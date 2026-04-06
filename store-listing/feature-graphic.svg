@@ -13,7 +13,7 @@
   <polygon points="360,173 250,364 470,364" fill="#1c2a3e" stroke="#ffffff" stroke-opacity="0.15" stroke-width="1.5"/>
   <!-- app name -->
   <text x="65" y="155" font-family="'Roboto', Arial, sans-serif" font-size="46" font-weight="700" fill="#ffffff" letter-spacing="4">BEAD</text>
-  <text x="65" y="188" font-family="'Roboto', Arial, sans-serif" font-size="28" font-weight="400" fill="#ffffffcc" letter-spacing="6">MANAGER</text>
+  <text x="65" y="188" font-family="'Roboto', Arial, sans-serif" font-size="28" font-weight="600" fill="#ffffff" letter-spacing="6">MANAGER</text>
   <!-- exit refraction point -->
   <circle cx="404" cy="249" r="4" fill="#ffffff"/>
   <!-- spectrum streams -->
