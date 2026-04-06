@@ -1,0 +1,6 @@
+<resources>
+    <!-- Base application theme. The actual color scheme is defined in
+         Compose (Theme.kt) using Material3 dynamic color. This XML theme
+         is required by the manifest but defers all visual styling to Compose. -->
+    <style name="Theme.BeadManager" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">Bead Manager</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="catalog">Catalog</string>
+    <string name="my_beads">My Beads</string>
+    <string name="reorder">Reorder</string>
+    <string name="search_beads">Search beads…</string>
+    <string name="filter">Filter</string>
+    <string name="color_group">Color Group</string>
+    <string name="glass_group">Glass Group</string>
+    <string name="finish">Finish</string>
+    <string name="in_stock">In Stock</string>
+    <string name="low_stock">Low Stock</string>
+    <string name="quantity_grams">Quantity (g)</string>
+    <string name="low_stock_threshold">Low-Stock Threshold (g)</string>
+    <string name="notes">Notes</string>
+    <string name="buy_at">Buy at %1$s</string>
+    <string name="view_on_miyuki">View on Miyuki</string>
+    <string name="share_reorder_list">Share reorder list</string>
+    <string name="no_beads_owned">You haven\'t logged any beads yet.\nBrowse the catalog to add some.</string>
+    <string name="no_low_stock">Everything is well-stocked.</string>
+    <string name="add_five_grams">+0.5g</string>
+    <string name="subtract_five_grams">−0.5g</string>
+    <string name="navigate_back">Back</string>
+</resources>

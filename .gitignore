@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# IDE
+.idea/
+*.iml
+*.iws
+.DS_Store
+
+# Firebase — google-services.json contains API keys; never commit it.
+# In CI, supply it via the GOOGLE_SERVICES_JSON secret.
+app/google-services.json
+
+# Room schema exports (optional — commit if you want migration history tracked)
+# app/schemas/
+
+# Kotlin incremental compilation
+**/.kotlin/
+
+# Generated assets — copied from repo root by the copyBeadCatalog Gradle task.
+# The root delica-beads.json is the source of truth; this copy is build output.
+app/src/main/assets/delica-beads.json

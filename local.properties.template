@@ -1,0 +1,14 @@
+# local.properties — gitignored developer-specific values.
+# Copy this file to local.properties and fill in your values.
+
+# Android SDK path (set by Android Studio automatically)
+# sdk.dir=/path/to/Android/sdk
+
+# OAuth 2.0 Web Client ID from Firebase Console:
+#   Firebase Console → Project Settings → General → Your apps → Web API Key
+#   OR: Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client IDs → Web client
+# google_web_client_id=YOUR_WEB_CLIENT_ID_HERE.apps.googleusercontent.com
+
+# If your system default JDK is newer than 21, set this in ~/.gradle/gradle.properties
+# (not here — Gradle does not read local.properties for daemon settings):
+#   org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64
