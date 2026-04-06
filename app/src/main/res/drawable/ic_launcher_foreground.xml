@@ -1,12 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Bead ring using evenOdd fill to punch inner hole -->
+
+    <!--
+      Bead ring: outer circle (r=33) winds CCW (sweep=0); inner hole (r=12) winds CW
+      (sweep=1). Opposite windings produce a correct ring under the nonZero fill rule
+      without relying on fillType="evenOdd". r=33 keeps the ring inside the adaptive
+      icon safe zone (max r=33 from center).
+      Radial gradient lit from upper-left (38,28), radius=90 to avoid a flat-grey
+      clamp band on the lower-right face.
+    -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M54,14 a40,40 0 1,0 0.001,0 Z M54,38 a16,16 0 1,0 0.001,0 Z" />
+        android:pathData="M54,21 A33,33 0 0,0 54,87 A33,33 0 0,0 54,21 M54,42 A12,12 0 0,1 54,66 A12,12 0 0,1 54,42">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="38"
+                android:centerY="28"
+                android:gradientRadius="90"
+                android:startColor="#D8E8F8"
+                android:endColor="#9096B0" />
+        </aapt:attr>
+    </path>
+
+    <!-- Inner rim: 3-unit dark ring around the hole edge to suggest bead wall depth -->
+    <path
+        android:fillColor="#50404858"
+        android:pathData="M54,39 A15,15 0 0,0 54,69 A15,15 0 0,0 54,39 M54,42 A12,12 0 0,1 54,66 A12,12 0 0,1 54,42" />
+
+    <!--
+      Specular highlight: white ellipse offset from the gradient center so the
+      lighter bead surface (#D8E8F8) provides visible contrast.
+      Verified fully inside the annulus: all edges at r≈24–33 from bead center.
+    -->
+    <path
+        android:fillColor="#B0FFFFFF"
+        android:pathData="M42,26 A6,4 0 0,1 42,34 A6,4 0 0,1 42,26" />
+
 </vector>
