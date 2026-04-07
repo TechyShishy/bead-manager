@@ -18,7 +18,7 @@ class SettingsViewModel @Inject constructor(
 
     val globalLowStockThreshold: StateFlow<Double> =
         preferencesRepository.globalLowStockThreshold
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD)
 
     fun setGlobalLowStockThreshold(grams: Double) {
         viewModelScope.launch {

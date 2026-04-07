@@ -29,7 +29,7 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setGlobalLowStockThreshold(grams: Double) {
         dataStore.edit { prefs ->
-            prefs[KEY_GLOBAL_LOW_STOCK_THRESHOLD] = grams.coerceAtLeast(0.0)
+            prefs[KEY_GLOBAL_LOW_STOCK_THRESHOLD] = grams.coerceIn(1.0, 30.0)
         }
     }
 
