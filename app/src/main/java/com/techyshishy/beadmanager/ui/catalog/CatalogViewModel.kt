@@ -54,8 +54,7 @@ class CatalogViewModel @Inject constructor(
                 }.getOrDefault(emptyList())
 
                 val matchesQuery = query.isBlank() ||
-                    bead.code.contains(query, ignoreCase = true) ||
-                    bead.colorGroup.contains(query, ignoreCase = true)
+                    bead.code.contains(query, ignoreCase = true)
 
                 val matchesColorGroup = filter.colorGroups.isEmpty() ||
                     bead.colorGroup in filter.colorGroups
