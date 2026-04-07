@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
@@ -31,20 +32,23 @@ import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
@@ -62,6 +66,14 @@ fun CatalogScreen(
     val query by viewModel.searchQuery.collectAsState()
     val filter by viewModel.filterState.collectAsState()
     var showFilter by remember { mutableStateOf(false) }
+    // No remember key — LaunchedEffect handles external resets; a query key would reset
+    // cursor position on every keystroke during normal typing.
+    var searchFieldValue by remember { mutableStateOf(TextFieldValue(query)) }
+    LaunchedEffect(query) {
+        if (query != searchFieldValue.text) {
+            searchFieldValue = TextFieldValue(query)
+        }
+    }
     val activeFilterCount = filter.colorGroups.size + filter.glassGroups.size + filter.finishes.size
     // On phones NavigationSuiteScaffold places the nav bar below content, so the content area
     // is already above the system nav bar and we must not add redundant bottom insets.
@@ -71,11 +83,21 @@ fun CatalogScreen(
         SearchBar(
             inputField = {
                 SearchBarDefaults.InputField(
-                    query = query,
-                    onQueryChange = viewModel::updateSearch,
+                    value = searchFieldValue,
+                    onValueChange = { newValue ->
+                        searchFieldValue = newValue
+                        viewModel.updateSearch(newValue.text)
+                    },
                     onSearch = {},
                     expanded = false,
                     onExpandedChange = {},
+                    modifier = Modifier.onFocusChanged { focusState ->
+                        if (focusState.hasFocus) {
+                            searchFieldValue = searchFieldValue.copy(
+                                selection = TextRange(0, searchFieldValue.text.length)
+                            )
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     placeholder = { Text(stringResource(R.string.search_beads)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
