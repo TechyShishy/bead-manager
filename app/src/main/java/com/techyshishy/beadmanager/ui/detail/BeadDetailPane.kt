@@ -27,7 +27,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.FilledTonalButton
@@ -39,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +69,7 @@ import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
+import java.math.BigDecimal
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -161,6 +165,30 @@ fun BeadDetailPane(
             var quantityInput by remember { mutableStateOf(TextFieldValue("")) }
             val quantityFocusRequester = remember { FocusRequester() }
             var customAmount by remember(beadCode) { mutableStateOf(TextFieldValue("")) }
+            var showResetConfirmation by remember(beadCode) { mutableStateOf(false) }
+
+            if (showResetConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showResetConfirmation = false },
+                    title = { Text("Reset inventory?") },
+                    text = { Text("This will set the quantity to 0g.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.setQuantity(0.0)
+                                showResetConfirmation = false
+                                editingQuantity = false
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) { Text("Reset") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetConfirmation = false }) { Text("Cancel") }
+                    },
+                )
+            }
 
             if (editingQuantity) {
                 // Track whether focus was actually acquired this session so that
@@ -206,12 +234,12 @@ fun BeadDetailPane(
                 }
             } else {
                 Text(
-                    text = "${java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()}g",
+                    text = "${BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()}g",
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            val text = java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()
+                            val text = BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()
                             quantityInput = TextFieldValue(text, selection = TextRange(0, text.length))
                             editingQuantity = true
                         },
@@ -224,10 +252,12 @@ fun BeadDetailPane(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                listOf(5.0, 10.0, 25.0).forEach { grams ->
+                listOf(7.5, 25.0, 50.0, 100.0).forEach { grams ->
                     SuggestionChip(
                         onClick = { viewModel.adjustQuantity(grams) },
-                        label = { Text("+${"%.0f".format(grams)}g") },
+                        label = {
+                            Text("+${BigDecimal.valueOf(grams).stripTrailingZeros().toPlainString()}g")
+                        },
                     )
                 }
                 BasicTextField(
@@ -265,6 +295,17 @@ fun BeadDetailPane(
                         }
                     },
                 )
+            }
+
+            TextButton(
+                onClick = { showResetConfirmation = true },
+                enabled = currentGrams != 0.0,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text("Reset inventory")
             }
 
             Spacer(Modifier.height(8.dp))
