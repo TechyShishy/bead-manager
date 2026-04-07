@@ -66,11 +66,14 @@ import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import java.math.BigDecimal
+import java.text.NumberFormat
 import kotlinx.serialization.json.Json
 
 // Consistent with all other decode sites: ignoreUnknownKeys guards against future
 // catalog schema additions silently causing failures.
 private val catalogJson = Json { ignoreUnknownKeys = true }
+
+private const val BEADS_PER_GRAM = 208
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -166,6 +169,7 @@ fun BeadDetailPane(
             Spacer(Modifier.height(8.dp))
 
             val currentGrams = inventory?.quantityGrams ?: 0.0
+            val beadCount = (currentGrams * BEADS_PER_GRAM).toLong()
             var customAmount by remember(beadCode) { mutableStateOf(TextFieldValue("")) }
             var showResetConfirmation by remember(beadCode) { mutableStateOf(false) }
 
@@ -196,6 +200,13 @@ fun BeadDetailPane(
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            if (currentGrams > 0.0) {
+                Text(
+                    text = "≈ ${NumberFormat.getIntegerInstance().format(beadCount)} beads",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
 
