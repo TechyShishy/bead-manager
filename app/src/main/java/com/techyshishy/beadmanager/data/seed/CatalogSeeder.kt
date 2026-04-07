@@ -40,7 +40,7 @@ class CatalogSeeder @Inject constructor(
 ) {
 
     companion object {
-        private const val CATALOG_VERSION = 1
+        private const val CATALOG_VERSION = 2
         private const val CATALOG_ASSET = "delica-beads.json"
 
         private val KEY_CATALOG_VERSION = intPreferencesKey("catalog_version")
@@ -78,7 +78,7 @@ class CatalogSeeder @Inject constructor(
                 hex = bead.hex,
                 imageUrl = bead.image,
                 officialUrl = bead.url,
-                colorGroup = bead.colorGroup,
+                colorGroup = json.encodeToString(ListSerializer(String.serializer()), bead.colorGroup),
                 glassGroup = bead.glassGroup,
                 finishes = json.encodeToString(ListSerializer(String.serializer()), bead.finish),
                 dyed = bead.dyed,
@@ -94,6 +94,7 @@ class CatalogSeeder @Inject constructor(
                     vendorKey = key,
                     displayName = VENDOR_DISPLAY_NAMES[key] ?: key,
                     url = url,
+                    beadName = bead.names[key],
                 )
             }
         }
@@ -115,7 +116,8 @@ class CatalogSeeder @Inject constructor(
         val image: String,
         val url: String,
         val purchase: Map<String, String> = emptyMap(),
-        @SerialName("color_group") val colorGroup: String,
+        val names: Map<String, String> = emptyMap(),
+        @SerialName("color_group") val colorGroup: List<String> = emptyList(),
         @SerialName("glass_group") val glassGroup: String,
         val finish: List<String> = emptyList(),
         val dyed: String,

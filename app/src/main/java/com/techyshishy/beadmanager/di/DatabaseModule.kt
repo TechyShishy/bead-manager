@@ -24,7 +24,9 @@ object DatabaseModule {
         context,
         BeadDatabase::class.java,
         "bead_catalog.db",
-    ).build()
+    )
+        .addMigrations(BeadDatabase.MIGRATION_1_2)
+        .build()
 
     @Provides
     fun provideBeadDao(db: BeadDatabase): BeadDao = db.beadDao()

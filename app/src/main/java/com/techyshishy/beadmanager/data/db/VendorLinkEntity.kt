@@ -35,4 +35,5 @@ data class VendorLinkEntity(
     val vendorKey: String,
     val displayName: String,
     val url: String,
+    val beadName: String? = null,
 )

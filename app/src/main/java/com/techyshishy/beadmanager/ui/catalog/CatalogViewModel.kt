@@ -56,12 +56,15 @@ class CatalogViewModel @Inject constructor(
                 val finishesInBead = runCatching {
                     json.decodeFromString<List<String>>(bead.finishes)
                 }.getOrDefault(emptyList())
+                val colorGroupsInBead = runCatching {
+                    json.decodeFromString<List<String>>(bead.colorGroup)
+                }.getOrDefault(emptyList())
 
                 val matchesQuery = query.isBlank() ||
                     bead.code.contains(query, ignoreCase = true)
 
                 val matchesColorGroup = filter.colorGroups.isEmpty() ||
-                    bead.colorGroup in filter.colorGroups
+                    colorGroupsInBead.any { it in filter.colorGroups }
 
                 val matchesGlassGroup = filter.glassGroups.isEmpty() ||
                     bead.glassGroup in filter.glassGroups
@@ -80,8 +83,15 @@ class CatalogViewModel @Inject constructor(
                         if (asc) compareBy(numericKey) else compareByDescending(numericKey),
                     )
                     SortBy.COLOR_GROUP -> filtered.sortedWith(
-                        (if (asc) compareBy<BeadWithInventory> { it.catalogEntry.bead.colorGroup }
-                        else compareByDescending { it.catalogEntry.bead.colorGroup })
+                        // Sort by primary color group (first listed in the JSON array).
+                        // Multi-group beads tie-break by DB number.
+                        (if (asc) compareBy<BeadWithInventory> {
+                            runCatching { json.decodeFromString<List<String>>(it.catalogEntry.bead.colorGroup) }
+                                .getOrDefault(emptyList()).firstOrNull() ?: ""
+                        } else compareByDescending {
+                            runCatching { json.decodeFromString<List<String>>(it.catalogEntry.bead.colorGroup) }
+                                .getOrDefault(emptyList()).firstOrNull() ?: ""
+                        })
                             .thenBy(numericKey),
                     )
                     SortBy.GLASS_GROUP -> filtered.sortedWith(

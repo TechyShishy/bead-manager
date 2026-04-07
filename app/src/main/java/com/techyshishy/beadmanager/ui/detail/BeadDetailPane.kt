@@ -66,6 +66,11 @@ import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import java.math.BigDecimal
+import kotlinx.serialization.json.Json
+
+// Consistent with all other decode sites: ignoreUnknownKeys guards against future
+// catalog schema additions silently causing failures.
+private val catalogJson = Json { ignoreUnknownKeys = true }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -91,6 +96,9 @@ fun BeadDetailPane(
 
     val hexColor = remember(bead.hex) {
         runCatching { Color(bead.hex.toColorInt()) }.getOrDefault(Color.Gray)
+    }
+    val colorGroupList = remember(bead.colorGroup) {
+        runCatching { catalogJson.decodeFromString<List<String>>(bead.colorGroup) }.getOrDefault(emptyList())
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -145,7 +153,7 @@ fun BeadDetailPane(
 
             Spacer(Modifier.height(8.dp))
 
-            MetadataRow("Color group", bead.colorGroup)
+            MetadataRow("Color group", colorGroupList.joinToString(", "))
             MetadataRow("Glass group", bead.glassGroup)
             MetadataRow("Dyed", bead.dyed)
             MetadataRow("Galvanized", bead.galvanized)
@@ -338,7 +346,16 @@ fun BeadDetailPane(
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
                     ) {
-                        Text(stringResource(R.string.buy_at, link.displayName))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(stringResource(R.string.buy_at, link.displayName))
+                            if (link.beadName != null) {
+                                Text(
+                                    text = link.beadName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

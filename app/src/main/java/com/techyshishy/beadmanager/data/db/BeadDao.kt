@@ -25,7 +25,10 @@ interface BeadDao {
     suspend fun count(): Int
 
     // Distinct filter values used to populate filter chips in the UI.
-    @Query("SELECT DISTINCT colorGroup FROM beads ORDER BY colorGroup ASC")
+    // json_each() expands the JSON array stored in colorGroup so each element
+    // is returned as a separate row; DISTINCT then collapses duplicates across
+    // all beads, giving the full set of individual color-group strings.
+    @Query("SELECT DISTINCT value FROM beads, json_each(beads.colorGroup) ORDER BY value ASC")
     fun distinctColorGroups(): Flow<List<String>>
 
     @Query("SELECT DISTINCT glassGroup FROM beads ORDER BY glassGroup ASC")
