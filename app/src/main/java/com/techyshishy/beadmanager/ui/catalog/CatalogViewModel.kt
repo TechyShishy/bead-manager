@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +19,7 @@ import javax.inject.Inject
 class CatalogViewModel @Inject constructor(
     catalogRepository: CatalogRepository,
     inventoryRepository: InventoryRepository,
+    preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     val searchQuery = MutableStateFlow("")
@@ -36,7 +38,8 @@ class CatalogViewModel @Inject constructor(
         inventoryRepository.inventoryStream(),
         searchQuery,
         filterState,
-    ) { catalogEntries, inventoryMap, query, filter ->
+        preferencesRepository.globalLowStockThreshold,
+    ) { catalogEntries, inventoryMap, query, filter, globalThreshold ->
         val numericKey: (BeadWithInventory) -> Int = { item ->
             item.code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE
         }
@@ -45,6 +48,7 @@ class CatalogViewModel @Inject constructor(
                 BeadWithInventory(
                     catalogEntry = entry,
                     inventory = inventoryMap[entry.bead.code],
+                    globalThresholdGrams = globalThreshold,
                 )
             }
             .filter { item ->

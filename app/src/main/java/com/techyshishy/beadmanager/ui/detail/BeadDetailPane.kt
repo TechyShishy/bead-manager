@@ -37,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -248,24 +246,6 @@ fun BeadDetailPane(
             ) {
                 Text("Reset inventory")
             }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Low-stock threshold slider
-            var threshold by remember(inventory?.lowStockThresholdGrams) {
-                mutableFloatStateOf((inventory?.lowStockThresholdGrams ?: 5.0).toFloat())
-            }
-            Text(
-                text = "${stringResource(R.string.low_stock_threshold)}: ${"%.0f".format(threshold)}g",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
-                value = threshold,
-                onValueChange = { threshold = it },
-                onValueChangeFinished = { viewModel.updateThreshold(threshold.toDouble()) },
-                valueRange = 1f..30f,
-                steps = 28,
-            )
 
             Spacer(Modifier.height(8.dp))
 

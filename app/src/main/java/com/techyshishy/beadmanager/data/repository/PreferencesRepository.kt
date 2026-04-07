@@ -1,0 +1,32 @@
+package com.techyshishy.beadmanager.data.repository
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import com.techyshishy.beadmanager.di.AppDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class PreferencesRepository @Inject constructor(
+    @AppDataStore private val dataStore: DataStore<Preferences>,
+) {
+    companion object {
+        private val KEY_GLOBAL_LOW_STOCK_THRESHOLD =
+            doublePreferencesKey("global_low_stock_threshold_grams")
+        const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
+    }
+
+    val globalLowStockThreshold: Flow<Double> = dataStore.data.map { prefs ->
+        prefs[KEY_GLOBAL_LOW_STOCK_THRESHOLD] ?: DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD
+    }
+
+    suspend fun setGlobalLowStockThreshold(grams: Double) {
+        dataStore.edit { prefs ->
+            prefs[KEY_GLOBAL_LOW_STOCK_THRESHOLD] = grams.coerceAtLeast(0.0)
+        }
+    }
+}

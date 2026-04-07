@@ -6,6 +6,8 @@ import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,9 +33,14 @@ import javax.inject.Inject
 class BeadDetailViewModel @Inject constructor(
     private val catalogRepository: CatalogRepository,
     private val inventoryRepository: InventoryRepository,
+    preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     private val beadCode = MutableStateFlow("")
+
+    private val globalThreshold: StateFlow<Double> =
+        preferencesRepository.globalLowStockThreshold
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD)
 
     fun initialize(code: String) {
         if (beadCode.value != code) beadCode.value = code
@@ -45,11 +52,13 @@ class BeadDetailViewModel @Inject constructor(
             combine(
                 catalogRepository.getBeadWithVendors(code),
                 inventoryRepository.inventoryStream(),
-            ) { catalogEntry, inventoryMap ->
+                globalThreshold,
+            ) { catalogEntry, inventoryMap, threshold ->
                 catalogEntry?.let {
                     BeadWithInventory(
                         catalogEntry = it,
                         inventory = inventoryMap[code],
+                        globalThresholdGrams = threshold,
                     )
                 }
             }
@@ -80,14 +89,5 @@ class BeadDetailViewModel @Inject constructor(
             inventoryRepository.upsert(current.copy(notes = notes, lastUpdated = null))
         }
     }
-
-    fun updateThreshold(thresholdGrams: Double) {
-        viewModelScope.launch {
-            val code = beadCode.value
-            val current = bead.value?.inventory ?: InventoryEntry(beadCode = code)
-            inventoryRepository.upsert(
-                current.copy(lowStockThresholdGrams = thresholdGrams, lastUpdated = null)
-            )
-        }
-    }
 }
+

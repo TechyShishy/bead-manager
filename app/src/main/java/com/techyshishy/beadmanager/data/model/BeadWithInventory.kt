@@ -7,17 +7,22 @@ import com.techyshishy.beadmanager.data.firestore.InventoryEntry
  * View-ready combination of catalog data and optional inventory state.
  *
  * Produced by combining the Room [BeadWithVendors] flow with the Firestore
- * inventory map in the ViewModel layer — never persisted directly.
+ * inventory map and the app-wide low-stock threshold (from DataStore) in the
+ * ViewModel layer — never persisted directly.
+ *
+ * [globalThresholdGrams] is the system-wide threshold configured in Settings.
+ * It drives [isLowStock] for all beads uniformly.
  */
 data class BeadWithInventory(
     val catalogEntry: BeadWithVendors,
     val inventory: InventoryEntry?,
+    val globalThresholdGrams: Double = 5.0,
 ) {
     val code: String get() = catalogEntry.bead.code
     val isOwned: Boolean get() = (inventory?.quantityGrams ?: 0.0) > 0.0
     val isLowStock: Boolean
         get() {
             val inv = inventory ?: return false
-            return inv.quantityGrams > 0.0 && inv.quantityGrams <= inv.lowStockThresholdGrams
+            return inv.quantityGrams > 0.0 && inv.quantityGrams <= globalThresholdGrams
         }
 }

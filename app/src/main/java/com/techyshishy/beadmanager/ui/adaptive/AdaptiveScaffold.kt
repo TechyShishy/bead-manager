@@ -4,9 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -38,8 +40,10 @@ import com.techyshishy.beadmanager.ui.inventory.InventoryScreen
 import com.techyshishy.beadmanager.ui.inventory.InventoryViewModel
 import com.techyshishy.beadmanager.ui.lowstock.LowStockScreen
 import com.techyshishy.beadmanager.ui.lowstock.LowStockViewModel
+import com.techyshishy.beadmanager.ui.settings.SettingsScreen
+import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
-enum class AppTab { CATALOG, INVENTORY, LOW_STOCK }
+enum class AppTab { CATALOG, INVENTORY, LOW_STOCK, SETTINGS }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -50,6 +54,7 @@ fun AdaptiveScaffold() {
     val catalogViewModel: CatalogViewModel = hiltViewModel()
     val inventoryViewModel: InventoryViewModel = hiltViewModel()
     val lowStockViewModel: LowStockViewModel = hiltViewModel()
+    val settingsViewModel: SettingsViewModel = hiltViewModel()
 
     val lowStockCount by lowStockViewModel.lowStockBeads.collectAsState()
 
@@ -99,6 +104,17 @@ fun AdaptiveScaffold() {
                     }
                 },
                 label = { Text(stringResource(R.string.reorder)) },
+            )
+            item(
+                selected = currentTab == AppTab.SETTINGS,
+                onClick = { currentTab = AppTab.SETTINGS },
+                icon = {
+                    Icon(
+                        if (currentTab == AppTab.SETTINGS) Icons.Filled.Settings else Icons.Outlined.Settings,
+                        contentDescription = null,
+                    )
+                },
+                label = { Text(stringResource(R.string.settings)) },
             )
         },
     ) {
@@ -192,6 +208,10 @@ fun AdaptiveScaffold() {
                         catalogNavigator.navigateTo(ListDetailPaneScaffoldRole.Detail, code)
                     },
                 )
+            }
+
+            AppTab.SETTINGS -> {
+                SettingsScreen(viewModel = settingsViewModel)
             }
         }
     }
