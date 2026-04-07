@@ -129,7 +129,7 @@ fun AdaptiveScaffold() {
                 // Provide a BeadDetailViewModel scoped to the selected code via the
                 // scaffold navigator's content key so Hilt reuses the VM per bead.
                 ListDetailPaneScaffold(
-                    directive = catalogNavigator.scaffoldDirective,
+                    directive = catalogNavigator.scaffoldDirective.copy(maxHorizontalPartitions = 1),
                     value = catalogNavigator.scaffoldValue,
                     listPane = {
                         AnimatedPane {
@@ -168,7 +168,7 @@ fun AdaptiveScaffold() {
                     scope.launch { inventoryNavigator.navigateBack() }
                 }
                 ListDetailPaneScaffold(
-                    directive = inventoryNavigator.scaffoldDirective,
+                    directive = inventoryNavigator.scaffoldDirective.copy(maxHorizontalPartitions = 1),
                     value = inventoryNavigator.scaffoldValue,
                     listPane = {
                         AnimatedPane {
