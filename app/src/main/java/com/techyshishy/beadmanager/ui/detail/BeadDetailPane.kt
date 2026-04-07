@@ -303,7 +303,6 @@ fun BeadDetailPane(
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = MaterialTheme.colorScheme.error,
                 ),
-                modifier = Modifier.align(Alignment.End),
             ) {
                 Text("Reset inventory")
             }
