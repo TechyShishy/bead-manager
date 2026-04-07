@@ -22,4 +22,12 @@
     <string name="add_five_grams">+0.5g</string>
     <string name="subtract_five_grams">−0.5g</string>
     <string name="navigate_back">Back</string>
+    <string name="sort_by">Sort By</string>
+    <string name="sort_db_number">DB Number</string>
+    <string name="dyed">Dyed</string>
+    <string name="galvanized">Galvanized</string>
+    <string name="plating">Plating</string>
+    <string name="sort_most_owned">Most Owned</string>
+    <string name="owned_only">Owned only</string>
+    <string name="clear_all_filters">Clear all filters</string>
 </resources>

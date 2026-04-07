@@ -6,7 +6,6 @@ import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +37,9 @@ class CatalogViewModel @Inject constructor(
         searchQuery,
         filterState,
     ) { catalogEntries, inventoryMap, query, filter ->
+        val numericKey: (BeadWithInventory) -> Int = { item ->
+            item.code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE
+        }
         catalogEntries
             .map { entry ->
                 BeadWithInventory(
@@ -64,7 +66,38 @@ class CatalogViewModel @Inject constructor(
                 val matchesFinish = filter.finishes.isEmpty() ||
                     finishesInBead.any { it in filter.finishes }
 
-                matchesQuery && matchesColorGroup && matchesGlassGroup && matchesFinish
+                val matchesOwned = !filter.ownedOnly || item.isOwned
+
+                matchesQuery && matchesColorGroup && matchesGlassGroup && matchesFinish && matchesOwned
+            }
+            .let { filtered ->
+                when (filter.sortBy) {
+                    SortBy.DB_NUMBER -> filtered.sortedWith(compareBy(numericKey))
+                    SortBy.COLOR_GROUP -> filtered.sortedWith(
+                        compareBy<BeadWithInventory> { it.catalogEntry.bead.colorGroup }
+                            .thenBy(numericKey),
+                    )
+                    SortBy.GLASS_GROUP -> filtered.sortedWith(
+                        compareBy<BeadWithInventory> { it.catalogEntry.bead.glassGroup }
+                            .thenBy(numericKey),
+                    )
+                    SortBy.DYED -> filtered.sortedWith(
+                        compareBy<BeadWithInventory> { it.catalogEntry.bead.dyed }
+                            .thenBy(numericKey),
+                    )
+                    SortBy.GALVANIZED -> filtered.sortedWith(
+                        compareBy<BeadWithInventory> { it.catalogEntry.bead.galvanized }
+                            .thenBy(numericKey),
+                    )
+                    SortBy.PLATING -> filtered.sortedWith(
+                        compareBy<BeadWithInventory> { it.catalogEntry.bead.plating }
+                            .thenBy(numericKey),
+                    )
+                    SortBy.COUNT -> filtered.sortedWith(
+                        compareByDescending<BeadWithInventory> { it.inventory?.quantityGrams ?: 0.0 }
+                            .thenBy(numericKey),
+                    )
+                }
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -95,6 +128,14 @@ class CatalogViewModel @Inject constructor(
                 else f.finishes + finish,
             )
         }
+    }
+
+    fun toggleOwnedOnly() {
+        filterState.value = filterState.value.copy(ownedOnly = !filterState.value.ownedOnly)
+    }
+
+    fun setSortBy(sort: SortBy) {
+        filterState.value = filterState.value.copy(sortBy = sort)
     }
 
     fun clearFilters() { filterState.value = FilterState() }

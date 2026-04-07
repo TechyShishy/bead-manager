@@ -74,7 +74,11 @@ fun CatalogScreen(
             searchFieldValue = TextFieldValue(query)
         }
     }
-    val activeFilterCount = filter.colorGroups.size + filter.glassGroups.size + filter.finishes.size
+    val activeFilterCount = filter.colorGroups.size +
+        filter.glassGroups.size +
+        filter.finishes.size +
+        (if (filter.ownedOnly) 1 else 0) +
+        (if (filter.sortBy != SortBy.DB_NUMBER) 1 else 0)
     // On phones NavigationSuiteScaffold places the nav bar below content, so the content area
     // is already above the system nav bar and we must not add redundant bottom insets.
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600
