@@ -135,6 +135,14 @@ class CatalogViewModel @Inject constructor(
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val sortBuckets: StateFlow<List<SortBucket>> = combine(beads, filterState) { sortedBeads, filter ->
+        computeSortBuckets(
+            beads = sortedBeads,
+            sortBy = filter.sortBy,
+            ascending = filter.sortDirection == SortDirection.ASCENDING,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun updateSearch(query: String) { searchQuery.value = query }
 
     fun toggleColorGroup(group: String) {

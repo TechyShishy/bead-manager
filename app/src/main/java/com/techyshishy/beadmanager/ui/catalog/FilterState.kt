@@ -21,3 +21,12 @@ data class FilterState(
     val sortBy: SortBy = SortBy.DB_NUMBER,
     val sortDirection: SortDirection = SortDirection.ASCENDING,
 )
+
+/**
+ * A labeled segment of the sorted catalog list, used by the sort navigation bar.
+ * [startIndex] is the position of the first item in this bucket within the sorted beads list.
+ */
+data class SortBucket(
+    val label: String,
+    val startIndex: Int,
+)

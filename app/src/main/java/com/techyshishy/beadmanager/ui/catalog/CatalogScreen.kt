@@ -5,9 +5,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -33,9 +36,11 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +58,7 @@ import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
+import kotlinx.coroutines.launch
 
 @Composable
 fun CatalogScreen(
@@ -60,6 +66,7 @@ fun CatalogScreen(
     onBeadSelected: (String) -> Unit,
 ) {
     val beads by viewModel.beads.collectAsState()
+    val sortBuckets by viewModel.sortBuckets.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
     val filter by viewModel.filterState.collectAsState()
     var showFilter by remember { mutableStateOf(false) }
@@ -79,6 +86,27 @@ fun CatalogScreen(
     // On phones NavigationSuiteScaffold places the nav bar below content, so the content area
     // is already above the system nav bar and we must not add redundant bottom insets.
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600
+    val showNavBar = !isPhoneLayout && sortBuckets.size > 1
+
+    val lazyGridState = rememberLazyGridState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Tracks which beads list item is closest to the vertical center of the visible grid area.
+    // Uses derivedStateOf so scroll events only trigger recomposition when the value changes.
+    val centerVisibleIndex by remember(lazyGridState) {
+        derivedStateOf {
+            val visible = lazyGridState.layoutInfo.visibleItemsInfo
+            if (visible.isEmpty()) -1 else visible[visible.size / 2].index
+        }
+    }
+    // Finds the nav bar bucket that contains the center-visible item.
+    val currentBucketIndex by remember(sortBuckets) {
+        val buckets = sortBuckets
+        derivedStateOf {
+            if (buckets.isEmpty() || centerVisibleIndex < 0) -1
+            else buckets.indexOfLast { it.startIndex <= centerVisibleIndex }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         TextField(
@@ -132,17 +160,29 @@ fun CatalogScreen(
             ),
         )
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 120.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = if (!isPhoneLayout) WindowInsets.navigationBars.asPaddingValues()
-                             else WindowInsets(0, 0, 0, 0).asPaddingValues(),
-        ) {
-            items(beads, key = { it.code }) { item ->
-                BeadGridItem(
-                    item = item,
-                    onClick = { onBeadSelected(item.code) },
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (showNavBar) {
+                SortNavBar(
+                    buckets = sortBuckets,
+                    currentBucketIndex = currentBucketIndex,
+                    onBucketClick = { bucket ->
+                        coroutineScope.launch { lazyGridState.animateScrollToItem(bucket.startIndex) }
+                    },
                 )
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 120.dp),
+                state = lazyGridState,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                contentPadding = if (!isPhoneLayout) WindowInsets.navigationBars.asPaddingValues()
+                                 else WindowInsets(0, 0, 0, 0).asPaddingValues(),
+            ) {
+                items(beads, key = { it.code }) { item ->
+                    BeadGridItem(
+                        item = item,
+                        onClick = { onBeadSelected(item.code) },
+                    )
+                }
             }
         }
     }
