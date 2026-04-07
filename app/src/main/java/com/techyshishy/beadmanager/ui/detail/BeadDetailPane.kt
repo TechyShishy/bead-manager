@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,14 +52,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -161,9 +157,6 @@ fun BeadDetailPane(
             Spacer(Modifier.height(8.dp))
 
             val currentGrams = inventory?.quantityGrams ?: 0.0
-            var editingQuantity by remember { mutableStateOf(false) }
-            var quantityInput by remember { mutableStateOf(TextFieldValue("")) }
-            val quantityFocusRequester = remember { FocusRequester() }
             var customAmount by remember(beadCode) { mutableStateOf(TextFieldValue("")) }
             var showResetConfirmation by remember(beadCode) { mutableStateOf(false) }
 
@@ -177,7 +170,6 @@ fun BeadDetailPane(
                             onClick = {
                                 viewModel.setQuantity(0.0)
                                 showResetConfirmation = false
-                                editingQuantity = false
                             },
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error,
@@ -190,61 +182,11 @@ fun BeadDetailPane(
                 )
             }
 
-            if (editingQuantity) {
-                // Track whether focus was actually acquired this session so that
-                // the initial isFocused=false event on first composition (fired
-                // before LaunchedEffect has a chance to request focus) does not
-                // immediately collapse the field. Declared inside the `if` so
-                // it resets to false each time a new editing session begins.
-                var hasFocused by remember { mutableStateOf(false) }
-                BasicTextField(
-                    value = quantityInput,
-                    onValueChange = { quantityInput = it },
-                    textStyle = MaterialTheme.typography.headlineMedium.copy(
-                        color = LocalContentColor.current,
-                    ),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(onDone = {
-                        // Just close the field; the resulting focus-loss fires
-                        // onFocusChanged which saves exactly once.
-                        editingQuantity = false
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(quantityFocusRequester)
-                        .onFocusChanged { focusState ->
-                            if (focusState.isFocused) {
-                                hasFocused = true
-                                quantityInput = quantityInput.copy(
-                                    selection = TextRange(0, quantityInput.text.length),
-                                )
-                            } else if (hasFocused) {
-                                val parsed = quantityInput.text.toDoubleOrNull()
-                                if (parsed != null && parsed >= 0.0) viewModel.setQuantity(parsed)
-                                editingQuantity = false
-                            }
-                        },
-                )
-                LaunchedEffect(Unit) {
-                    quantityFocusRequester.requestFocus()
-                }
-            } else {
-                Text(
+            Text(
                     text = "${BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()}g",
                     style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val text = BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()
-                            quantityInput = TextFieldValue(text, selection = TextRange(0, text.length))
-                            editingQuantity = true
-                        },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-            }
 
             Spacer(Modifier.height(8.dp))
 
