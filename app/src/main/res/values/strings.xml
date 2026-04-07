@@ -27,7 +27,9 @@
     <string name="dyed">Dyed</string>
     <string name="galvanized">Galvanized</string>
     <string name="plating">Plating</string>
-    <string name="sort_most_owned">Most Owned</string>
+    <string name="sort_most_owned">Quantity</string>
+    <string name="sort_direction_ascending">Ascending</string>
+    <string name="sort_direction_descending">Descending</string>
     <string name="owned_only">Owned only</string>
     <string name="clear_all_filters">Clear all filters</string>
 </resources>

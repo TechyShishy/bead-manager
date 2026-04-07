@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -62,6 +66,18 @@ fun FilterSheet(
                         selected = filter.sortBy == option,
                         onClick = { viewModel.setSortBy(option) },
                         label = { Text(option.label()) },
+                        trailingIcon = if (filter.sortBy == option) {
+                            {
+                                Icon(
+                                    imageVector = if (filter.sortDirection == SortDirection.ASCENDING)
+                                        Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                    contentDescription = if (filter.sortDirection == SortDirection.ASCENDING)
+                                        stringResource(R.string.sort_direction_ascending)
+                                    else
+                                        stringResource(R.string.sort_direction_descending),
+                                )
+                            }
+                        } else null,
                     )
                 }
             }

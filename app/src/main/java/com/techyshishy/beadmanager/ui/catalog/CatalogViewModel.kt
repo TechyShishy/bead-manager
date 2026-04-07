@@ -71,30 +71,39 @@ class CatalogViewModel @Inject constructor(
                 matchesQuery && matchesColorGroup && matchesGlassGroup && matchesFinish && matchesOwned
             }
             .let { filtered ->
+                val asc = filter.sortDirection == SortDirection.ASCENDING
                 when (filter.sortBy) {
-                    SortBy.DB_NUMBER -> filtered.sortedWith(compareBy(numericKey))
+                    SortBy.DB_NUMBER -> filtered.sortedWith(
+                        if (asc) compareBy(numericKey) else compareByDescending(numericKey),
+                    )
                     SortBy.COLOR_GROUP -> filtered.sortedWith(
-                        compareBy<BeadWithInventory> { it.catalogEntry.bead.colorGroup }
+                        (if (asc) compareBy<BeadWithInventory> { it.catalogEntry.bead.colorGroup }
+                        else compareByDescending { it.catalogEntry.bead.colorGroup })
                             .thenBy(numericKey),
                     )
                     SortBy.GLASS_GROUP -> filtered.sortedWith(
-                        compareBy<BeadWithInventory> { it.catalogEntry.bead.glassGroup }
+                        (if (asc) compareBy<BeadWithInventory> { it.catalogEntry.bead.glassGroup }
+                        else compareByDescending { it.catalogEntry.bead.glassGroup })
                             .thenBy(numericKey),
                     )
                     SortBy.DYED -> filtered.sortedWith(
-                        compareBy<BeadWithInventory> { it.catalogEntry.bead.dyed }
+                        (if (asc) compareBy<BeadWithInventory> { it.catalogEntry.bead.dyed }
+                        else compareByDescending { it.catalogEntry.bead.dyed })
                             .thenBy(numericKey),
                     )
                     SortBy.GALVANIZED -> filtered.sortedWith(
-                        compareBy<BeadWithInventory> { it.catalogEntry.bead.galvanized }
+                        (if (asc) compareBy<BeadWithInventory> { it.catalogEntry.bead.galvanized }
+                        else compareByDescending { it.catalogEntry.bead.galvanized })
                             .thenBy(numericKey),
                     )
                     SortBy.PLATING -> filtered.sortedWith(
-                        compareBy<BeadWithInventory> { it.catalogEntry.bead.plating }
+                        (if (asc) compareBy<BeadWithInventory> { it.catalogEntry.bead.plating }
+                        else compareByDescending { it.catalogEntry.bead.plating })
                             .thenBy(numericKey),
                     )
                     SortBy.COUNT -> filtered.sortedWith(
-                        compareByDescending<BeadWithInventory> { it.inventory?.quantityGrams ?: 0.0 }
+                        (if (asc) compareBy<BeadWithInventory> { it.inventory?.quantityGrams ?: 0.0 }
+                        else compareByDescending { it.inventory?.quantityGrams ?: 0.0 })
                             .thenBy(numericKey),
                     )
                 }
@@ -135,7 +144,15 @@ class CatalogViewModel @Inject constructor(
     }
 
     fun setSortBy(sort: SortBy) {
-        filterState.value = filterState.value.copy(sortBy = sort)
+        val current = filterState.value
+        filterState.value = if (sort == current.sortBy) {
+            current.copy(
+                sortDirection = if (current.sortDirection == SortDirection.ASCENDING)
+                    SortDirection.DESCENDING else SortDirection.ASCENDING,
+            )
+        } else {
+            current.copy(sortBy = sort, sortDirection = SortDirection.ASCENDING)
+        }
     }
 
     fun clearFilters() { filterState.value = FilterState() }
