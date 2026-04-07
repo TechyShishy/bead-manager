@@ -24,13 +24,12 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,7 +52,6 @@ import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
     viewModel: CatalogViewModel,
@@ -81,43 +79,44 @@ fun CatalogScreen(
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        SearchBar(
-            inputField = {
-                SearchBarDefaults.InputField(
-                    query = searchFieldValue,
-                    onQueryChange = { newValue ->
-                        val digits = newValue.filter { it.isDigit() }
-                        searchFieldValue = digits
-                        viewModel.updateSearch(digits)
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    onSearch = {},
-                    expanded = false,
-                    onExpandedChange = {},
-                    placeholder = { Text(stringResource(R.string.search_beads)) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    trailingIcon = {
-                        BadgedBox(
-                            badge = {
-                                if (activeFilterCount > 0) Badge { Text("$activeFilterCount") }
-                            },
-                        ) {
-                            IconButton(onClick = { showFilter = true }) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    contentDescription = stringResource(R.string.filter),
-                                )
-                            }
-                        }
-                    },
-                )
+        TextField(
+            value = searchFieldValue,
+            onValueChange = { newValue ->
+                val digits = newValue.filter { it.isDigit() }
+                searchFieldValue = digits
+                viewModel.updateSearch(digits)
             },
-            expanded = false,
-            onExpandedChange = {},
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {}
+            placeholder = { Text(stringResource(R.string.search_beads)) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                BadgedBox(
+                    badge = {
+                        if (activeFilterCount > 0) Badge { Text("$activeFilterCount") }
+                    },
+                ) {
+                    IconButton(onClick = { showFilter = true }) {
+                        Icon(
+                            Icons.Default.FilterList,
+                            contentDescription = stringResource(R.string.filter),
+                        )
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            shape = CircleShape,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent,
+            ),
+        )
 
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 120.dp),
