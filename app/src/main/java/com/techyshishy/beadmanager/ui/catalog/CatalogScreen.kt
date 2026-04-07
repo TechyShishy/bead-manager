@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
@@ -41,14 +40,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
@@ -68,10 +63,10 @@ fun CatalogScreen(
     var showFilter by remember { mutableStateOf(false) }
     // No remember key — LaunchedEffect handles external resets; a query key would reset
     // cursor position on every keystroke during normal typing.
-    var searchFieldValue by remember { mutableStateOf(TextFieldValue(query)) }
+    var searchFieldValue by remember { mutableStateOf(query) }
     LaunchedEffect(query) {
-        if (query != searchFieldValue.text) {
-            searchFieldValue = TextFieldValue(query)
+        if (query != searchFieldValue) {
+            searchFieldValue = query
         }
     }
     val activeFilterCount = filter.colorGroups.size +
@@ -87,22 +82,14 @@ fun CatalogScreen(
         SearchBar(
             inputField = {
                 SearchBarDefaults.InputField(
-                    value = searchFieldValue,
-                    onValueChange = { newValue ->
+                    query = searchFieldValue,
+                    onQueryChange = { newValue ->
                         searchFieldValue = newValue
-                        viewModel.updateSearch(newValue.text)
+                        viewModel.updateSearch(newValue)
                     },
                     onSearch = {},
                     expanded = false,
                     onExpandedChange = {},
-                    modifier = Modifier.onFocusChanged { focusState ->
-                        if (focusState.hasFocus) {
-                            searchFieldValue = searchFieldValue.copy(
-                                selection = TextRange(0, searchFieldValue.text.length)
-                            )
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     placeholder = { Text(stringResource(R.string.search_beads)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {

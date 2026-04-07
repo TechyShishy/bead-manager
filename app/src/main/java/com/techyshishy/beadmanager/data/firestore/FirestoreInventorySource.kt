@@ -1,8 +1,10 @@
 package com.techyshishy.beadmanager.data.firestore
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.techyshishy.beadmanager.BuildConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -14,7 +16,9 @@ import javax.inject.Singleton
 /**
  * Wraps Firestore operations for the user's inventory collection.
  *
- * The collection is scoped to the signed-in user: users/{uid}/inventory.
+ * The collection is scoped to the signed-in user: `users/{uid}/inventory` in release builds
+ * and `users_debug/{uid}/inventory` in debug builds, keeping debug data isolated from
+ * production inventory.
  * Firestore's offline persistence (enabled at SDK initialisation in
  * [FirebaseModule]) ensures the latest state is available even without a
  * network connection, and syncs automatically when connectivity resumes.
@@ -25,8 +29,12 @@ class FirestoreInventorySource @Inject constructor(
     private val auth: FirebaseAuth,
 ) {
 
-    private fun inventoryCollection() =
-        firestore.collection("users").document(requireUid()).collection("inventory")
+    private val usersCollection = if (BuildConfig.DEBUG) "users_debug" else "users"
+
+    private fun inventoryRef(uid: String): CollectionReference =
+        firestore.collection(usersCollection).document(uid).collection("inventory")
+
+    private fun inventoryCollection() = inventoryRef(requireUid())
 
     private fun requireUid(): String =
         auth.currentUser?.uid ?: error("No signed-in user — inventory access requires authentication.")
@@ -39,10 +47,7 @@ class FirestoreInventorySource @Inject constructor(
     fun inventoryStream(): Flow<Map<String, InventoryEntry>> {
         val uid = auth.currentUser?.uid ?: return flowOf(emptyMap())
         return callbackFlow {
-            val ref = firestore
-                .collection("users")
-                .document(uid)
-                .collection("inventory")
+            val ref = inventoryRef(uid)
             val registration = ref.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     // Do not emit emptyMap() — retain the last good cached value.
