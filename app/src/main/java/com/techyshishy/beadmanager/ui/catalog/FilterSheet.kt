@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,13 +18,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -84,23 +81,12 @@ fun FilterSheet(
 
             Spacer(Modifier.height(8.dp))
 
-            // Owned only toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.owned_only),
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Switch(
-                    checked = filter.ownedOnly,
-                    onCheckedChange = { _ -> viewModel.toggleOwnedOnly() },
-                )
-            }
+            // Owned only filter chip
+            FilterChip(
+                selected = filter.ownedOnly,
+                onClick = { viewModel.toggleOwnedOnly() },
+                label = { Text(stringResource(R.string.owned_only)) },
+            )
 
             FilterSection(
                 title = stringResource(R.string.color_group),
