@@ -125,7 +125,7 @@ private fun LowStockRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(bead.code, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "%.1fg remaining".format(grams),
+                    "${java.math.BigDecimal.valueOf(grams).stripTrailingZeros().toPlainString()}g remaining",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

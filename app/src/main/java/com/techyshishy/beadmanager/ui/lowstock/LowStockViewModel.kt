@@ -31,6 +31,6 @@ class LowStockViewModel @Inject constructor(
 
     fun buildShareText(): String = lowStockBeads.value.joinToString(separator = "\n") { item ->
         val grams = item.inventory?.quantityGrams ?: 0.0
-        "${item.code} — ${item.catalogEntry.bead.colorGroup} — %.1fg remaining".format(grams)
+        "${item.code} — ${item.catalogEntry.bead.colorGroup} — ${java.math.BigDecimal.valueOf(grams).stripTrailingZeros().toPlainString()}g remaining"
     }
 }

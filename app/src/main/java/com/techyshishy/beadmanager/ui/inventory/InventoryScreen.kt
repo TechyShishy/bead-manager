@@ -133,7 +133,7 @@ private fun InventoryRow(
                 Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.subtract_five_grams))
             }
             Text(
-                text = "%.1fg".format(grams),
+                text = "${java.math.BigDecimal.valueOf(grams).stripTrailingZeros().toPlainString()}g",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )

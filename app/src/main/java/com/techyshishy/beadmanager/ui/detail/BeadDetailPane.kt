@@ -59,7 +59,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import java.util.Locale
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
@@ -209,12 +208,12 @@ fun BeadDetailPane(
                     }
                 } else {
                     Text(
-                        text = "%.1fg".format(currentGrams),
+                        text = "${java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()}g",
                         style = MaterialTheme.typography.headlineMedium,
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
-                                val text = String.format(Locale.US, "%.1f", currentGrams)
+                                val text = java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()
                                 quantityInput = TextFieldValue(text, selection = TextRange(0, text.length))
                                 editingQuantity = true
                             },
