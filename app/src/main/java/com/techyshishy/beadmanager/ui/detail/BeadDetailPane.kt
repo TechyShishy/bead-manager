@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.detail
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,10 +13,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -23,8 +27,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
@@ -35,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -64,7 +67,7 @@ import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BeadDetailPane(
     beadCode: String,
@@ -157,71 +160,111 @@ fun BeadDetailPane(
             var editingQuantity by remember { mutableStateOf(false) }
             var quantityInput by remember { mutableStateOf(TextFieldValue("")) }
             val quantityFocusRequester = remember { FocusRequester() }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            var customAmount by remember(beadCode) { mutableStateOf(TextFieldValue("")) }
+
+            if (editingQuantity) {
+                // Track whether focus was actually acquired this session so that
+                // the initial isFocused=false event on first composition (fired
+                // before LaunchedEffect has a chance to request focus) does not
+                // immediately collapse the field. Declared inside the `if` so
+                // it resets to false each time a new editing session begins.
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = quantityInput,
+                    onValueChange = { quantityInput = it },
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(
+                        color = LocalContentColor.current,
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = {
+                        // Just close the field; the resulting focus-loss fires
+                        // onFocusChanged which saves exactly once.
+                        editingQuantity = false
+                    }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(quantityFocusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                                quantityInput = quantityInput.copy(
+                                    selection = TextRange(0, quantityInput.text.length),
+                                )
+                            } else if (hasFocused) {
+                                val parsed = quantityInput.text.toDoubleOrNull()
+                                if (parsed != null && parsed >= 0.0) viewModel.setQuantity(parsed)
+                                editingQuantity = false
+                            }
+                        },
+                )
+                LaunchedEffect(Unit) {
+                    quantityFocusRequester.requestFocus()
+                }
+            } else {
+                Text(
+                    text = "${java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()}g",
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val text = java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()
+                            quantityInput = TextFieldValue(text, selection = TextRange(0, text.length))
+                            editingQuantity = true
+                        },
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                IconButton(onClick = { viewModel.adjustQuantity(-0.5) }) {
-                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.subtract_five_grams))
-                }
-                if (editingQuantity) {
-                    // Track whether focus was actually acquired this session so that
-                    // the initial isFocused=false event on first composition (fired
-                    // before LaunchedEffect has a chance to request focus) does not
-                    // immediately collapse the field. Declared inside the `if` so
-                    // it resets to false each time a new editing session begins.
-                    var hasFocused by remember { mutableStateOf(false) }
-                    BasicTextField(
-                        value = quantityInput,
-                        onValueChange = { quantityInput = it },
-                        textStyle = MaterialTheme.typography.headlineMedium.copy(
-                            color = LocalContentColor.current,
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(onDone = {
-                            // Just close the field; the resulting focus-loss fires
-                            // onFocusChanged which saves exactly once.
-                            editingQuantity = false
-                        }),
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(quantityFocusRequester)
-                            .onFocusChanged { focusState ->
-                                if (focusState.isFocused) {
-                                    hasFocused = true
-                                    quantityInput = quantityInput.copy(
-                                        selection = TextRange(0, quantityInput.text.length),
-                                    )
-                                } else if (hasFocused) {
-                                    val parsed = quantityInput.text.toDoubleOrNull()
-                                    if (parsed != null && parsed >= 0.0) viewModel.setQuantity(parsed)
-                                    editingQuantity = false
-                                }
-                            },
-                    )
-                    LaunchedEffect(Unit) {
-                        quantityFocusRequester.requestFocus()
-                    }
-                } else {
-                    Text(
-                        text = "${java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()}g",
-                        style = MaterialTheme.typography.headlineMedium,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                val text = java.math.BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString()
-                                quantityInput = TextFieldValue(text, selection = TextRange(0, text.length))
-                                editingQuantity = true
-                            },
+                listOf(5.0, 10.0, 25.0).forEach { grams ->
+                    SuggestionChip(
+                        onClick = { viewModel.adjustQuantity(grams) },
+                        label = { Text("+${"%.0f".format(grams)}g") },
                     )
                 }
-                IconButton(onClick = { viewModel.adjustQuantity(+0.5) }) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_five_grams))
-                }
+                BasicTextField(
+                    value = customAmount,
+                    onValueChange = { customAmount = it },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = LocalContentColor.current,
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = {
+                        val parsed = customAmount.text.toDoubleOrNull()
+                        if (parsed != null && parsed > 0.0) viewModel.adjustQuantity(parsed)
+                        customAmount = TextFieldValue("")
+                    }),
+                    modifier = Modifier.widthIn(min = 96.dp, max = 120.dp),
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            if (customAmount.text.isEmpty()) {
+                                Text(
+                                    "0.0g",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                )
             }
 
             Spacer(Modifier.height(8.dp))
