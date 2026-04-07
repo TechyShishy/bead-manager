@@ -15,9 +15,9 @@ import com.google.firebase.firestore.ServerTimestamp
 data class InventoryEntry(
     @DocumentId val beadCode: String = "",
     val quantityGrams: Double = 0.0,
-    // Retained for Firestore deserialization compatibility. The app now uses a global
-    // threshold from DataStore (PreferencesRepository); this field is no longer read.
-    val lowStockThresholdGrams: Double = 5.0,
+    // Sentinel: 0.0 means "use the global threshold from Settings".
+    // Values > 0 are an explicit per-bead override.
+    val lowStockThresholdGrams: Double = 0.0,
     val notes: String = "",
     @ServerTimestamp val lastUpdated: Timestamp? = null,
 )

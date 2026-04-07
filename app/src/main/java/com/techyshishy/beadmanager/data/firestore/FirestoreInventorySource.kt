@@ -90,4 +90,31 @@ class FirestoreInventorySource @Inject constructor(
         )
         upsert(updated)
     }
+
+    /**
+     * One-time migration: resets [InventoryEntry.lowStockThresholdGrams] from the legacy
+     * factory default (5.0 g) to the sentinel value (0.0 g, meaning "use global default").
+     *
+     * Only documents whose stored threshold is exactly 5.0 are touched — values the user
+     * set explicitly to a different number are left unchanged. The caller is responsible
+     * for recording that the migration has run so it is not repeated.
+     */
+    suspend fun migrateLegacyThresholds() {
+        val uid = auth.currentUser?.uid ?: return
+        // Note: uses default Source (server-first, cache-fallback). If the server is
+        // unreachable and there is no local cache (new device, first launch), this throws.
+        // The caller must NOT treat that exception as success — the migration must retry.
+        val snapshot = inventoryRef(uid).get().await()
+        val matching = snapshot.documents.filter {
+            it.getDouble("lowStockThresholdGrams") == 5.0
+        }
+        // Firestore enforces a hard limit of 500 writes per batch; chunk accordingly.
+        matching.chunked(500).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { doc ->
+                batch.update(doc.reference, "lowStockThresholdGrams", 0.0)
+            }
+            batch.commit().await()
+        }
+    }
 }

@@ -40,6 +40,7 @@ import com.techyshishy.beadmanager.ui.inventory.InventoryScreen
 import com.techyshishy.beadmanager.ui.inventory.InventoryViewModel
 import com.techyshishy.beadmanager.ui.lowstock.LowStockScreen
 import com.techyshishy.beadmanager.ui.lowstock.LowStockViewModel
+import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
 import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
@@ -55,6 +56,8 @@ fun AdaptiveScaffold() {
     val inventoryViewModel: InventoryViewModel = hiltViewModel()
     val lowStockViewModel: LowStockViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
+    // Triggers one-time data migrations immediately on first composition post-auth.
+    hiltViewModel<MigrationViewModel>()
 
     val lowStockCount by lowStockViewModel.lowStockBeads.collectAsState()
 

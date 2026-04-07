@@ -34,7 +34,10 @@
     <string name="settings">Settings</string>
     <string name="settings_section_inventory">Inventory</string>
     <string name="global_low_stock_threshold">Low-stock threshold</string>
-    <string name="global_low_stock_threshold_description">Beads below this quantity will appear in the Reorder list.</string>
+    <string name="global_low_stock_threshold_description">Beads below this quantity will appear in the Reorder list. Individual beads can override this.</string>
     <string name="settings_threshold_label">Threshold (g)</string>
-    <string name="settings_threshold_error">Enter a positive number</string>
+    <string name="settings_threshold_error">Enter a value from 1 to 30 (grams)</string>
+    <string name="low_stock_threshold_label">Low-stock threshold: %1$dg</string>
+    <string name="using_global_default">Using global default</string>
+    <string name="reset_to_global_default">Reset to global</string>
 </resources>

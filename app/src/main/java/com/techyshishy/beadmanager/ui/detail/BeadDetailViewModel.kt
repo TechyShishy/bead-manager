@@ -38,7 +38,7 @@ class BeadDetailViewModel @Inject constructor(
 
     private val beadCode = MutableStateFlow("")
 
-    private val globalThreshold: StateFlow<Double> =
+    val globalThresholdGrams: StateFlow<Double> =
         preferencesRepository.globalLowStockThreshold
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD)
 
@@ -52,7 +52,7 @@ class BeadDetailViewModel @Inject constructor(
             combine(
                 catalogRepository.getBeadWithVendors(code),
                 inventoryRepository.inventoryStream(),
-                globalThreshold,
+                globalThresholdGrams,
             ) { catalogEntry, inventoryMap, threshold ->
                 catalogEntry?.let {
                     BeadWithInventory(
@@ -89,5 +89,17 @@ class BeadDetailViewModel @Inject constructor(
             inventoryRepository.upsert(current.copy(notes = notes, lastUpdated = null))
         }
     }
+
+    fun updateThreshold(thresholdGrams: Double) {
+        viewModelScope.launch {
+            val code = beadCode.value
+            val current = bead.value?.inventory ?: InventoryEntry(beadCode = code)
+            inventoryRepository.upsert(
+                current.copy(lowStockThresholdGrams = thresholdGrams, lastUpdated = null)
+            )
+        }
+    }
+
+    fun resetThresholdToGlobal() = updateThreshold(0.0)
 }
 

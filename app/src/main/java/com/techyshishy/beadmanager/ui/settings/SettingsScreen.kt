@@ -85,7 +85,9 @@ private fun LowStockThresholdRow(
 
     fun tryCommit() {
         val parsed = text.toDoubleOrNull()
-        if (parsed != null && parsed > 0.0 && parsed.isFinite()) {
+        // Must be in [1, 30] — the same range as the per-bead slider. This prevents
+        // the slider thumb from being silently clamped while the label shows a higher value.
+        if (parsed != null && parsed in 1.0..30.0) {
             isError = false
             onCommit(parsed)
         } else {

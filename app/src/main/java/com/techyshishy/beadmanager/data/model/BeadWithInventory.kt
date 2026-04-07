@@ -11,7 +11,9 @@ import com.techyshishy.beadmanager.data.firestore.InventoryEntry
  * ViewModel layer — never persisted directly.
  *
  * [globalThresholdGrams] is the system-wide threshold configured in Settings.
- * It drives [isLowStock] for all beads uniformly.
+ * A bead uses its own [InventoryEntry.lowStockThresholdGrams] when that value
+ * is greater than zero; otherwise it falls back to [globalThresholdGrams].
+ * Zero is the sentinel meaning "use the global default".
  */
 data class BeadWithInventory(
     val catalogEntry: BeadWithVendors,
@@ -23,6 +25,8 @@ data class BeadWithInventory(
     val isLowStock: Boolean
         get() {
             val inv = inventory ?: return false
-            return inv.quantityGrams > 0.0 && inv.quantityGrams <= globalThresholdGrams
+            val threshold = if (inv.lowStockThresholdGrams > 0.0) inv.lowStockThresholdGrams
+                           else globalThresholdGrams
+            return inv.quantityGrams > 0.0 && inv.quantityGrams <= threshold
         }
 }

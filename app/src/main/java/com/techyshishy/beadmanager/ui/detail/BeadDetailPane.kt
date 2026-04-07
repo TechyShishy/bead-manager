@@ -37,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -78,6 +80,7 @@ fun BeadDetailPane(
         viewModel.initialize(beadCode)
     }
     val beadWithInventory by viewModel.bead.collectAsState()
+    val globalThreshold by viewModel.globalThresholdGrams.collectAsState()
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600
     val item = beadWithInventory ?: return
 
@@ -248,6 +251,58 @@ fun BeadDetailPane(
             }
 
             Spacer(Modifier.height(8.dp))
+
+            // Low-stock threshold — per-bead override or global fallback.
+            // 0.0 is the sentinel meaning "use global"; any positive value is a per-bead
+            // override set explicitly by the user.
+            val storedThreshold = inventory?.lowStockThresholdGrams ?: 0.0
+            val isUsingGlobal = storedThreshold == 0.0
+            val effectiveThreshold = if (isUsingGlobal) globalThreshold.toFloat() else storedThreshold.toFloat()
+            var threshold by remember(storedThreshold) { mutableFloatStateOf(effectiveThreshold) }
+            // Keep slider in sync when the global threshold changes while this bead's
+            // threshold is set to the global sentinel.
+            //
+            // Safety note: the LaunchedEffect re-runs when either key changes. The guard
+            // `if (isUsingGlobal)` is what protects against an unwanted reset — not any
+            // recomposition ordering guarantee. A narrow race exists (global changes between
+            // onValueChangeFinished and the Firestore write reflecting back), but it requires
+            // simultaneous multi-screen interaction and is acceptable.
+            LaunchedEffect(isUsingGlobal, globalThreshold) {
+                if (isUsingGlobal) threshold = globalThreshold.toFloat()
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.low_stock_threshold_label,
+                        threshold.toInt(),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (!isUsingGlobal) {
+                    TextButton(onClick = { viewModel.resetThresholdToGlobal() }) {
+                        Text(stringResource(R.string.reset_to_global_default))
+                    }
+                }
+            }
+            if (isUsingGlobal) {
+                Text(
+                    text = stringResource(R.string.using_global_default),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Slider(
+                value = threshold,
+                onValueChange = { threshold = it },
+                onValueChangeFinished = { viewModel.updateThreshold(threshold.toDouble()) },
+                valueRange = 1f..30f,
+                steps = 28,
+            )
 
             // Notes field — saved on IME Done and also on focus loss so edits
             // are never silently discarded by back-gesture or field switching.
