@@ -16,8 +16,8 @@ class CatalogRepository @Inject constructor(
     fun getBeadWithVendors(code: String): Flow<BeadWithVendors?> =
         beadDao.getBeadWithVendors(code)
 
-    fun distinctColorGroups(): Flow<List<String>> =
-        beadDao.distinctColorGroups()
+    fun allColorGroupJsonValues(): Flow<List<String>> =
+        beadDao.allColorGroupJsonValues()
 
     fun distinctGlassGroups(): Flow<List<String>> =
         beadDao.distinctGlassGroups()

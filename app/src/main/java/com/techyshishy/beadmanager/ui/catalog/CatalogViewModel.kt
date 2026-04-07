@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -25,13 +26,24 @@ class CatalogViewModel @Inject constructor(
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
 
-    val colorGroups: StateFlow<List<String>> = catalogRepository.distinctColorGroups()
+    private val json = Json { ignoreUnknownKeys = true }
+
+    val colorGroups: StateFlow<List<String>> = catalogRepository.allColorGroupJsonValues()
+        .map { jsonValues ->
+            jsonValues
+                .flatMap { encoded ->
+                    runCatching { json.decodeFromString<List<String>>(encoded) }.getOrDefault(emptyList())
+                }
+                .distinct()
+                .sorted()
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val glassGroups: StateFlow<List<String>> = catalogRepository.distinctGlassGroups()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val json = Json { ignoreUnknownKeys = true }
+    // json declared first (above) so it is available to the colorGroups lambda
+    // regardless of SharingStarted variant chosen in the future.
 
     val beads: StateFlow<List<BeadWithInventory>> = combine(
         catalogRepository.getAllBeadsWithVendors(),
