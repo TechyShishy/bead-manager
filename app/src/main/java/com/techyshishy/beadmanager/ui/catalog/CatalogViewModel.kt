@@ -76,7 +76,7 @@ class CatalogViewModel @Inject constructor(
                     bead.code.contains(query, ignoreCase = true)
 
                 val matchesColorGroup = filter.colorGroups.isEmpty() ||
-                    colorGroupsInBead.any { it in filter.colorGroups }
+                    filter.colorGroups.all { it in colorGroupsInBead }
 
                 val matchesGlassGroup = filter.glassGroups.isEmpty() ||
                     bead.glassGroup in filter.glassGroups

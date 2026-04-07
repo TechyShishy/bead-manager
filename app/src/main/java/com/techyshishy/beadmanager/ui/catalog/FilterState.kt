@@ -9,6 +9,9 @@ enum class SortDirection { ASCENDING, DESCENDING }
 /**
  * The set of active filter chips and sort order for the catalog screen.
  * Empty sets mean "show all". All filtering and sorting happens in-memory in the ViewModel.
+ *
+ * colorGroups uses AND semantics: a bead must belong to every selected group.
+ * glassGroups and finishes use OR semantics: a bead must match at least one selection.
  */
 data class FilterState(
     val colorGroups: Set<String> = emptySet(),
