@@ -54,8 +54,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 import androidx.core.graphics.toColorInt
@@ -154,7 +156,7 @@ fun BeadDetailPane(
 
             val currentGrams = inventory?.quantityGrams ?: 0.0
             var editingQuantity by remember { mutableStateOf(false) }
-            var quantityInput by remember { mutableStateOf("") }
+            var quantityInput by remember { mutableStateOf(TextFieldValue("")) }
             val quantityFocusRequester = remember { FocusRequester() }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -167,7 +169,8 @@ fun BeadDetailPane(
                     // Track whether focus was actually acquired this session so that
                     // the initial isFocused=false event on first composition (fired
                     // before LaunchedEffect has a chance to request focus) does not
-                    // immediately collapse the field.
+                    // immediately collapse the field. Declared inside the `if` so
+                    // it resets to false each time a new editing session begins.
                     var hasFocused by remember { mutableStateOf(false) }
                     BasicTextField(
                         value = quantityInput,
@@ -181,8 +184,8 @@ fun BeadDetailPane(
                             imeAction = ImeAction.Done,
                         ),
                         keyboardActions = KeyboardActions(onDone = {
-                            val parsed = quantityInput.toDoubleOrNull()
-                            if (parsed != null && parsed >= 0.0) viewModel.setQuantity(parsed)
+                            // Just close the field; the resulting focus-loss fires
+                            // onFocusChanged which saves exactly once.
                             editingQuantity = false
                         }),
                         modifier = Modifier
@@ -191,8 +194,11 @@ fun BeadDetailPane(
                             .onFocusChanged { focusState ->
                                 if (focusState.isFocused) {
                                     hasFocused = true
+                                    quantityInput = quantityInput.copy(
+                                        selection = TextRange(0, quantityInput.text.length),
+                                    )
                                 } else if (hasFocused) {
-                                    val parsed = quantityInput.toDoubleOrNull()
+                                    val parsed = quantityInput.text.toDoubleOrNull()
                                     if (parsed != null && parsed >= 0.0) viewModel.setQuantity(parsed)
                                     editingQuantity = false
                                 }
@@ -208,7 +214,8 @@ fun BeadDetailPane(
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
-                                quantityInput = String.format(Locale.US, "%.1f", currentGrams)
+                                val text = String.format(Locale.US, "%.1f", currentGrams)
+                                quantityInput = TextFieldValue(text, selection = TextRange(0, text.length))
                                 editingQuantity = true
                             },
                     )
