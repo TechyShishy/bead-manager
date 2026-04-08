@@ -12,15 +12,15 @@ service cloud.firestore {
     // No rule for /users/{uid} itself — this app stores no user profile
     // document at that path. If one is added later, add a rule here.
     // -----------------------------------------------------------------------
-    match /users/{uid}/inventory/{beadCode} {
+    match /users/{uid}/inventory/{document=**} {
       allow read, write: if isOwner(uid);
     }
 
-    match /users/{uid}/projects/{projectId} {
+    match /users/{uid}/projects/{document=**} {
       allow read, write: if isOwner(uid);
     }
 
-    match /users/{uid}/orders/{orderId} {
+    match /users/{uid}/orders/{document=**} {
       allow read, write: if isOwner(uid);
     }
 
@@ -29,15 +29,15 @@ service cloud.firestore {
     // Same ownership rules as production; data is isolated to prevent
     // test writes from contaminating the release inventory/orders/projects.
     // -----------------------------------------------------------------------
-    match /users_debug/{uid}/inventory/{beadCode} {
+    match /users_debug/{uid}/inventory/{document=**} {
       allow read, write: if isOwner(uid);
     }
 
-    match /users_debug/{uid}/projects/{projectId} {
+    match /users_debug/{uid}/projects/{document=**} {
       allow read, write: if isOwner(uid);
     }
 
-    match /users_debug/{uid}/orders/{orderId} {
+    match /users_debug/{uid}/orders/{document=**} {
       allow read, write: if isOwner(uid);
     }
   }
