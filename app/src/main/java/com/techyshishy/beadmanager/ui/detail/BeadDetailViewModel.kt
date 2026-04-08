@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
+import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD
+import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +37,7 @@ class BeadDetailViewModel @Inject constructor(
     private val catalogRepository: CatalogRepository,
     private val inventoryRepository: InventoryRepository,
     preferencesRepository: PreferencesRepository,
+    private val projectRepository: ProjectRepository,
 ) : ViewModel() {
 
     private val beadCode = MutableStateFlow("")
@@ -100,5 +104,29 @@ class BeadDetailViewModel @Inject constructor(
     }
 
     fun resetThresholdToGlobal() = updateThreshold(0.0)
+
+    // ── Project bead list ──────────────────────────────────────────────────────
+
+    /**
+     * All projects belonging to the current user. Drives the "Add to project"
+     * selector in the catalog detail pane.
+     */
+    val projects: StateFlow<List<ProjectEntry>> =
+        projectRepository.projectsStream()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Adds the current bead to [projectId] with [targetGrams] as the target quantity.
+     * If the bead is already in the project, replaces its existing target.
+     * No-ops silently if the bead code is blank (i.e. [initialize] has not been called).
+     */
+    suspend fun addToProject(projectId: String, targetGrams: Double) {
+        val code = beadCode.value.takeIf { it.isNotBlank() } ?: return
+        val existingBeads = projects.value
+            .find { it.projectId == projectId }?.beads ?: emptyList()
+        val updated = existingBeads.filter { it.beadCode != code } +
+            ProjectBeadEntry(code, targetGrams)
+        projectRepository.updateBeads(projectId, updated)
+    }
 }
 

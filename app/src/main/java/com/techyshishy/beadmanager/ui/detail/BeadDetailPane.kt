@@ -25,6 +25,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -32,12 +36,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -50,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +67,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -67,9 +75,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
+import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import java.math.BigDecimal
 import java.text.NumberFormat
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 // Consistent with all other decode sites: ignoreUnknownKeys guards against future
@@ -84,6 +95,7 @@ fun BeadDetailPane(
     beadCode: String,
     viewModel: BeadDetailViewModel,
     onNavigateBack: (() -> Unit)? = null,
+    onShowSnackbar: (String) -> Unit = {},
 ) {
     // LaunchedEffect ensures initialize() runs as a side effect, not during
     // composition, avoiding potential re-entrant snapshot state writes.
@@ -97,9 +109,11 @@ fun BeadDetailPane(
 
     val bead = item.catalogEntry.bead
     val inventory = item.inventory
-    val vendorLinks = item.catalogEntry.vendorLinks
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val projects by viewModel.projects.collectAsState()
+    var showAddToProjectSheet by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val hexColor = remember(bead.hex) {
         runCatching { Color(bead.hex.toColorInt()) }.getOrDefault(Color.Gray)
@@ -350,36 +364,23 @@ fun BeadDetailPane(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // Purchase links
-            if (vendorLinks.isNotEmpty()) {
-                Text("Buy", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                vendorLinks.forEach { link ->
-                    FilledTonalButton(
-                        onClick = {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(link.url))
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(stringResource(R.string.buy_at, link.displayName))
-                            if (link.beadName != null) {
-                                Text(
-                                    text = link.beadName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-                                )
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
+            // Add to project
+            Button(
+                onClick = { showAddToProjectSheet = true },
+                enabled = projects.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.add_to_project))
             }
-
+            if (projects.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.no_projects_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
                     context.startActivity(
@@ -393,6 +394,177 @@ fun BeadDetailPane(
             if (!isPhoneLayout) {
                 Spacer(Modifier.navigationBarsPadding())
             }
+        }
+    }
+    if (showAddToProjectSheet) {
+        AddToProjectSheet(
+            beadCode = bead.code,
+            projects = projects,
+            onConfirm = { projectId, targetGrams, isUpdate ->
+                val projectName = projects.find { it.projectId == projectId }?.name ?: projectId
+                val message = if (isUpdate)
+                    context.getString(R.string.bead_updated_in_project, bead.code, projectName)
+                else
+                    context.getString(R.string.bead_added_to_project, bead.code, projectName)
+                scope.launch {
+                    viewModel.addToProject(projectId, targetGrams)
+                    showAddToProjectSheet = false
+                    onShowSnackbar(message)
+                }
+            },
+            onDismiss = { showAddToProjectSheet = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddToProjectSheet(
+    beadCode: String,
+    projects: List<ProjectEntry>,
+    onConfirm: (projectId: String, targetGrams: Double, isUpdate: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedProjectId by remember { mutableStateOf<String?>(null) }
+    var targetGramsInput by remember { mutableStateOf("") }
+    var showReplaceDialog by remember { mutableStateOf(false) }
+    // Captured at confirm-tap time so the AlertDialog references stable values.
+    var replaceProjectId by remember { mutableStateOf("") }
+    var replaceGrams by remember { mutableStateOf(0.0) }
+
+    val existingEntry: ProjectBeadEntry? = remember(selectedProjectId, projects) {
+        projects.find { it.projectId == selectedProjectId }
+            ?.beads?.find { it.beadCode == beadCode }
+    }
+
+    // Pre-fill target grams when the selected project already has this bead.
+    LaunchedEffect(selectedProjectId) {
+        targetGramsInput = projects
+            .find { it.projectId == selectedProjectId }
+            ?.beads?.find { it.beadCode == beadCode }
+            ?.let { BigDecimal.valueOf(it.targetGrams).stripTrailingZeros().toPlainString() }
+            ?: ""
+    }
+
+    val parsedGrams = targetGramsInput.toDoubleOrNull()?.takeIf { it > 0.0 }
+    val canConfirm = selectedProjectId != null && parsedGrams != null
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.add_to_project_title, beadCode),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
+                items(projects, key = { it.projectId }) { project ->
+                    val existingInThis = project.beads.find { it.beadCode == beadCode }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = project.projectId == selectedProjectId,
+                                onClick = { selectedProjectId = project.projectId },
+                                role = Role.RadioButton,
+                            )
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        RadioButton(
+                            selected = project.projectId == selectedProjectId,
+                            onClick = null,
+                        )
+                        Text(project.name, modifier = Modifier.weight(1f))
+                        if (existingInThis != null) {
+                            Text(
+                                text = "${BigDecimal.valueOf(existingInThis.targetGrams).stripTrailingZeros().toPlainString()}g",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            OutlinedTextField(
+                value = targetGramsInput,
+                onValueChange = { targetGramsInput = it },
+                label = { Text(stringResource(R.string.target_grams)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done,
+                ),
+                suffix = { Text("g") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    if (existingEntry != null) {
+                        // Capture stable values before showing the confirmation dialog.
+                        replaceProjectId = selectedProjectId!!
+                        replaceGrams = parsedGrams!!
+                        showReplaceDialog = true
+                    } else {
+                        onConfirm(selectedProjectId!!, parsedGrams!!, false)
+                    }
+                },
+                enabled = canConfirm,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    stringResource(
+                        if (existingEntry != null) R.string.update_target else R.string.add_to_project,
+                    ),
+                )
+            }
+        }
+    }
+
+    if (showReplaceDialog) {
+        val replaceProject = projects.find { it.projectId == replaceProjectId }
+        val existingGrams = projects
+            .find { it.projectId == replaceProjectId }
+            ?.beads?.find { it.beadCode == beadCode }?.targetGrams ?: 0.0
+        if (replaceProject != null) {
+            AlertDialog(
+                onDismissRequest = { showReplaceDialog = false },
+                title = { Text(stringResource(R.string.already_in_project_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.already_in_project_message,
+                            beadCode,
+                            replaceProject.name,
+                            BigDecimal.valueOf(existingGrams).stripTrailingZeros().toPlainString(),
+                            BigDecimal.valueOf(replaceGrams).stripTrailingZeros().toPlainString(),
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showReplaceDialog = false
+                        onConfirm(replaceProjectId, replaceGrams, true)
+                    }) {
+                        Text(stringResource(R.string.update_target))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showReplaceDialog = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                },
+            )
         }
     }
 }

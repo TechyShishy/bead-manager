@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -30,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,9 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
@@ -76,7 +71,6 @@ fun ProjectDetailScreen(
     val beads = project?.beads ?: emptyList()
 
     var checkedCodes by rememberSaveable { mutableStateOf(emptySet<String>()) }
-    var showAddDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
 
     // Drop checked codes that were removed from the bead list.
@@ -98,10 +92,6 @@ fun ProjectDetailScreen(
                     }
                 },
                 actions = {
-                    // Add bead
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_bead))
-                    }
                     // View orders — badge shows order count when > 0
                     IconButton(
                         onClick = {
@@ -180,16 +170,6 @@ fun ProjectDetailScreen(
                 }
             }
         }
-    }
-
-    if (showAddDialog) {
-        AddBeadDialog(
-            onConfirm = { beadCode, targetGrams ->
-                viewModel.addBead(beadCode, targetGrams)
-                showAddDialog = false
-            },
-            onDismiss = { showAddDialog = false },
-        )
     }
 
     deleteTarget?.let { bead ->
@@ -290,60 +270,4 @@ private fun ProjectBeadRow(
             )
         }
     }
-}
-
-@Composable
-private fun AddBeadDialog(
-    onConfirm: (beadCode: String, targetGrams: Double) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var beadCodeInput by remember { mutableStateOf("") }
-    var targetGramsInput by remember { mutableStateOf("") }
-
-    val normalizedCode = beadCodeInput.uppercase().trim()
-    val targetGrams = targetGramsInput.toDoubleOrNull()?.takeIf { it > 0.0 }
-    val canConfirm = normalizedCode.isNotBlank() && targetGrams != null
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.add_bead)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = beadCodeInput,
-                    onValueChange = { beadCodeInput = it },
-                    label = { Text(stringResource(R.string.bead_code)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        imeAction = ImeAction.Next,
-                    ),
-                )
-                OutlinedTextField(
-                    value = targetGramsInput,
-                    onValueChange = { targetGramsInput = it },
-                    label = { Text(stringResource(R.string.target_grams)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done,
-                    ),
-                    suffix = { Text("g") },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(normalizedCode, targetGrams!!) },
-                enabled = canConfirm,
-            ) {
-                Text(stringResource(android.R.string.ok))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        },
-    )
 }

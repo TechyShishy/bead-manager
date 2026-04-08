@@ -3,7 +3,6 @@ package com.techyshishy.beadmanager.ui.orders
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
@@ -78,23 +77,6 @@ class ProjectDetailViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     // ── Bead list mutations ──────────────────────────────────────────────────
-
-    /**
-     * Adds a bead to the project bead list.
-     * Silently no-ops if the code is already present.
-     * Returns false if the code is blank or is a duplicate; true if the bead was added.
-     */
-    fun addBead(beadCode: String, targetGrams: Double): Boolean {
-        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return false
-        val normalized = beadCode.uppercase().trim()
-        if (normalized.isBlank()) return false
-        val currentBeads = project.value?.beads ?: emptyList()
-        if (currentBeads.any { it.beadCode == normalized }) return false
-        viewModelScope.launch {
-            projectRepository.addBead(projectId, ProjectBeadEntry(normalized, targetGrams), currentBeads)
-        }
-        return true
-    }
 
     /**
      * Removes a bead from the project bead list.

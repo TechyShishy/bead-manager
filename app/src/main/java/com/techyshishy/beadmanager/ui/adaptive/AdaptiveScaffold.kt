@@ -1,6 +1,8 @@
 package com.techyshishy.beadmanager.ui.adaptive
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Folder
@@ -9,6 +11,8 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -19,9 +23,12 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -58,6 +65,7 @@ fun AdaptiveScaffold() {
 
     // Separate list-detail navigators keep scaffold state independent per tab.
     val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
+    val catalogSnackbarHostState = remember { SnackbarHostState() }
 
     // Orders tab: four-level nav state (projects → project detail → orders → order detail).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -108,39 +116,50 @@ fun AdaptiveScaffold() {
                 BackHandler(catalogNavigator.canNavigateBack()) {
                     scope.launch { catalogNavigator.navigateBack() }
                 }
-                ListDetailPaneScaffold(
-                    directive = catalogNavigator.scaffoldDirective.copy(maxHorizontalPartitions = 1),
-                    value = catalogNavigator.scaffoldValue,
-                    listPane = {
-                        AnimatedPane {
-                            CatalogScreen(
-                                viewModel = catalogViewModel,
-                                onBeadSelected = { code ->
-                                    catalogNavigator.navigateTo(
-                                        ListDetailPaneScaffoldRole.Detail,
-                                        code,
-                                    )
-                                },
-                            )
-                        }
-                    },
-                    detailPane = {
-                        AnimatedPane {
-                            catalogNavigator.currentDestination?.content?.let { code ->
-                                val detailVm: BeadDetailViewModel = hiltViewModel(
-                                    key = "catalog_detail_$code",
-                                )
-                                BeadDetailPane(
-                                    beadCode = code,
-                                    viewModel = detailVm,
-                                    onNavigateBack = if (catalogNavigator.canNavigateBack()) {
-                                        { scope.launch { catalogNavigator.navigateBack() } }
-                                    } else null,
+                Box(modifier = Modifier.fillMaxSize()) {
+                    ListDetailPaneScaffold(
+                        directive = catalogNavigator.scaffoldDirective.copy(maxHorizontalPartitions = 1),
+                        value = catalogNavigator.scaffoldValue,
+                        listPane = {
+                            AnimatedPane {
+                                CatalogScreen(
+                                    viewModel = catalogViewModel,
+                                    onBeadSelected = { code ->
+                                        catalogNavigator.navigateTo(
+                                            ListDetailPaneScaffoldRole.Detail,
+                                            code,
+                                        )
+                                    },
                                 )
                             }
-                        }
-                    },
-                )
+                        },
+                        detailPane = {
+                            AnimatedPane {
+                                catalogNavigator.currentDestination?.content?.let { code ->
+                                    val detailVm: BeadDetailViewModel = hiltViewModel(
+                                        key = "catalog_detail_$code",
+                                    )
+                                    BeadDetailPane(
+                                        beadCode = code,
+                                        viewModel = detailVm,
+                                        onNavigateBack = if (catalogNavigator.canNavigateBack()) {
+                                            { scope.launch { catalogNavigator.navigateBack() } }
+                                        } else null,
+                                        onShowSnackbar = { message ->
+                                            scope.launch {
+                                                catalogSnackbarHostState.showSnackbar(message)
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    )
+                    SnackbarHost(
+                        hostState = catalogSnackbarHostState,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
             }
 
             AppTab.PROJECTS -> {

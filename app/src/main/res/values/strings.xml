@@ -9,7 +9,6 @@
     <string name="finish">Finish</string>
     <string name="quantity_grams">Quantity (g)</string>
     <string name="notes">Notes</string>
-    <string name="buy_at">Buy at %1$s</string>
     <string name="view_on_miyuki">View on Miyuki</string>
     <string name="navigate_back">Back</string>
     <string name="sort_by">Sort By</string>
@@ -70,8 +69,7 @@
     <string name="revert_pending">Revert to pending</string>
 
     <!-- Project detail / bead list -->
-    <string name="add_bead">Add Bead</string>
-    <string name="no_beads">No beads yet. Tap + to add one.</string>
+    <string name="no_beads">No beads yet. Add beads from the Catalog tab.</string>
     <string name="remove_bead">Remove bead</string>
     <string name="confirm_remove_bead">Remove %1$s from this project?</string>
     <string name="bead_progress">%1$s g / %2$s g received</string>
@@ -81,4 +79,14 @@
     <string name="select_vendor">Select vendor</string>
     <string name="bead_vendor_target">%1$s — target %2$s g</string>
     <string name="over_target_warning">Already received %1$s g; ordering this will exceed the %2$s g project target.</string>
+
+    <!-- Catalog → Add to project -->
+    <string name="add_to_project">Add to project</string>
+    <string name="no_projects_hint">Create a project first</string>
+    <string name="add_to_project_title">Add %1$s to project</string>
+    <string name="already_in_project_title">Already in project</string>
+    <string name="already_in_project_message">%1$s is already in \u201c%2$s\u201d (target: %3$sg). Replace with %4$sg?</string>
+    <string name="bead_added_to_project">Added %1$s to %2$s</string>
+    <string name="bead_updated_in_project">Updated %1$s target in %2$s</string>
+    <string name="update_target">Update target</string>
 </resources>

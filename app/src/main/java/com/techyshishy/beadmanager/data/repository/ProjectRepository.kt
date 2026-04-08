@@ -34,15 +34,6 @@ class ProjectRepository @Inject constructor(
     }
 
     /**
-     * Appends a bead to the project bead list.
-     * Silently no-ops if a bead with the same [ProjectBeadEntry.beadCode] already exists.
-     */
-    suspend fun addBead(projectId: String, entry: ProjectBeadEntry, existingBeads: List<ProjectBeadEntry>) {
-        if (existingBeads.any { it.beadCode == entry.beadCode }) return
-        source.updateBeads(projectId, existingBeads + entry)
-    }
-
-    /**
      * Removes a bead from the project bead list by bead code.
      * Does not check for vendor-less order items referencing this bead; the caller is
      * responsible for confirming with the user before calling.
