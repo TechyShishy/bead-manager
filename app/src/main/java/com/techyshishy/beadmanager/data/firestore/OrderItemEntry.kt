@@ -18,7 +18,9 @@ import com.google.firebase.Timestamp
  *                   equality to resolve the URL, which is only safe with the original value.
  * [quantityUnits] — ceil(targetGrams / packGrams); stored to avoid per-render recompute.
  * [status]        — lowercase string from [OrderItemStatus.firestoreValue].
- * [receivedAt]    — null until status transitions to "received".
+ * [receivedAt]    — null until status transitions to "received". Set to client Timestamp.now()
+ *                   on first receive; preserved on retries. Cannot use @ServerTimestamp here
+ *                   because FieldValue.serverTimestamp() is not supported inside array elements.
  * [appliedToInventory] — idempotency guard; true after the inventory delta has been posted.
  *
  * Default values are required for Firestore no-argument deserialization.

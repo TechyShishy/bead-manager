@@ -16,8 +16,8 @@ class InventoryRepository @Inject constructor(
     suspend fun upsert(entry: InventoryEntry) =
         source.upsert(entry)
 
-    suspend fun adjustQuantity(beadCode: String, deltaGrams: Double, current: InventoryEntry?) =
-        source.adjustQuantity(beadCode, deltaGrams, current)
+    suspend fun adjustQuantity(beadCode: String, deltaGrams: Double) =
+        source.adjustQuantity(beadCode, deltaGrams)
 
     suspend fun migrateLegacyThresholds() =
         source.migrateLegacyThresholds()

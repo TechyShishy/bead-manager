@@ -1,6 +1,6 @@
 ---
 description: "Use when writing any code for this Android project. Covers architecture, naming conventions, data layer patterns, Compose UI patterns, and release process. Always load for Kotlin, Gradle, or Compose tasks in bead-manager."
-applyTo: "app/src/**/*.kt, app/build.gradle.kts, gradle/libs.versions.toml"
+applyTo: "**"
 ---
 
 # Bead Manager — Project Conventions

@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.techyshishy.beadmanager.BuildConfig
 import kotlinx.coroutines.channels.awaitClose
@@ -44,7 +45,9 @@ class FirestoreOrderSource @Inject constructor(
     fun ordersStream(projectId: String): Flow<List<OrderEntry>> {
         val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
         return callbackFlow {
-            val query = ordersRef(uid).whereEqualTo("projectId", projectId)
+            val query = ordersRef(uid)
+                .whereEqualTo("projectId", projectId)
+                .orderBy("createdAt", Query.Direction.ASCENDING)
             val registration = query.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e("FirestoreOrder", "Snapshot listener error", error)

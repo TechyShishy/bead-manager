@@ -1,7 +1,6 @@
 package com.techyshishy.beadmanager.data.repository
 
 import com.techyshishy.beadmanager.data.firestore.FirestoreOrderSource
-import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
@@ -35,32 +34,39 @@ class OrderRepository @Inject constructor(
      * to confirm receive again — they can decline. This is the worst-case outcome and is
      * tolerable given the absence of a distributed transaction boundary here.
      *
+     * The inventory increment is atomic on the server ([FieldValue.increment] via
+     * [InventoryRepository.adjustQuantity]), so concurrent receives from multiple devices
+     * accumulate correctly.
+     *
      * @param orderId   Document ID of the containing order.
      * @param item      The item being received.
      * @param allItems  The full items list from the order (used to build the replacement array).
-     * @param currentInventory  Latest inventory snapshot, keyed by beadCode.
      */
     suspend fun markItemReceived(
         orderId: String,
         item: OrderItemEntry,
         allItems: List<OrderItemEntry>,
-        currentInventory: Map<String, InventoryEntry>,
     ) {
         check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey } == 1) {
             "Order item identity collision: ${item.beadCode}/${item.vendorKey}"
+        }
+        require(item.quantityUnits > 0 && item.packGrams > 0.0) {
+            "Cannot receive item with zero quantity or pack size: ${item.beadCode}/${item.vendorKey}"
         }
         if (!item.appliedToInventory) {
             val deltaGrams = item.packGrams * item.quantityUnits
             inventoryRepository.adjustQuantity(
                 beadCode = item.beadCode,
                 deltaGrams = deltaGrams,
-                current = currentInventory[item.beadCode],
             )
         }
 
         val received = item.copy(
             status = OrderItemStatus.RECEIVED.firestoreValue,
-            receivedAt = com.google.firebase.Timestamp.now(),
+            // Preserve the original timestamp on re-calls (e.g. retry after partial failure).
+            // Only set when first marking received; client Timestamp.now() is the only option
+            // because FieldValue.serverTimestamp() is not supported inside array elements.
+            receivedAt = item.receivedAt ?: com.google.firebase.Timestamp.now(),
             appliedToInventory = true,
         )
         val updatedItems = allItems.map { existing ->
@@ -76,6 +82,12 @@ class OrderRepository @Inject constructor(
     /**
      * Updates the status of a line item to any non-received status.
      * For RECEIVED transitions, use [markItemReceived] instead.
+     *
+     * Reverting FROM [OrderItemStatus.RECEIVED] is permitted. The item's
+     * [OrderItemEntry.appliedToInventory] flag is intentionally left true — no inventory
+     * reversal is performed. This means a re-received item will skip the inventory write
+     * (idempotency is preserved) but will show a PENDING/ORDERED/SKIPPED status in the UI
+     * while inventory has already been credited.
      */
     suspend fun updateItemStatus(
         orderId: String,

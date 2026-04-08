@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.data.firestore
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.techyshishy.beadmanager.BuildConfig
@@ -79,16 +80,32 @@ class FirestoreInventorySource @Inject constructor(
     }
 
     /**
-     * Adjust quantity by [deltaGrams] (can be negative) and write the result.
-     * Clamps the result to a minimum of 0.
+     * Atomically increment the quantity for [beadCode] by [deltaGrams].
+     *
+     * Uses [FieldValue.increment] so the delta is applied server-side without a
+     * prior read. Concurrent calls from multiple devices cannot race — the server
+     * serialises the increments, so all deltas are applied correctly.
+     *
+     * [deltaGrams] must be positive; negative deltas (decrements) are not supported — use
+     * [upsert] with an explicit [InventoryEntry.quantityGrams] value for absolute sets.
+     *
+     * If the inventory document does not yet exist it is created with
+     * quantityGrams = deltaGrams — [FieldValue.increment] treats a missing field as 0.
+     * [SetOptions.merge] is independent: it prevents the write from erasing other fields
+     * (`notes`, `lowStockThresholdGrams`) that are not present in the update map.
      */
-    suspend fun adjustQuantity(beadCode: String, deltaGrams: Double, currentEntry: InventoryEntry?) {
-        val current = currentEntry ?: InventoryEntry(beadCode = beadCode)
-        val updated = current.copy(
-            quantityGrams = maxOf(0.0, current.quantityGrams + deltaGrams),
-            lastUpdated = null, // cleared so @ServerTimestamp fills it
-        )
-        upsert(updated)
+    suspend fun adjustQuantity(beadCode: String, deltaGrams: Double) {
+        require(deltaGrams > 0.0) { "deltaGrams must be positive; use upsert() for absolute sets." }
+        inventoryCollection()
+            .document(beadCode)
+            .set(
+                mapOf(
+                    "quantityGrams" to FieldValue.increment(deltaGrams),
+                    "lastUpdated" to FieldValue.serverTimestamp(),
+                ),
+                SetOptions.merge(),
+            )
+            .await()
     }
 
     /**

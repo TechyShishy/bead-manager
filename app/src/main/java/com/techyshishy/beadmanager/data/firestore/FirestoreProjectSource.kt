@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.techyshishy.beadmanager.BuildConfig
 import kotlinx.coroutines.channels.awaitClose
@@ -38,7 +39,9 @@ class FirestoreProjectSource @Inject constructor(
     fun projectsStream(): Flow<List<ProjectEntry>> {
         val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
         return callbackFlow {
-            val registration = projectsRef(uid).addSnapshotListener { snapshot, error ->
+            val registration = projectsRef(uid)
+                .orderBy("createdAt", Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e("FirestoreProject", "Snapshot listener error", error)
                     return@addSnapshotListener

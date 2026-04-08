@@ -69,7 +69,6 @@ class BeadDetailViewModel @Inject constructor(
             inventoryRepository.adjustQuantity(
                 beadCode = beadCode.value,
                 deltaGrams = deltaGrams,
-                current = bead.value?.inventory,
             )
         }
     }
