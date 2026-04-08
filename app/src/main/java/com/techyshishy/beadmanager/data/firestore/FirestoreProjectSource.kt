@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.data.firestore
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -54,6 +55,22 @@ class FirestoreProjectSource @Inject constructor(
         }
     }
 
+    fun projectStream(projectId: String): Flow<ProjectEntry?> {
+        val uid = auth.currentUser?.uid ?: return flowOf(null)
+        return callbackFlow {
+            val registration = projectsRef(uid).document(projectId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("FirestoreProject", "Single project stream error for $projectId", error)
+                        return@addSnapshotListener
+                    }
+                    if (snapshot == null) return@addSnapshotListener
+                    trySend(snapshot.toObject(ProjectEntry::class.java))
+                }
+            awaitClose { registration.remove() }
+        }
+    }
+
     /**
      * Creates a new project document with an auto-generated ID.
      * Returns the assigned document ID.
@@ -68,6 +85,23 @@ class FirestoreProjectSource @Inject constructor(
     suspend fun updateProject(entry: ProjectEntry) {
         val uid = requireUid()
         projectsRef(uid).document(entry.projectId).set(entry, SetOptions.merge()).await()
+    }
+
+    /**
+     * Replaces the [beads] array on the project document.
+     * Uses [SetOptions.merge] so [name] and [createdAt] are not touched.
+     */
+    suspend fun updateBeads(projectId: String, beads: List<ProjectBeadEntry>) {
+        val uid = requireUid()
+        projectsRef(uid).document(projectId)
+            .set(
+                mapOf(
+                    "beads" to beads,
+                    "lastUpdated" to FieldValue.serverTimestamp(),
+                ),
+                SetOptions.merge(),
+            )
+            .await()
     }
 
     suspend fun deleteProject(projectId: String) {

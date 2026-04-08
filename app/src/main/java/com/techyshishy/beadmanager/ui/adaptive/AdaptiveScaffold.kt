@@ -35,6 +35,8 @@ import com.techyshishy.beadmanager.ui.orders.OrderDetailScreen
 import com.techyshishy.beadmanager.ui.orders.OrderDetailViewModel
 import com.techyshishy.beadmanager.ui.orders.OrdersScreen
 import com.techyshishy.beadmanager.ui.orders.OrdersViewModel
+import com.techyshishy.beadmanager.ui.orders.ProjectDetailScreen
+import com.techyshishy.beadmanager.ui.orders.ProjectDetailViewModel
 import com.techyshishy.beadmanager.ui.orders.ProjectsScreen
 import com.techyshishy.beadmanager.ui.orders.ProjectsViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
@@ -57,9 +59,10 @@ fun AdaptiveScaffold() {
     // Separate list-detail navigators keep scaffold state independent per tab.
     val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
 
-    // Orders tab: simple three-level nav state (projects → orders → order detail).
+    // Orders tab: four-level nav state (projects → project detail → orders → order detail).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var ordersProjectName by rememberSaveable { mutableStateOf("") }
+    var ordersShowOrdersList by rememberSaveable { mutableStateOf(false) }
     var ordersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
 
     NavigationSuiteScaffold(
@@ -142,11 +145,13 @@ fun AdaptiveScaffold() {
 
             AppTab.ORDERS -> {
                 BackHandler(ordersProjectId != null) {
-                    if (ordersOrderId != null) {
-                        ordersOrderId = null
-                    } else {
-                        ordersProjectId = null
-                        ordersProjectName = ""
+                    when {
+                        ordersOrderId != null -> ordersOrderId = null
+                        ordersShowOrdersList -> ordersShowOrdersList = false
+                        else -> {
+                            ordersProjectId = null
+                            ordersProjectName = ""
+                        }
                     }
                 }
                 when {
@@ -159,7 +164,7 @@ fun AdaptiveScaffold() {
                             onNavigateBack = { ordersOrderId = null },
                         )
                     }
-                    ordersProjectId != null -> {
+                    ordersShowOrdersList && ordersProjectId != null -> {
                         val ordersVm: OrdersViewModel =
                             hiltViewModel(key = "orders_$ordersProjectId")
                         OrdersScreen(
@@ -167,9 +172,22 @@ fun AdaptiveScaffold() {
                             projectName = ordersProjectName,
                             viewModel = ordersVm,
                             onOrderSelected = { orderId -> ordersOrderId = orderId },
+                            onNavigateBack = { ordersShowOrdersList = false },
+                        )
+                    }
+                    ordersProjectId != null -> {
+                        val projectDetailVm: ProjectDetailViewModel =
+                            hiltViewModel(key = "project_detail_$ordersProjectId")
+                        ProjectDetailScreen(
+                            projectId = ordersProjectId!!,
+                            viewModel = projectDetailVm,
                             onNavigateBack = {
                                 ordersProjectId = null
                                 ordersProjectName = ""
+                            },
+                            onViewOrders = { _, _ -> ordersShowOrdersList = true },
+                            onOrderCreated = { orderId ->
+                                ordersOrderId = orderId
                             },
                         )
                     }
@@ -179,6 +197,7 @@ fun AdaptiveScaffold() {
                             onProjectSelected = { projectId, projectName ->
                                 ordersProjectId = projectId
                                 ordersProjectName = projectName
+                                ordersShowOrdersList = false
                             },
                         )
                     }

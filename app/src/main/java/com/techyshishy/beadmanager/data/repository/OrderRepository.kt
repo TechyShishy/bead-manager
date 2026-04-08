@@ -4,6 +4,7 @@ import com.techyshishy.beadmanager.data.firestore.FirestoreOrderSource
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,6 +23,30 @@ class OrderRepository @Inject constructor(
     suspend fun createOrder(entry: OrderEntry): String =
         source.createOrder(entry)
 
+    /**
+     * Creates a new order pre-populated with vendor-less items for [selectedBeads].
+     *
+     * Each bead produces one [OrderItemEntry] with [vendorKey] = "" and [packGrams] = 0.0.
+     * The user assigns a vendor (and the DP combination runs) on the Order Detail screen.
+     *
+     * Returns the new order document ID.
+     */
+    suspend fun createOrderFromBeads(projectId: String, selectedBeads: List<ProjectBeadEntry>): String {
+        require(selectedBeads.isNotEmpty()) { "Cannot create an order with no beads selected." }
+        val items = selectedBeads.map { bead ->
+            OrderItemEntry(
+                beadCode = bead.beadCode,
+                vendorKey = "",
+                targetGrams = bead.targetGrams,
+                packGrams = 0.0,
+                quantityUnits = 0,
+                status = OrderItemStatus.PENDING.firestoreValue,
+            )
+        }
+        val entry = OrderEntry(projectId = projectId, items = items)
+        return source.createOrder(entry)
+    }
+
     suspend fun deleteOrder(orderId: String) =
         source.deleteOrder(orderId)
 
@@ -39,6 +64,32 @@ class OrderRepository @Inject constructor(
         }
         if (toAdd.isEmpty()) return
         source.updateItems(orderId, existingItems + toAdd)
+    }
+
+    /**
+     * Assigns a vendor to the vendor-less item for [beadCode], replacing it with one or more
+     * [newItems] produced from the pack combination.
+     *
+     * The single vendor-less item (vendorKey == "") is removed and the [newItems] are appended.
+     * Triple-identity duplicates among [newItems] vs the remaining items are silently dropped.
+     * If no vendor-less item for [beadCode] exists, the call is a no-op.
+     */
+    suspend fun assignVendor(
+        orderId: String,
+        beadCode: String,
+        newItems: List<OrderItemEntry>,
+        allItems: List<OrderItemEntry>,
+    ) {
+        val withoutVendorless = allItems.filter { !(it.beadCode == beadCode && it.vendorKey.isBlank()) }
+        if (withoutVendorless.size == allItems.size) return  // no vendor-less item found
+        val toAdd = newItems.filter { newItem ->
+            withoutVendorless.none {
+                it.beadCode == newItem.beadCode &&
+                    it.vendorKey == newItem.vendorKey &&
+                    it.packGrams == newItem.packGrams
+            }
+        }
+        source.updateItems(orderId, withoutVendorless + toAdd)
     }
 
     /** Removes a line item by (beadCode, vendorKey, packGrams) identity. */

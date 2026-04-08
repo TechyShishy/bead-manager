@@ -68,4 +68,17 @@
     <string name="mark_received">Mark received</string>
     <string name="mark_skipped">Skip</string>
     <string name="revert_pending">Revert to pending</string>
+
+    <!-- Project detail / bead list -->
+    <string name="add_bead">Add Bead</string>
+    <string name="no_beads">No beads yet. Tap + to add one.</string>
+    <string name="remove_bead">Remove bead</string>
+    <string name="confirm_remove_bead">Remove %1$s from this project?</string>
+    <string name="bead_progress">%1$s g / %2$s g received</string>
+    <string name="bead_target_met">✓ Target met</string>
+    <string name="create_order">Create Order</string>
+    <string name="view_orders">View Orders</string>
+    <string name="select_vendor">Select vendor</string>
+    <string name="bead_vendor_target">%1$s — target %2$s g</string>
+    <string name="over_target_warning">Already received %1$s g; ordering this will exceed the %2$s g project target.</string>
 </resources>

@@ -1,0 +1,123 @@
+package com.techyshishy.beadmanager.ui.orders
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.techyshishy.beadmanager.data.firestore.OrderEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.repository.OrderRepository
+import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+/**
+ * Drives the Project Detail screen (bead list).
+ *
+ * Combines a live stream of the project document (for the bead list) with a live stream of
+ * all orders for that project (for received-grams progress). The resulting [receivedGrams]
+ * map is computed reactively — no denormalized write is needed.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+@HiltViewModel
+class ProjectDetailViewModel @Inject constructor(
+    private val projectRepository: ProjectRepository,
+    private val orderRepository: OrderRepository,
+) : ViewModel() {
+
+    private val _projectId = MutableStateFlow("")
+
+    fun initialize(projectId: String) {
+        if (_projectId.value != projectId) _projectId.value = projectId
+    }
+
+    val project: StateFlow<ProjectEntry?> = _projectId
+        .flatMapLatest { id ->
+            if (id.isBlank()) flowOf(null)
+            else projectRepository.projectStream(id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val orders: StateFlow<List<OrderEntry>> = _projectId
+        .flatMapLatest { id ->
+            if (id.isBlank()) flowOf(emptyList())
+            else orderRepository.ordersStream(id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val orderCount: StateFlow<Int> = orders
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * Grams received per bead code, summed across all orders.
+     *
+     * Only counts items where [appliedToInventory] is true, so reverted items
+     * are correctly excluded.
+     */
+    val receivedGrams: StateFlow<Map<String, Double>> = orders
+        .map { orderList ->
+            val map = mutableMapOf<String, Double>()
+            for (order in orderList) {
+                for (item in order.items) {
+                    if (item.appliedToInventory) {
+                        map[item.beadCode] = (map[item.beadCode] ?: 0.0) + item.packGrams * item.quantityUnits
+                    }
+                }
+            }
+            map
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    // ── Bead list mutations ──────────────────────────────────────────────────
+
+    /**
+     * Adds a bead to the project bead list.
+     * Silently no-ops if the code is already present.
+     * Returns false if the code is blank or is a duplicate; true if the bead was added.
+     */
+    fun addBead(beadCode: String, targetGrams: Double): Boolean {
+        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return false
+        val normalized = beadCode.uppercase().trim()
+        if (normalized.isBlank()) return false
+        val currentBeads = project.value?.beads ?: emptyList()
+        if (currentBeads.any { it.beadCode == normalized }) return false
+        viewModelScope.launch {
+            projectRepository.addBead(projectId, ProjectBeadEntry(normalized, targetGrams), currentBeads)
+        }
+        return true
+    }
+
+    /**
+     * Removes a bead from the project bead list.
+     */
+    fun removeBead(beadCode: String) {
+        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
+        val currentBeads = project.value?.beads ?: return
+        viewModelScope.launch {
+            projectRepository.removeBead(projectId, beadCode, currentBeads)
+        }
+    }
+
+    // ── Order creation ───────────────────────────────────────────────────────
+
+    /**
+     * Creates a new order pre-populated with vendor-less items for [selectedBeadCodes].
+     * Returns the new orderId, or null if no codes are selected or no matching beads found.
+     */
+    suspend fun createOrderFromSelection(selectedBeadCodes: Set<String>): String? {
+        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return null
+        val beads = project.value?.beads ?: return null
+        val selected = beads.filter { it.beadCode in selectedBeadCodes }
+        if (selected.isEmpty()) return null
+        return orderRepository.createOrderFromBeads(projectId, selected)
+    }
+}
