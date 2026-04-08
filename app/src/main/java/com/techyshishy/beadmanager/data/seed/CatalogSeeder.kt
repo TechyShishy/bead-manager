@@ -110,20 +110,24 @@ class CatalogSeeder @Inject constructor(
                     beadCode = bead.code,
                     vendorKey = key,
                     displayName = VENDOR_DISPLAY_NAMES[key] ?: key,
-                    url = options.minByOrNull { it.grams }?.url ?: "",
+                    // !! is safe: grams is non-null in every element after the filter.
+                    url = options.filter { it.grams != null }.minByOrNull { it.grams!! }?.url
+                        ?: options.firstOrNull()?.url ?: "",
                     beadName = bead.names[key],
                 )
             }
         }
 
         // vendor_packs: one row per purchasable SKU (beadCode, vendorKey, grams).
+        // Options with null grams are generic product-page links with no pack size; skip them.
         val vendorPackEntities = catalog.values.flatMap { bead ->
             bead.purchase.entries.flatMap { (key, options) ->
-                options.map { option ->
+                options.mapNotNull { option ->
+                    val grams = option.grams ?: return@mapNotNull null
                     VendorPackEntity(
                         beadCode = bead.code,
                         vendorKey = key,
-                        grams = option.grams,
+                        grams = grams,
                         url = option.url,
                     )
                 }
@@ -159,7 +163,7 @@ class CatalogSeeder @Inject constructor(
 
     @Serializable
     private data class PurchaseOptionJson(
-        val grams: Double,
+        val grams: Double?,
         val url: String,
     )
 }
