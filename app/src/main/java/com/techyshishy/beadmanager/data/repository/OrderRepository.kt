@@ -107,14 +107,61 @@ class OrderRepository @Inject constructor(
     }
 
     /**
+     * Reverts a RECEIVED item to PENDING and reverses the inventory credit.
+     *
+     * The inventory decrement uses the same [InventoryRepository.adjustQuantity] path as the
+     * receive — a server-side [FieldValue.increment] with a negative delta, so concurrent
+     * reverts from multiple devices accumulate correctly.
+     *
+     * After a successful revert, [OrderItemEntry.appliedToInventory] is reset to `false` and
+     * [OrderItemEntry.receivedAt] is cleared. This means a subsequent "Mark Received" call will
+     * re-credit inventory, which is the correct behaviour.
+     *
+     * Crash window: inventory is reversed before the Firestore write. If the app crashes between
+     * the two operations, the item still shows RECEIVED / appliedToInventory = true, but one
+     * pack-quantity of grams has already been subtracted from inventory. The user can retry the
+     * revert; the inventory adjustment will fire a second time, going further negative. This is
+     * the same class of risk accepted in [markItemReceived] and is tolerable without a
+     * distributed transaction boundary.
+     *
+     * @param orderId   Document ID of the containing order.
+     * @param item      The RECEIVED item to revert.
+     * @param allItems  The full items list from the order.
+     */
+    suspend fun revertItemReceived(
+        orderId: String,
+        item: OrderItemEntry,
+        allItems: List<OrderItemEntry>,
+    ) {
+        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
+            "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"
+        }
+        if (item.appliedToInventory) {
+            val deltaGrams = -(item.packGrams * item.quantityUnits)
+            inventoryRepository.adjustQuantity(
+                beadCode = item.beadCode,
+                deltaGrams = deltaGrams,
+            )
+        }
+        val reverted = item.copy(
+            status = OrderItemStatus.PENDING.firestoreValue,
+            appliedToInventory = false,
+            receivedAt = null,
+        )
+        val updatedItems = allItems.map { existing ->
+            if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
+                reverted
+            } else {
+                existing
+            }
+        }
+        source.updateItems(orderId, updatedItems)
+    }
+
+    /**
      * Updates the status of a line item to any non-received status.
      * For RECEIVED transitions, use [markItemReceived] instead.
-     *
-     * Reverting FROM [OrderItemStatus.RECEIVED] is permitted. The item's
-     * [OrderItemEntry.appliedToInventory] flag is intentionally left true — no inventory
-     * reversal is performed. This means a re-received item will skip the inventory write
-     * (idempotency is preserved) but will show a PENDING/ORDERED/SKIPPED status in the UI
-     * while inventory has already been credited.
+     * For reverting a RECEIVED item (with inventory reversal), use [revertItemReceived] instead.
      */
     suspend fun updateItemStatus(
         orderId: String,
@@ -124,6 +171,9 @@ class OrderRepository @Inject constructor(
     ) {
         require(newStatus != OrderItemStatus.RECEIVED) {
             "Use markItemReceived() to transition items to RECEIVED status."
+        }
+        require(item.status != OrderItemStatus.RECEIVED.firestoreValue) {
+            "Use revertItemReceived() to revert RECEIVED items — inventory reversal is required."
         }
         check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
             "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"

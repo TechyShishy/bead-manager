@@ -133,6 +133,7 @@ fun OrderDetailScreen(
                         OrderItemRow(
                             item = item,
                             onMarkReceived = { viewModel.markItemReceived(item) },
+                            onRevertReceived = { viewModel.revertItemReceived(item) },
                             onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
                             onRemove = { removeTarget = item },
                         )
@@ -194,6 +195,7 @@ private fun VendorSectionHeader(vendorKey: String) {
 private fun OrderItemRow(
     item: OrderItemEntry,
     onMarkReceived: () -> Unit,
+    onRevertReceived: () -> Unit,
     onUpdateStatus: (OrderItemStatus) -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -269,7 +271,7 @@ private fun OrderItemRow(
                 }
                 OrderItemStatus.RECEIVED -> {
                     SuggestionChip(
-                        onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
+                        onClick = onRevertReceived,
                         label = { Text(stringResource(R.string.revert_pending)) },
                     )
                 }

@@ -80,4 +80,11 @@ class OrderDetailViewModel @Inject constructor(
             orderRepository.updateItemStatus(currentOrder.orderId, item, currentOrder.items, newStatus)
         }
     }
+
+    fun revertItemReceived(item: OrderItemEntry) {
+        val currentOrder = order.value ?: return
+        viewModelScope.launch {
+            orderRepository.revertItemReceived(currentOrder.orderId, item, currentOrder.items)
+        }
+    }
 }

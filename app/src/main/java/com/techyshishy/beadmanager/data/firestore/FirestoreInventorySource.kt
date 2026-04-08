@@ -95,7 +95,7 @@ class FirestoreInventorySource @Inject constructor(
      * (`notes`, `lowStockThresholdGrams`) that are not present in the update map.
      */
     suspend fun adjustQuantity(beadCode: String, deltaGrams: Double) {
-        require(deltaGrams > 0.0) { "deltaGrams must be positive; use upsert() for absolute sets." }
+        require(deltaGrams != 0.0) { "deltaGrams must be non-zero; use upsert() for absolute sets." }
         inventoryCollection()
             .document(beadCode)
             .set(
