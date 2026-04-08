@@ -51,13 +51,25 @@ class CatalogSeeder @Inject constructor(
             // Third vendor will be added here — key must match JSON field name.
         )
 
-        // Canonical finish values from the catalog; used to populate filter chips.
+        // Canonical values for each finish-related property; used to populate filter chips.
+        // Note: ALL_FINISHES filters the bead.finishes JSON array. ALL_GALVANIZED_VALUES and
+        // ALL_PLATING_VALUES filter the separate scalar bead.galvanized / bead.plating columns;
+        // the overlapping labels ("Galvanized", "Plating") select on different DB columns.
         val ALL_FINISHES: List<String> = listOf(
             "Color-Lined", "Copperline", "Duracoat", "Frosted (Matte)",
             "Galvanized", "Glass enamel", "Glazed", "Glazed Luster",
             "Gold Luster", "Goldline", "Luster", "Metallic",
             "Non-Extra Finish", "Outside-Dyed", "Plating", "Rainbow",
             "Silverline", "Special Coating",
+        )
+        val ALL_DYED_VALUES: List<String> = listOf(
+            "Color-Lined", "Duracoat Outside-Dyed", "Non Dyed", "Outside Dyed",
+        )
+        val ALL_GALVANIZED_VALUES: List<String> = listOf(
+            "Duracoat Galvanized", "Galvanized", "Non-galvanized",
+        )
+        val ALL_PLATING_VALUES: List<String> = listOf(
+            "Copper", "Gold", "Nickel", "Non-Plating", "Palladium", "Silver",
         )
     }
 

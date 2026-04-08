@@ -11,12 +11,16 @@ enum class SortDirection { ASCENDING, DESCENDING }
  * Empty sets mean "show all". All filtering and sorting happens in-memory in the ViewModel.
  *
  * colorGroups uses AND semantics: a bead must belong to every selected group.
- * glassGroups and finishes use OR semantics: a bead must match at least one selection.
+ * glassGroups, finishes, dyed, galvanized, and plating use OR semantics: a bead must match
+ * at least one selection within each group.
  */
 data class FilterState(
     val colorGroups: Set<String> = emptySet(),
     val glassGroups: Set<String> = emptySet(),
     val finishes: Set<String> = emptySet(),
+    val dyed: Set<String> = emptySet(),
+    val galvanized: Set<String> = emptySet(),
+    val plating: Set<String> = emptySet(),
     val ownedOnly: Boolean = false,
     val sortBy: SortBy = SortBy.DB_NUMBER,
     val sortDirection: SortDirection = SortDirection.ASCENDING,

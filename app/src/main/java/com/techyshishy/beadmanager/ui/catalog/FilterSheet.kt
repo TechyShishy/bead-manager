@@ -40,6 +40,9 @@ fun FilterSheet(
     val colorGroups by viewModel.colorGroups.collectAsState()
     val glassGroups by viewModel.glassGroups.collectAsState()
     val finishes = CatalogSeeder.ALL_FINISHES
+    val dyedValues = CatalogSeeder.ALL_DYED_VALUES
+    val galvanizedValues = CatalogSeeder.ALL_GALVANIZED_VALUES
+    val platingValues = CatalogSeeder.ALL_PLATING_VALUES
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -107,6 +110,27 @@ fun FilterSheet(
                 items = finishes,
                 selected = filter.finishes,
                 onToggle = viewModel::toggleFinish,
+            )
+
+            FilterSection(
+                title = stringResource(R.string.dyed),
+                items = dyedValues,
+                selected = filter.dyed,
+                onToggle = viewModel::toggleDyed,
+            )
+
+            FilterSection(
+                title = stringResource(R.string.galvanized),
+                items = galvanizedValues,
+                selected = filter.galvanized,
+                onToggle = viewModel::toggleGalvanized,
+            )
+
+            FilterSection(
+                title = stringResource(R.string.plating),
+                items = platingValues,
+                selected = filter.plating,
+                onToggle = viewModel::togglePlating,
             )
 
             Spacer(Modifier.height(8.dp))

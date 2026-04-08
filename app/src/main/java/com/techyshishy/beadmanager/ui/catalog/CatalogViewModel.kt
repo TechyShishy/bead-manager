@@ -84,9 +84,16 @@ class CatalogViewModel @Inject constructor(
                 val matchesFinish = filter.finishes.isEmpty() ||
                     finishesInBead.any { it in filter.finishes }
 
+                val matchesDyed = filter.dyed.isEmpty() || bead.dyed in filter.dyed
+
+                val matchesGalvanized = filter.galvanized.isEmpty() || bead.galvanized in filter.galvanized
+
+                val matchesPlating = filter.plating.isEmpty() || bead.plating in filter.plating
+
                 val matchesOwned = !filter.ownedOnly || item.isOwned
 
-                matchesQuery && matchesColorGroup && matchesGlassGroup && matchesFinish && matchesOwned
+                matchesQuery && matchesColorGroup && matchesGlassGroup &&
+                    matchesFinish && matchesDyed && matchesGalvanized && matchesPlating && matchesOwned
             }
             .let { filtered ->
                 val asc = filter.sortDirection == SortDirection.ASCENDING
@@ -168,6 +175,30 @@ class CatalogViewModel @Inject constructor(
             f.copy(
                 finishes = if (finish in f.finishes) f.finishes - finish
                 else f.finishes + finish,
+            )
+        }
+    }
+
+    fun toggleDyed(value: String) {
+        filterState.value = filterState.value.let { f ->
+            f.copy(
+                dyed = if (value in f.dyed) f.dyed - value else f.dyed + value,
+            )
+        }
+    }
+
+    fun toggleGalvanized(value: String) {
+        filterState.value = filterState.value.let { f ->
+            f.copy(
+                galvanized = if (value in f.galvanized) f.galvanized - value else f.galvanized + value,
+            )
+        }
+    }
+
+    fun togglePlating(value: String) {
+        filterState.value = filterState.value.let { f ->
+            f.copy(
+                plating = if (value in f.plating) f.plating - value else f.plating + value,
             )
         }
     }
