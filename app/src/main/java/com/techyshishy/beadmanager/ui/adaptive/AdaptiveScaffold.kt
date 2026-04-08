@@ -3,11 +3,11 @@ package com.techyshishy.beadmanager.ui.adaptive
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -42,7 +42,7 @@ import com.techyshishy.beadmanager.ui.orders.ProjectsViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
 import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
-enum class AppTab { CATALOG, ORDERS, SETTINGS }
+enum class AppTab { CATALOG, PROJECTS, SETTINGS }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -79,16 +79,16 @@ fun AdaptiveScaffold() {
                 label = { Text(stringResource(R.string.catalog)) },
             )
             item(
-                selected = currentTab == AppTab.ORDERS,
-                onClick = { currentTab = AppTab.ORDERS },
+                selected = currentTab == AppTab.PROJECTS,
+                onClick = { currentTab = AppTab.PROJECTS },
                 icon = {
                     Icon(
-                        if (currentTab == AppTab.ORDERS) Icons.Filled.ShoppingCart
-                        else Icons.Outlined.ShoppingCart,
+                        if (currentTab == AppTab.PROJECTS) Icons.Filled.Folder
+                        else Icons.Outlined.Folder,
                         contentDescription = null,
                     )
                 },
-                label = { Text(stringResource(R.string.orders)) },
+                label = { Text(stringResource(R.string.projects)) },
             )
             item(
                 selected = currentTab == AppTab.SETTINGS,
@@ -143,7 +143,7 @@ fun AdaptiveScaffold() {
                 )
             }
 
-            AppTab.ORDERS -> {
+            AppTab.PROJECTS -> {
                 BackHandler(ordersProjectId != null) {
                     when {
                         ordersOrderId != null -> ordersOrderId = null
