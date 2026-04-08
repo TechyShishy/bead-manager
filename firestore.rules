@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Shared helper — true when the request is from the document's owner.
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // -----------------------------------------------------------------------
+    // Release data — users/{uid}/...
+    // No rule for /users/{uid} itself — this app stores no user profile
+    // document at that path. If one is added later, add a rule here.
+    // -----------------------------------------------------------------------
+    match /users/{uid}/inventory/{beadCode} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /users/{uid}/projects/{projectId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /users/{uid}/orders/{orderId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // -----------------------------------------------------------------------
+    // Debug data — users_debug/{uid}/...
+    // Same ownership rules as production; data is isolated to prevent
+    // test writes from contaminating the release inventory/orders/projects.
+    // -----------------------------------------------------------------------
+    match /users_debug/{uid}/inventory/{beadCode} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /users_debug/{uid}/projects/{projectId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /users_debug/{uid}/orders/{orderId} {
+      allow read, write: if isOwner(uid);
+    }
+  }
+}
