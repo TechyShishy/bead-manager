@@ -25,19 +25,26 @@ class OrderRepository @Inject constructor(
     suspend fun deleteOrder(orderId: String) =
         source.deleteOrder(orderId)
 
-    /** Appends a new item to an order. No-op if the (beadCode, vendorKey) pair already exists. */
-    suspend fun addItem(orderId: String, newItem: OrderItemEntry, existingItems: List<OrderItemEntry>) {
-        val alreadyPresent = existingItems.any {
-            it.beadCode == newItem.beadCode && it.vendorKey == newItem.vendorKey
+    /**
+     * Appends new line items to an order.
+     * Items whose (beadCode, vendorKey, packGrams) triple already exists are silently skipped.
+     */
+    suspend fun addItems(orderId: String, newItems: List<OrderItemEntry>, existingItems: List<OrderItemEntry>) {
+        val toAdd = newItems.filter { newItem ->
+            existingItems.none {
+                it.beadCode == newItem.beadCode &&
+                    it.vendorKey == newItem.vendorKey &&
+                    it.packGrams == newItem.packGrams
+            }
         }
-        if (alreadyPresent) return
-        source.updateItems(orderId, existingItems + newItem)
+        if (toAdd.isEmpty()) return
+        source.updateItems(orderId, existingItems + toAdd)
     }
 
-    /** Removes a line item by (beadCode, vendorKey) identity. */
+    /** Removes a line item by (beadCode, vendorKey, packGrams) identity. */
     suspend fun removeItem(orderId: String, item: OrderItemEntry, allItems: List<OrderItemEntry>) {
         val updated = allItems.filter {
-            it.beadCode != item.beadCode || it.vendorKey != item.vendorKey
+            it.beadCode != item.beadCode || it.vendorKey != item.vendorKey || it.packGrams != item.packGrams
         }
         source.updateItems(orderId, updated)
     }
@@ -67,8 +74,8 @@ class OrderRepository @Inject constructor(
         item: OrderItemEntry,
         allItems: List<OrderItemEntry>,
     ) {
-        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey } == 1) {
-            "Order item identity collision: ${item.beadCode}/${item.vendorKey}"
+        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
+            "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"
         }
         require(item.quantityUnits > 0 && item.packGrams > 0.0) {
             "Cannot receive item with zero quantity or pack size: ${item.beadCode}/${item.vendorKey}"
@@ -90,7 +97,7 @@ class OrderRepository @Inject constructor(
             appliedToInventory = true,
         )
         val updatedItems = allItems.map { existing ->
-            if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey) {
+            if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
                 received
             } else {
                 existing
@@ -118,12 +125,12 @@ class OrderRepository @Inject constructor(
         require(newStatus != OrderItemStatus.RECEIVED) {
             "Use markItemReceived() to transition items to RECEIVED status."
         }
-        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey } == 1) {
-            "Order item identity collision: ${item.beadCode}/${item.vendorKey}"
+        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
+            "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"
         }
         val updated = item.copy(status = newStatus.firestoreValue)
         val updatedItems = allItems.map { existing ->
-            if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey) {
+            if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
                 updated
             } else {
                 existing

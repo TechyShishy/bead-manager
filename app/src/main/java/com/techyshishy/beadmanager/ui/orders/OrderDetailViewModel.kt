@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.ceil
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -50,21 +49,14 @@ class OrderDetailViewModel @Inject constructor(
         catalogRepository.packsForVendor(beadCode, vendorKey)
 
     /**
-     * Adds a new line item to the current order.
-     * [packGrams] must be the verbatim value from [VendorPackEntity.grams].
+     * Adds pre-computed line items to the current order.
+     * Items whose (beadCode, vendorKey, packGrams) triple already exists are silently skipped
+     * by [OrderRepository.addItems].
      */
-    fun addItem(beadCode: String, vendorKey: String, packGrams: Double, targetGrams: Double) {
+    fun addItems(items: List<OrderItemEntry>) {
         val currentOrder = order.value ?: return
-        val quantityUnits = ceil(targetGrams / packGrams).toInt()
-        val newItem = OrderItemEntry(
-            beadCode = beadCode,  // caller (AddItemBottomSheet) already normalizes
-            vendorKey = vendorKey,
-            targetGrams = targetGrams,
-            packGrams = packGrams,
-            quantityUnits = quantityUnits,
-        )
         viewModelScope.launch {
-            orderRepository.addItem(currentOrder.orderId, newItem, currentOrder.items)
+            orderRepository.addItems(currentOrder.orderId, items, currentOrder.items)
         }
     }
 

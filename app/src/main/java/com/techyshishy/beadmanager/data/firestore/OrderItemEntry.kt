@@ -5,7 +5,8 @@ import com.google.firebase.Timestamp
 /**
  * A single line item within an [OrderEntry].
  *
- * Identity is (beadCode + vendorKey) — exactly one entry per bead-vendor pair per order.
+ * Identity is (beadCode + vendorKey + packGrams) — an order may have multiple entries for the
+ * same bead-vendor pair when different pack sizes are needed to reach the target quantity.
  *
  * The purchase URL is NOT stored here. At render time it is resolved from Room:
  *   VendorPackDao.packUrl(beadCode, vendorKey, packGrams)
@@ -16,7 +17,8 @@ import com.google.firebase.Timestamp
  *                   INVARIANT: must be a verbatim copy of VendorPackEntity.grams — never
  *                   arithmetically derived. VendorPackDao.packUrl() uses floating-point
  *                   equality to resolve the URL, which is only safe with the original value.
- * [quantityUnits] — ceil(targetGrams / packGrams); stored to avoid per-render recompute.
+ * [quantityUnits] — the number of units of [packGrams] to order for this row; set from the
+ *                   DP combination result. Stored to avoid per-render recompute.
  * [status]        — lowercase string from [OrderItemStatus.firestoreValue].
  * [receivedAt]    — null until status transitions to "received". Set to client Timestamp.now()
  *                   on first receive; preserved on retries. Cannot use @ServerTimestamp here

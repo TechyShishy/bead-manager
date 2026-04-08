@@ -56,6 +56,7 @@
     <string name="pack_size_grams">%1$s g</string>
     <string name="target_grams">Target quantity</string>
     <string name="quantity_units">%1$d × %2$s g to order</string>
+    <string name="combination_no_solution">No combination possible for this target</string>
     <string name="remove_item">Remove item</string>
     <string name="confirm_remove_item">Remove %1$s from this order?</string>
 
