@@ -222,11 +222,11 @@ private fun OrderItemRow(
                 )
             }
             StatusBadge(status)
-            IconButton(onClick = onRemove, enabled = status != OrderItemStatus.RECEIVED) {
+            IconButton(onClick = onRemove, enabled = !item.appliedToInventory) {
                 Icon(
                     Icons.Filled.Delete,
                     contentDescription = stringResource(R.string.remove_item),
-                    tint = if (status != OrderItemStatus.RECEIVED)
+                    tint = if (!item.appliedToInventory)
                         MaterialTheme.colorScheme.error
                     else
                         MaterialTheme.colorScheme.outlineVariant,
@@ -234,41 +234,44 @@ private fun OrderItemRow(
             }
         }
 
-        if (status != OrderItemStatus.RECEIVED) {
-            Spacer(Modifier.height(6.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when (status) {
-                    OrderItemStatus.PENDING -> {
-                        SuggestionChip(
-                            onClick = { onUpdateStatus(OrderItemStatus.ORDERED) },
-                            label = { Text(stringResource(R.string.mark_ordered)) },
-                        )
-                        SuggestionChip(
-                            onClick = { onUpdateStatus(OrderItemStatus.SKIPPED) },
-                            label = { Text(stringResource(R.string.mark_skipped)) },
-                        )
-                    }
-                    OrderItemStatus.ORDERED -> {
-                        SuggestionChip(
-                            onClick = onMarkReceived,
-                            label = { Text(stringResource(R.string.mark_received)) },
-                        )
-                        SuggestionChip(
-                            onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
-                            label = { Text(stringResource(R.string.revert_pending)) },
-                        )
-                        SuggestionChip(
-                            onClick = { onUpdateStatus(OrderItemStatus.SKIPPED) },
-                            label = { Text(stringResource(R.string.mark_skipped)) },
-                        )
-                    }
-                    OrderItemStatus.SKIPPED -> {
-                        SuggestionChip(
-                            onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
-                            label = { Text(stringResource(R.string.revert_pending)) },
-                        )
-                    }
-                    OrderItemStatus.RECEIVED -> { /* no actions */ }
+        Spacer(Modifier.height(6.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            when (status) {
+                OrderItemStatus.PENDING -> {
+                    SuggestionChip(
+                        onClick = { onUpdateStatus(OrderItemStatus.ORDERED) },
+                        label = { Text(stringResource(R.string.mark_ordered)) },
+                    )
+                    SuggestionChip(
+                        onClick = { onUpdateStatus(OrderItemStatus.SKIPPED) },
+                        label = { Text(stringResource(R.string.mark_skipped)) },
+                    )
+                }
+                OrderItemStatus.ORDERED -> {
+                    SuggestionChip(
+                        onClick = onMarkReceived,
+                        label = { Text(stringResource(R.string.mark_received)) },
+                    )
+                    SuggestionChip(
+                        onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
+                        label = { Text(stringResource(R.string.revert_pending)) },
+                    )
+                    SuggestionChip(
+                        onClick = { onUpdateStatus(OrderItemStatus.SKIPPED) },
+                        label = { Text(stringResource(R.string.mark_skipped)) },
+                    )
+                }
+                OrderItemStatus.SKIPPED -> {
+                    SuggestionChip(
+                        onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
+                        label = { Text(stringResource(R.string.revert_pending)) },
+                    )
+                }
+                OrderItemStatus.RECEIVED -> {
+                    SuggestionChip(
+                        onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
+                        label = { Text(stringResource(R.string.revert_pending)) },
+                    )
                 }
             }
         }
