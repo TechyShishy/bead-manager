@@ -66,6 +66,7 @@ fun ProjectDetailScreen(
     val project by viewModel.project.collectAsState()
     val receivedGrams by viewModel.receivedGrams.collectAsState()
     val orderCount by viewModel.orderCount.collectAsState()
+    val inventoryGrams by viewModel.inventoryGrams.collectAsState()
     val scope = rememberCoroutineScope()
 
     val beads = project?.beads ?: emptyList()
@@ -155,6 +156,7 @@ fun ProjectDetailScreen(
                     ProjectBeadRow(
                         bead = bead,
                         receivedGrams = received,
+                        inventoryGrams = inventoryGrams[bead.beadCode] ?: 0.0,
                         checked = bead.beadCode in checkedCodes,
                         atOrOverTarget = atOrOverTarget,
                         onCheckedChange = { checked ->
@@ -198,6 +200,7 @@ fun ProjectDetailScreen(
 private fun ProjectBeadRow(
     bead: ProjectBeadEntry,
     receivedGrams: Double,
+    inventoryGrams: Double,
     checked: Boolean,
     atOrOverTarget: Boolean,
     onCheckedChange: (Boolean) -> Unit,
@@ -209,6 +212,10 @@ private fun ProjectBeadRow(
 
     val targetStr = BigDecimal.valueOf(bead.targetGrams).stripTrailingZeros().toPlainString()
     val receivedStr = BigDecimal.valueOf(receivedGrams).stripTrailingZeros().toPlainString()
+    val deficit = (bead.targetGrams - inventoryGrams).coerceAtLeast(0.0)
+        .let { if (it < 0.001) 0.0 else it }
+    val invStr = BigDecimal.valueOf(inventoryGrams).stripTrailingZeros().toPlainString()
+    val deficitStr = BigDecimal.valueOf(deficit).stripTrailingZeros().toPlainString()
 
     Column(
         modifier = Modifier
@@ -269,5 +276,16 @@ private fun ProjectBeadRow(
                         else MaterialTheme.colorScheme.primary,
             )
         }
+        Text(
+            text = if (deficit > 0.0) {
+                stringResource(R.string.bead_in_stock_deficit, invStr, deficitStr)
+            } else {
+                stringResource(R.string.bead_in_stock_sufficient, invStr)
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (deficit > 0.0) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.tertiary,
+            modifier = Modifier.padding(start = 44.dp, top = 2.dp, end = 48.dp),
+        )
     }
 }

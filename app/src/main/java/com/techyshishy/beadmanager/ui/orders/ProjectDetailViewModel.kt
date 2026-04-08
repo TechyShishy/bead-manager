@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +31,7 @@ import javax.inject.Inject
 class ProjectDetailViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val orderRepository: OrderRepository,
+    private val inventoryRepository: InventoryRepository,
 ) : ViewModel() {
 
     private val _projectId = MutableStateFlow("")
@@ -74,6 +76,17 @@ class ProjectDetailViewModel @Inject constructor(
             }
             map
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Current inventory quantity per bead code, in grams.
+     *
+     * Used alongside [ProjectBeadEntry.targetGrams] to compute how much still needs to be
+     * acquired. Deficit = max(0, targetGrams - inventoryGrams[beadCode]).
+     */
+    val inventoryGrams: StateFlow<Map<String, Double>> = inventoryRepository
+        .inventoryStream()
+        .map { inv -> inv.mapValues { (_, entry) -> entry.quantityGrams } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     // ── Bead list mutations ──────────────────────────────────────────────────
