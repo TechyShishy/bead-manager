@@ -4,8 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -29,10 +31,16 @@ import com.techyshishy.beadmanager.ui.catalog.CatalogViewModel
 import com.techyshishy.beadmanager.ui.detail.BeadDetailPane
 import com.techyshishy.beadmanager.ui.detail.BeadDetailViewModel
 import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
+import com.techyshishy.beadmanager.ui.orders.OrderDetailScreen
+import com.techyshishy.beadmanager.ui.orders.OrderDetailViewModel
+import com.techyshishy.beadmanager.ui.orders.OrdersScreen
+import com.techyshishy.beadmanager.ui.orders.OrdersViewModel
+import com.techyshishy.beadmanager.ui.orders.ProjectsScreen
+import com.techyshishy.beadmanager.ui.orders.ProjectsViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
 import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
-enum class AppTab { CATALOG, SETTINGS }
+enum class AppTab { CATALOG, ORDERS, SETTINGS }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -42,11 +50,17 @@ fun AdaptiveScaffold() {
 
     val catalogViewModel: CatalogViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
+    val projectsViewModel: ProjectsViewModel = hiltViewModel()
     // Triggers one-time data migrations immediately on first composition post-auth.
     hiltViewModel<MigrationViewModel>()
 
     // Separate list-detail navigators keep scaffold state independent per tab.
     val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
+
+    // Orders tab: simple three-level nav state (projects → orders → order detail).
+    var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    var ordersProjectName by rememberSaveable { mutableStateOf("") }
+    var ordersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -60,6 +74,18 @@ fun AdaptiveScaffold() {
                     )
                 },
                 label = { Text(stringResource(R.string.catalog)) },
+            )
+            item(
+                selected = currentTab == AppTab.ORDERS,
+                onClick = { currentTab = AppTab.ORDERS },
+                icon = {
+                    Icon(
+                        if (currentTab == AppTab.ORDERS) Icons.Filled.ShoppingCart
+                        else Icons.Outlined.ShoppingCart,
+                        contentDescription = null,
+                    )
+                },
+                label = { Text(stringResource(R.string.orders)) },
             )
             item(
                 selected = currentTab == AppTab.SETTINGS,
@@ -79,8 +105,6 @@ fun AdaptiveScaffold() {
                 BackHandler(catalogNavigator.canNavigateBack()) {
                     scope.launch { catalogNavigator.navigateBack() }
                 }
-                // Provide a BeadDetailViewModel scoped to the selected code via the
-                // scaffold navigator's content key so Hilt reuses the VM per bead.
                 ListDetailPaneScaffold(
                     directive = catalogNavigator.scaffoldDirective.copy(maxHorizontalPartitions = 1),
                     value = catalogNavigator.scaffoldValue,
@@ -114,6 +138,51 @@ fun AdaptiveScaffold() {
                         }
                     },
                 )
+            }
+
+            AppTab.ORDERS -> {
+                BackHandler(ordersProjectId != null) {
+                    if (ordersOrderId != null) {
+                        ordersOrderId = null
+                    } else {
+                        ordersProjectId = null
+                        ordersProjectName = ""
+                    }
+                }
+                when {
+                    ordersOrderId != null -> {
+                        val orderDetailVm: OrderDetailViewModel =
+                            hiltViewModel(key = "order_detail_$ordersOrderId")
+                        OrderDetailScreen(
+                            orderId = ordersOrderId!!,
+                            viewModel = orderDetailVm,
+                            onNavigateBack = { ordersOrderId = null },
+                        )
+                    }
+                    ordersProjectId != null -> {
+                        val ordersVm: OrdersViewModel =
+                            hiltViewModel(key = "orders_$ordersProjectId")
+                        OrdersScreen(
+                            projectId = ordersProjectId!!,
+                            projectName = ordersProjectName,
+                            viewModel = ordersVm,
+                            onOrderSelected = { orderId -> ordersOrderId = orderId },
+                            onNavigateBack = {
+                                ordersProjectId = null
+                                ordersProjectName = ""
+                            },
+                        )
+                    }
+                    else -> {
+                        ProjectsScreen(
+                            viewModel = projectsViewModel,
+                            onProjectSelected = { projectId, projectName ->
+                                ordersProjectId = projectId
+                                ordersProjectName = projectName
+                            },
+                        )
+                    }
+                }
             }
 
             AppTab.SETTINGS -> {

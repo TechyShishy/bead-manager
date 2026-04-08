@@ -91,6 +91,26 @@ class FirestoreOrderSource @Inject constructor(
             .await()
     }
 
+    /**
+     * Live stream of a single order document by [orderId].
+     * Emits null if the document does not exist.
+     */
+    fun orderStream(orderId: String): Flow<OrderEntry?> {
+        val uid = auth.currentUser?.uid ?: return flowOf(null)
+        return callbackFlow {
+            val ref = ordersRef(uid).document(orderId)
+            val registration = ref.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirestoreOrder", "Single order stream error for $orderId", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot == null) return@addSnapshotListener
+                trySend(snapshot.toObject(OrderEntry::class.java))
+            }
+            awaitClose { registration.remove() }
+        }
+    }
+
     suspend fun deleteOrder(orderId: String) {
         val uid = requireUid()
         ordersRef(uid).document(orderId).delete().await()

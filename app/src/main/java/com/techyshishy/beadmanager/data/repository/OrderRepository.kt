@@ -16,11 +16,31 @@ class OrderRepository @Inject constructor(
     fun ordersStream(projectId: String): Flow<List<OrderEntry>> =
         source.ordersStream(projectId)
 
+    fun orderStream(orderId: String): Flow<OrderEntry?> =
+        source.orderStream(orderId)
+
     suspend fun createOrder(entry: OrderEntry): String =
         source.createOrder(entry)
 
     suspend fun deleteOrder(orderId: String) =
         source.deleteOrder(orderId)
+
+    /** Appends a new item to an order. No-op if the (beadCode, vendorKey) pair already exists. */
+    suspend fun addItem(orderId: String, newItem: OrderItemEntry, existingItems: List<OrderItemEntry>) {
+        val alreadyPresent = existingItems.any {
+            it.beadCode == newItem.beadCode && it.vendorKey == newItem.vendorKey
+        }
+        if (alreadyPresent) return
+        source.updateItems(orderId, existingItems + newItem)
+    }
+
+    /** Removes a line item by (beadCode, vendorKey) identity. */
+    suspend fun removeItem(orderId: String, item: OrderItemEntry, allItems: List<OrderItemEntry>) {
+        val updated = allItems.filter {
+            it.beadCode != item.beadCode || it.vendorKey != item.vendorKey
+        }
+        source.updateItems(orderId, updated)
+    }
 
     /**
      * Transitions a line item to [OrderItemStatus.RECEIVED] and posts the inventory delta.

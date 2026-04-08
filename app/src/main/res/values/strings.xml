@@ -31,4 +31,40 @@
     <string name="low_stock_threshold_label">Low-stock threshold: %1$dg</string>
     <string name="using_global_default">Using global default</string>
     <string name="reset_to_global_default">Reset to global</string>
+
+    <!-- Orders / Projects -->
+    <string name="orders">Orders</string>
+    <string name="projects">Projects</string>
+    <string name="no_projects">No projects yet. Tap + to create one.</string>
+    <string name="new_project">New Project</string>
+    <string name="project_name">Project name</string>
+    <string name="delete_project">Delete project</string>
+    <string name="confirm_delete_project">Delete "%1$s"? This will also delete all its orders.</string>
+
+    <string name="no_orders">No orders yet. Tap + to create one.</string>
+    <string name="new_order">New Order</string>
+    <string name="delete_order">Delete order</string>
+    <string name="confirm_delete_order">Delete this order and all its items?</string>
+    <string name="order_created">Order — %1$s</string>
+    <string name="order_progress">%1$d / %2$d received</string>
+
+    <string name="no_items">No items yet. Tap + to add a bead.</string>
+    <string name="add_item">Add Item</string>
+    <string name="bead_code">Bead code (e.g. DB0001)</string>
+    <string name="vendor">Vendor</string>
+    <string name="pack_size">Pack size</string>
+    <string name="pack_size_grams">%1$s g</string>
+    <string name="target_grams">Target quantity</string>
+    <string name="quantity_units">%1$d × %2$s g to order</string>
+    <string name="remove_item">Remove item</string>
+    <string name="confirm_remove_item">Remove %1$s from this order?</string>
+
+    <string name="status_pending">Pending</string>
+    <string name="status_ordered">Ordered</string>
+    <string name="status_received">Received</string>
+    <string name="status_skipped">Skipped</string>
+    <string name="mark_ordered">Mark ordered</string>
+    <string name="mark_received">Mark received</string>
+    <string name="mark_skipped">Skip</string>
+    <string name="revert_pending">Revert to pending</string>
 </resources>

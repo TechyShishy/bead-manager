@@ -14,6 +14,15 @@ interface VendorPackDao {
     suspend fun insertAll(packs: List<VendorPackEntity>)
 
     /**
+     * Distinct vendor keys that carry a bead, ordered alphabetically.
+     * Used to populate the vendor picker in the order line-item editor.
+     */
+    @Query(
+        "SELECT DISTINCT vendorKey FROM vendor_packs WHERE beadCode = :beadCode ORDER BY vendorKey ASC"
+    )
+    fun vendorKeysForBead(beadCode: String): Flow<List<String>>
+
+    /**
      * All pack sizes for a bead at a specific vendor, ordered smallest first.
      * Used to populate the pack-size picker in the order line-item editor.
      */
