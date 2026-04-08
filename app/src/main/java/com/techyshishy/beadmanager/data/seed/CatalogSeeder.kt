@@ -7,6 +7,8 @@ import com.techyshishy.beadmanager.data.db.BeadDao
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.VendorLinkDao
 import com.techyshishy.beadmanager.data.db.VendorLinkEntity
+import com.techyshishy.beadmanager.data.db.VendorPackDao
+import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.di.AppDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -37,10 +39,11 @@ class CatalogSeeder @Inject constructor(
     @AppDataStore private val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
     private val beadDao: BeadDao,
     private val vendorLinkDao: VendorLinkDao,
+    private val vendorPackDao: VendorPackDao,
 ) {
 
     companion object {
-        private const val CATALOG_VERSION = 2
+        private const val CATALOG_VERSION = 3
         private const val CATALOG_ASSET = "delica-beads.json"
 
         private val KEY_CATALOG_VERSION = intPreferencesKey("catalog_version")
@@ -99,20 +102,37 @@ class CatalogSeeder @Inject constructor(
             )
         }
 
+        // vendor_links: one row per (beadCode, vendorKey), url = cheapest pack URL.
+        // Preserved for the detail pane "buy at vendor" button; pack detail lives in vendor_packs.
         val vendorEntities = catalog.values.flatMap { bead ->
-            bead.purchase.entries.map { (key, url) ->
+            bead.purchase.entries.map { (key, options) ->
                 VendorLinkEntity(
                     beadCode = bead.code,
                     vendorKey = key,
                     displayName = VENDOR_DISPLAY_NAMES[key] ?: key,
-                    url = url,
+                    url = options.minByOrNull { it.grams }?.url ?: "",
                     beadName = bead.names[key],
                 )
             }
         }
 
+        // vendor_packs: one row per purchasable SKU (beadCode, vendorKey, grams).
+        val vendorPackEntities = catalog.values.flatMap { bead ->
+            bead.purchase.entries.flatMap { (key, options) ->
+                options.map { option ->
+                    VendorPackEntity(
+                        beadCode = bead.code,
+                        vendorKey = key,
+                        grams = option.grams,
+                        url = option.url,
+                    )
+                }
+            }
+        }
+
         beadDao.insertAll(beadEntities)
         vendorLinkDao.insertAll(vendorEntities)
+        vendorPackDao.insertAll(vendorPackEntities)
 
         dataStore.edit { prefs -> prefs[KEY_CATALOG_VERSION] = CATALOG_VERSION }
     }
@@ -127,7 +147,7 @@ class CatalogSeeder @Inject constructor(
         val hex: String,
         val image: String,
         val url: String,
-        val purchase: Map<String, String> = emptyMap(),
+        val purchase: Map<String, List<PurchaseOptionJson>> = emptyMap(),
         val names: Map<String, String> = emptyMap(),
         @SerialName("color_group") val colorGroup: List<String> = emptyList(),
         @SerialName("glass_group") val glassGroup: String,
@@ -135,5 +155,11 @@ class CatalogSeeder @Inject constructor(
         val dyed: String,
         val galvanized: String,
         val plating: String,
+    )
+
+    @Serializable
+    private data class PurchaseOptionJson(
+        val grams: Double,
+        val url: String,
     )
 }

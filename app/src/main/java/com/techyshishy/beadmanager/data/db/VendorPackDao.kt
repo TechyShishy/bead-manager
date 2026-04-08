@@ -1,0 +1,33 @@
+package com.techyshishy.beadmanager.data.db
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface VendorPackDao {
+
+    // REPLACE ensures CATALOG_VERSION bumps refresh pack URLs on existing rows.
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(packs: List<VendorPackEntity>)
+
+    /**
+     * All pack sizes for a bead at a specific vendor, ordered smallest first.
+     * Used to populate the pack-size picker in the order line-item editor.
+     */
+    @Query(
+        "SELECT * FROM vendor_packs WHERE beadCode = :beadCode AND vendorKey = :vendorKey ORDER BY grams ASC"
+    )
+    fun packsByVendor(beadCode: String, vendorKey: String): Flow<List<VendorPackEntity>>
+
+    /**
+     * Resolve the purchase URL for a specific (bead, vendor, pack size) triple.
+     * Returns null if the combination is not in the catalog — callers must handle this.
+     */
+    @Query(
+        "SELECT url FROM vendor_packs WHERE beadCode = :beadCode AND vendorKey = :vendorKey AND grams = :grams LIMIT 1"
+    )
+    suspend fun packUrl(beadCode: String, vendorKey: String, grams: Double): String?
+}

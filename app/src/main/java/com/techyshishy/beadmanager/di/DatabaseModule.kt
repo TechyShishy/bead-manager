@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.techyshishy.beadmanager.data.db.BeadDao
 import com.techyshishy.beadmanager.data.db.BeadDatabase
 import com.techyshishy.beadmanager.data.db.VendorLinkDao
+import com.techyshishy.beadmanager.data.db.VendorPackDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,7 +26,7 @@ object DatabaseModule {
         BeadDatabase::class.java,
         "bead_catalog.db",
     )
-        .addMigrations(BeadDatabase.MIGRATION_1_2)
+        .addMigrations(BeadDatabase.MIGRATION_1_2, BeadDatabase.MIGRATION_2_3)
         .build()
 
     @Provides
@@ -33,4 +34,7 @@ object DatabaseModule {
 
     @Provides
     fun provideVendorLinkDao(db: BeadDatabase): VendorLinkDao = db.vendorLinkDao()
+
+    @Provides
+    fun provideVendorPackDao(db: BeadDatabase): VendorPackDao = db.vendorPackDao()
 }

@@ -12,18 +12,21 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   1 — initial schema: beads + vendor_links tables
  *   2 — vendor_links.beadName added (vendor-specific bead name from `names` field);
  *       beads.colorGroup data migrated from plain string to JSON array
+ *   3 — vendor_packs table added; stores per-pack-size purchase URLs for each
+ *       (beadCode, vendorKey) pair, replacing the single URL in vendor_links
  *
  * User inventory is intentionally NOT stored here; it lives in Firestore
  * so it syncs across devices automatically.
  */
 @Database(
-    entities = [BeadEntity::class, VendorLinkEntity::class],
-    version = 2,
+    entities = [BeadEntity::class, VendorLinkEntity::class, VendorPackEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class BeadDatabase : RoomDatabase() {
     abstract fun beadDao(): BeadDao
     abstract fun vendorLinkDao(): VendorLinkDao
+    abstract fun vendorPackDao(): VendorPackDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -37,6 +40,29 @@ abstract class BeadDatabase : RoomDatabase() {
                 // plain string (not an array) in the pre-v2 JSON, so every v1 DB row holds
                 // a single ASCII word with no embedded quotes or backslashes.
                 db.execSQL("UPDATE beads SET colorGroup = '[\"' || colorGroup || '\"]'")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS vendor_packs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        beadCode TEXT NOT NULL,
+                        vendorKey TEXT NOT NULL,
+                        grams REAL NOT NULL,
+                        url TEXT NOT NULL,
+                        FOREIGN KEY (beadCode) REFERENCES beads(code) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_vendor_packs_beadCode ON vendor_packs (beadCode)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_vendor_packs_beadCode_vendorKey_grams ON vendor_packs (beadCode, vendorKey, grams)"
+                )
             }
         }
     }
