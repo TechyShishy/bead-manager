@@ -272,6 +272,16 @@ private fun ProjectBeadRow(
                         )
                     }
                 }
+                Text(
+                    text = if (deficit > 0.0) {
+                        stringResource(R.string.bead_in_stock_deficit, invStr, deficitStr)
+                    } else {
+                        stringResource(R.string.bead_in_stock_sufficient, invStr)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (deficit > 0.0) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.tertiary,
+                )
             }
 
             IconButton(onClick = onDelete) {
@@ -293,16 +303,5 @@ private fun ProjectBeadRow(
                         else MaterialTheme.colorScheme.primary,
             )
         }
-        Text(
-            text = if (deficit > 0.0) {
-                stringResource(R.string.bead_in_stock_deficit, invStr, deficitStr)
-            } else {
-                stringResource(R.string.bead_in_stock_sufficient, invStr)
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = if (deficit > 0.0) MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.tertiary,
-            modifier = Modifier.padding(start = 44.dp, top = 2.dp, end = 48.dp),
-        )
     }
 }
