@@ -232,8 +232,6 @@ private fun ProjectBeadRow(
         (receivedGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
     } else 0f
 
-    val targetStr = BigDecimal.valueOf(bead.targetGrams).stripTrailingZeros().toPlainString()
-    val receivedStr = BigDecimal.valueOf(receivedGrams).stripTrailingZeros().toPlainString()
     val deficit = (bead.targetGrams - inventoryGrams).coerceAtLeast(0.0)
         .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
     val inventorySufficient = deficit == 0.0
@@ -274,11 +272,6 @@ private fun ProjectBeadRow(
                         )
                     }
                 }
-                Text(
-                    text = stringResource(R.string.bead_progress, receivedStr, targetStr),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
 
             IconButton(onClick = onDelete) {
