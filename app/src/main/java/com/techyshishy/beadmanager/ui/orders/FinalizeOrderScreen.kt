@@ -42,9 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
-import java.math.BigDecimal
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +81,7 @@ fun FinalizeOrderScreen(
             )
 
             is FinalizeOrderViewModel.UiState.UnavailableError -> UnavailableContent(
-                packs = state.packs,
+                beadCodes = state.beadCodes,
                 onGoBack = onNavigateBack,
                 modifier = Modifier.padding(innerPadding),
             )
@@ -160,7 +158,7 @@ private fun SuccessContent(
 
 @Composable
 private fun UnavailableContent(
-    packs: List<VendorPackEntity>,
+    beadCodes: List<String>,
     onGoBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -189,11 +187,9 @@ private fun UnavailableContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(16.dp))
-        packs.forEach { pack ->
-            val vendorName = CatalogSeeder.VENDOR_DISPLAY_NAMES[pack.vendorKey] ?: pack.vendorKey
-            val gramsLabel = BigDecimal.valueOf(pack.grams).stripTrailingZeros().toPlainString()
+        beadCodes.forEach { code ->
             Text(
-                text = "• ${pack.beadCode}  ${gramsLabel}g  ($vendorName)",
+                text = "\u2022 $code",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(vertical = 2.dp),
             )

@@ -76,7 +76,7 @@ fun OrderDetailScreen(
     val order by viewModel.order.collectAsState()
     val receivedGramsPerBead by viewModel.receivedGramsPerBead.collectAsState()
     val projectTargetGrams by viewModel.projectTargetGrams.collectAsState()
-    val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue && it.vendorKey.isNotBlank() } == true
+    val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
     var selectVendorTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
@@ -171,8 +171,6 @@ fun OrderDetailScreen(
                 showAddSheet = false
             },
             onDismiss = { showAddSheet = false },
-            vendorKeysForBead = { beadCode -> viewModel.vendorKeysForBead(beadCode) },
-            packsForVendor = { beadCode, vendorKey -> viewModel.packsForVendor(beadCode, vendorKey) },
         )
     }
 
@@ -461,39 +459,16 @@ private fun computeOptimalCombination(
 private fun AddItemBottomSheet(
     onAdd: (items: List<OrderItemEntry>) -> Unit,
     onDismiss: () -> Unit,
-    vendorKeysForBead: (String) -> kotlinx.coroutines.flow.Flow<List<String>>,
-    packsForVendor: (String, String) -> kotlinx.coroutines.flow.Flow<List<VendorPackEntity>>,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var beadCodeInput by rememberSaveable { mutableStateOf("") }
-    var selectedVendorKey by rememberSaveable { mutableStateOf<String?>(null) }
     var targetGramsInput by rememberSaveable { mutableStateOf("") }
 
     val normalizedCode = beadCodeInput.uppercase().trim()
-
-    val vendorKeys by vendorKeysForBead(normalizedCode).collectAsState(emptyList())
-    val packs by packsForVendor(normalizedCode, selectedVendorKey ?: "").collectAsState(emptyList())
-
-    // Clear vendor selection if it's no longer valid for the current bead code.
-    LaunchedEffect(vendorKeys) {
-        if (selectedVendorKey != null && selectedVendorKey !in vendorKeys) {
-            selectedVendorKey = null
-        }
-    }
-
     val targetGrams = targetGramsInput.toDoubleOrNull()?.takeIf { it > 0.0 }
 
-    // Compute the optimal combination whenever the available packs or target changes.
-    val combination = remember(packs, targetGrams) {
-        if (packs.isNotEmpty() && targetGrams != null) {
-            computeOptimalCombination(packs.map { it.grams }, targetGrams)
-        } else {
-            emptyList()
-        }
-    }
-
-    val canAdd = normalizedCode.isNotBlank() && selectedVendorKey != null && combination.isNotEmpty()
+    val canAdd = normalizedCode.isNotBlank() && targetGrams != null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -514,10 +489,7 @@ private fun AddItemBottomSheet(
 
             OutlinedTextField(
                 value = beadCodeInput,
-                onValueChange = {
-                    beadCodeInput = it
-                    selectedVendorKey = null
-                },
+                onValueChange = { beadCodeInput = it },
                 label = { Text(stringResource(R.string.bead_code)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -527,75 +499,18 @@ private fun AddItemBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            if (vendorKeys.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.vendor),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                @OptIn(ExperimentalLayoutApi::class)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    vendorKeys.forEach { key ->
-                        val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[key] ?: key
-                        FilterChip(
-                            selected = key == selectedVendorKey,
-                            onClick = { selectedVendorKey = key },
-                            label = { Text(displayName) },
-                        )
-                    }
-                }
-            }
-
-            if (selectedVendorKey != null) {
-                OutlinedTextField(
-                    value = targetGramsInput,
-                    onValueChange = { targetGramsInput = it },
-                    label = { Text(stringResource(R.string.target_grams)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done,
-                    ),
-                    suffix = { Text("g") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            // Combination preview — shown as soon as the algorithm produces a result.
-            if (combination.isNotEmpty() && targetGrams != null) {
-                val totalGrams = combination.sumOf { it.packGrams * it.quantity }
-                val totalStr = BigDecimal.valueOf(totalGrams).stripTrailingZeros().toPlainString()
-                val targetStr = BigDecimal.valueOf(targetGrams).stripTrailingZeros().toPlainString()
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    combination.forEach { c ->
-                        val gramsStr = BigDecimal.valueOf(c.packGrams).stripTrailingZeros().toPlainString()
-                        Text(
-                            text = stringResource(R.string.quantity_units, c.quantity, gramsStr),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (totalGrams != targetGrams) {
-                        Text(
-                            text = "Total: ${totalStr}g (target ${targetStr}g)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Text(
-                            text = "Total: ${totalStr}g",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            } else if (selectedVendorKey != null && targetGrams != null && packs.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.combination_no_solution),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+            OutlinedTextField(
+                value = targetGramsInput,
+                onValueChange = { targetGramsInput = it },
+                label = { Text(stringResource(R.string.target_grams)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done,
+                ),
+                suffix = { Text("g") },
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -607,16 +522,15 @@ private fun AddItemBottomSheet(
                 TextButton(
                     onClick = {
                         if (canAdd) {
-                            val items = combination.map { c ->
+                            onAdd(listOf(
                                 OrderItemEntry(
                                     beadCode = normalizedCode,
-                                    vendorKey = selectedVendorKey!!,
+                                    vendorKey = "",
                                     targetGrams = targetGrams!!,
-                                    packGrams = c.packGrams,
-                                    quantityUnits = c.quantity,
+                                    packGrams = 0.0,
+                                    quantityUnits = 0,
                                 )
-                            }
-                            onAdd(items)
+                            ))
                         }
                     },
                     enabled = canAdd,

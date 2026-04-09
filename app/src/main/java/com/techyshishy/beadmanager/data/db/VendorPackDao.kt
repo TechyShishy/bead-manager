@@ -50,6 +50,15 @@ interface VendorPackDao {
     suspend fun packByKey(beadCode: String, vendorKey: String, grams: Double): VendorPackEntity?
 
     /**
+     * All packs for a bead across every vendor, ordered by vendor key then pack size.
+     * Used by vendor auto-selection during order finalization.
+     */
+    @Query(
+        "SELECT * FROM vendor_packs WHERE beadCode = :beadCode ORDER BY vendorKey ASC, grams ASC"
+    )
+    suspend fun packsForBead(beadCode: String): List<VendorPackEntity>
+
+    /**
      * Records the outcome of a live price check for a single SKU.
      * Called after a successful scrape; never called on fetch failure.
      */

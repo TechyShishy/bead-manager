@@ -2,7 +2,6 @@ package com.techyshishy.beadmanager.ui.orders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.scraper.NoConnectivityException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +18,7 @@ class FinalizeOrderViewModel @Inject constructor(
     sealed interface UiState {
         data object Checking : UiState
         data class Success(val items: List<FinalizedItem>) : UiState
-        data class UnavailableError(val packs: List<VendorPackEntity>) : UiState
+        data class UnavailableError(val beadCodes: List<String>) : UiState
         data object ConnectivityError : UiState
         data object UnknownError : UiState
     }
@@ -34,7 +33,7 @@ class FinalizeOrderViewModel @Inject constructor(
                 onSuccess = { UiState.Success(it.items) },
                 onFailure = { e ->
                     when (e) {
-                        is UnavailablePacksException -> UiState.UnavailableError(e.packs)
+                        is UnavailablePacksException -> UiState.UnavailableError(e.beadCodes)
                         is NoConnectivityException -> UiState.ConnectivityError
                         else -> UiState.UnknownError
                     }

@@ -257,19 +257,43 @@ class OrderRepository @Inject constructor(
     }
 
     /**
-     * Transitions all PENDING items in the order to ORDERED in a single Firestore write.
-     * Items already at ORDERED, RECEIVED, or SKIPPED are left unchanged.
+     * Transitions PENDING items to ORDERED, applying vendor assignments for previously unassigned
+     * or fallback-reassigned items.
+     *
+     * [assignedItems] is the resolved list produced by [FinalizeOrderUseCase]: each entry has a
+     * definitive vendorKey, packGrams, and quantityUnits. Items in [allItems] that are vendor-less
+     * (or OOS and replaced by a fallback) are replaced by their entries in [assignedItems]. Items
+     * not present in [assignedItems] are left unchanged except for the PENDING → ORDERED transition.
+     *
+     * Only items with [vendorKey] non-blank are transitioned to ORDERED.
      */
-    suspend fun finalizeOrder(orderId: String, allItems: List<OrderItemEntry>) {
-        val updated = allItems.map { item ->
-            if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.PENDING
-                && item.vendorKey.isNotBlank()
-            ) {
+    suspend fun finalizeOrder(
+        orderId: String,
+        allItems: List<OrderItemEntry>,
+        assignedItems: List<OrderItemEntry>,
+    ) {
+        // Build a lookup: (beadCode, vendorLess-original) → replacement items.
+        // Vendor-less items in allItems are identified by vendorKey == "".
+        // Fallback-replaced items have a different vendorKey in assignedItems.
+        val assignedByBead = assignedItems.groupBy { it.beadCode }
+
+        // Start by removing all vendor-less PENDING items from allItems and any PENDING items
+        // whose bead code appears in assignedItems (they will be replaced).
+        val beadCodesWithAssignment = assignedItems.map { it.beadCode }.toSet()
+        val retained = allItems.filter { item ->
+            val isPending = OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.PENDING
+            !(isPending && item.beadCode in beadCodesWithAssignment)
+        }
+
+        // Add the resolved items (already have correct vendorKey/pack), transitioned to ORDERED.
+        val resolved = assignedItems.map { item ->
+            if (item.vendorKey.isNotBlank()) {
                 item.copy(status = OrderItemStatus.ORDERED.firestoreValue)
             } else {
                 item
             }
         }
-        source.updateItems(orderId, updated)
+
+        source.updateItems(orderId, retained + resolved)
     }
 }

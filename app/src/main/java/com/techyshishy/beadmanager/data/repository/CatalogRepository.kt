@@ -43,6 +43,10 @@ class CatalogRepository @Inject constructor(
     suspend fun packByKey(beadCode: String, vendorKey: String, grams: Double): VendorPackEntity? =
         vendorPackDao.packByKey(beadCode, vendorKey, grams)
 
+    /** All packs for a bead across every vendor, for vendor auto-selection at finalize time. */
+    suspend fun packsForBead(beadCode: String): List<VendorPackEntity> =
+        vendorPackDao.packsForBead(beadCode)
+
     /**
      * Live-checks [packs] against their vendor pages and writes the results to Room.
      *
