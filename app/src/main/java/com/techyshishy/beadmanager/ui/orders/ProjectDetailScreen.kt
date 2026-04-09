@@ -52,6 +52,13 @@ import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 
+/**
+ * Inventory quantities below this many grams are treated as zero-deficit for display and
+ * checkbox-enable purposes. Keeps floating-point noise from keeping a bead in the "needs
+ * ordering" state.
+ */
+private const val SUFFICIENT_THRESHOLD_GRAMS = 0.001
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDetailScreen(
@@ -78,6 +85,20 @@ fun ProjectDetailScreen(
     LaunchedEffect(beads) {
         val validCodes = beads.map { it.beadCode }.toSet()
         checkedCodes = checkedCodes.intersect(validCodes)
+    }
+
+    // Drop checked codes whose inventory now covers the target — no order needed.
+    LaunchedEffect(inventoryGrams, beads) {
+        val sufficientCodes = beads
+            .filter { bead ->
+                val deficit = (bead.targetGrams - (inventoryGrams[bead.beadCode] ?: 0.0))
+                    .coerceAtLeast(0.0)
+                    .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
+                deficit == 0.0
+            }
+            .map { it.beadCode }
+            .toSet()
+        checkedCodes = checkedCodes - sufficientCodes
     }
 
     Scaffold(
@@ -206,6 +227,7 @@ private fun ProjectBeadRow(
     onCheckedChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
+    // Sufficient means inventory already covers the target — no order needed.
     val progress = if (bead.targetGrams > 0.0) {
         (receivedGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
     } else 0f
@@ -213,7 +235,8 @@ private fun ProjectBeadRow(
     val targetStr = BigDecimal.valueOf(bead.targetGrams).stripTrailingZeros().toPlainString()
     val receivedStr = BigDecimal.valueOf(receivedGrams).stripTrailingZeros().toPlainString()
     val deficit = (bead.targetGrams - inventoryGrams).coerceAtLeast(0.0)
-        .let { if (it < 0.001) 0.0 else it }
+        .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
+    val inventorySufficient = deficit == 0.0
     val invStr = BigDecimal.valueOf(inventoryGrams).stripTrailingZeros().toPlainString()
     val deficitStr = BigDecimal.valueOf(deficit).stripTrailingZeros().toPlainString()
 
@@ -229,6 +252,7 @@ private fun ProjectBeadRow(
             Checkbox(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
+                enabled = !inventorySufficient,
                 modifier = Modifier.size(40.dp),
             )
 
