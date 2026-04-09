@@ -119,6 +119,6 @@ class ProjectDetailViewModel @Inject constructor(
         val beads = project.value?.beads ?: return null
         val selected = beads.filter { it.beadCode in selectedBeadCodes }
         if (selected.isEmpty()) return null
-        return orderRepository.createOrderFromBeads(projectId, selected, inventoryGrams.value)
+        return orderRepository.createOrderFromBeads(projectId, selected, inventoryGrams.value, activeOrderStatus.value)
     }
 }
