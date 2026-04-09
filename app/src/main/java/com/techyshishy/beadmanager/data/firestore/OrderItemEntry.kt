@@ -12,7 +12,8 @@ import com.google.firebase.Timestamp
  *   VendorPackDao.packUrl(beadCode, vendorKey, packGrams)
  * This keeps Firestore lean and guarantees URLs stay current when the catalog is re-seeded.
  *
- * [targetGrams]   — how much of this color the project requires.
+ * [targetGrams]   — grams still needed at order creation time (project target − inventory
+ *                   at snapshot). Set to 0.0 if inventory already covers the target.
  * [packGrams]     — the pack size the user selected; must match a vendor_packs row.
  *                   INVARIANT: must be a verbatim copy of VendorPackEntity.grams — never
  *                   arithmetically derived. VendorPackDao.packUrl() uses floating-point

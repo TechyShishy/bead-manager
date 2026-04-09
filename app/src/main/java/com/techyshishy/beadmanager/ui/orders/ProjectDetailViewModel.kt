@@ -107,12 +107,16 @@ class ProjectDetailViewModel @Inject constructor(
     /**
      * Creates a new order pre-populated with vendor-less items for [selectedBeadCodes].
      * Returns the new orderId, or null if no codes are selected or no matching beads found.
+     *
+     * [inventoryGrams] snapshot is taken at call time. Firestore's local cache means the
+     * value is live before any user interaction is possible; the window where it could be
+     * [emptyMap] is sub-second at first screen open only.
      */
     suspend fun createOrderFromSelection(selectedBeadCodes: Set<String>): String? {
         val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return null
         val beads = project.value?.beads ?: return null
         val selected = beads.filter { it.beadCode in selectedBeadCodes }
         if (selected.isEmpty()) return null
-        return orderRepository.createOrderFromBeads(projectId, selected)
+        return orderRepository.createOrderFromBeads(projectId, selected, inventoryGrams.value)
     }
 }

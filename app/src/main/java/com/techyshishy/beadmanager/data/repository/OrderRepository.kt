@@ -29,15 +29,25 @@ class OrderRepository @Inject constructor(
      * Each bead produces one [OrderItemEntry] with [vendorKey] = "" and [packGrams] = 0.0.
      * The user assigns a vendor (and the DP combination runs) on the Order Detail screen.
      *
+     * [targetGrams] on each item is set to the deficit — the project target minus whatever
+     * is already in [inventoryGrams] — so the order reflects only what still needs to be
+     * purchased. Callers should pass the live inventory snapshot from the ViewModel.
+     *
      * Returns the new order document ID.
      */
-    suspend fun createOrderFromBeads(projectId: String, selectedBeads: List<ProjectBeadEntry>): String {
+    suspend fun createOrderFromBeads(
+        projectId: String,
+        selectedBeads: List<ProjectBeadEntry>,
+        inventoryGrams: Map<String, Double>,
+    ): String {
         require(selectedBeads.isNotEmpty()) { "Cannot create an order with no beads selected." }
         val items = selectedBeads.map { bead ->
+            val inStock = inventoryGrams[bead.beadCode] ?: 0.0
+            val deficit = (bead.targetGrams - inStock).coerceAtLeast(0.0)
             OrderItemEntry(
                 beadCode = bead.beadCode,
                 vendorKey = "",
-                targetGrams = bead.targetGrams,
+                targetGrams = deficit,
                 packGrams = 0.0,
                 quantityUnits = 0,
                 status = OrderItemStatus.PENDING.firestoreValue,
