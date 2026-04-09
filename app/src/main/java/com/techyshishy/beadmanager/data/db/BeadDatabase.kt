@@ -14,13 +14,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *       beads.colorGroup data migrated from plain string to JSON array
  *   3 — vendor_packs table added; stores per-pack-size purchase URLs for each
  *       (beadCode, vendorKey) pair, replacing the single URL in vendor_links
+ *   4 — vendor_packs gains priceCents (INT nullable), available (INT nullable 0/1),
+ *       and lastCheckedEpochSeconds (INT nullable) for live price-check results
  *
  * User inventory is intentionally NOT stored here; it lives in Firestore
  * so it syncs across devices automatically.
  */
 @Database(
     entities = [BeadEntity::class, VendorLinkEntity::class, VendorPackEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class BeadDatabase : RoomDatabase() {
@@ -63,6 +65,14 @@ abstract class BeadDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS index_vendor_packs_beadCode_vendorKey_grams ON vendor_packs (beadCode, vendorKey, grams)"
                 )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN priceCents INTEGER")
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN available INTEGER")
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN lastCheckedEpochSeconds INTEGER")
             }
         }
     }

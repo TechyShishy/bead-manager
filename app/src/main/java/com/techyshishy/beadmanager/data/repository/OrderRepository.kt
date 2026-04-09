@@ -255,4 +255,21 @@ class OrderRepository @Inject constructor(
         }
         source.updateItems(orderId, updatedItems)
     }
+
+    /**
+     * Transitions all PENDING items in the order to ORDERED in a single Firestore write.
+     * Items already at ORDERED, RECEIVED, or SKIPPED are left unchanged.
+     */
+    suspend fun finalizeOrder(orderId: String, allItems: List<OrderItemEntry>) {
+        val updated = allItems.map { item ->
+            if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.PENDING
+                && item.vendorKey.isNotBlank()
+            ) {
+                item.copy(status = OrderItemStatus.ORDERED.firestoreValue)
+            } else {
+                item
+            }
+        }
+        source.updateItems(orderId, updated)
+    }
 }

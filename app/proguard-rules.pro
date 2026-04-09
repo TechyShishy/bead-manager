@@ -3,6 +3,8 @@
 -keepclassmembers class * {
     @com.google.firebase.firestore.DocumentId <fields>;
 }
+# Jsoup HTML parser (FMG scraper)
+-keep public class org.jsoup.** { public *; }
 # Firestore — keep data classes used for document deserialization
 -keep class com.techyshishy.beadmanager.data.firestore.** { *; }
 # kotlinx.serialization

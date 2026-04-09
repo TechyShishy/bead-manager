@@ -38,6 +38,8 @@ import com.techyshishy.beadmanager.ui.catalog.CatalogViewModel
 import com.techyshishy.beadmanager.ui.detail.BeadDetailPane
 import com.techyshishy.beadmanager.ui.detail.BeadDetailViewModel
 import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
+import com.techyshishy.beadmanager.ui.orders.FinalizeOrderScreen
+import com.techyshishy.beadmanager.ui.orders.FinalizeOrderViewModel
 import com.techyshishy.beadmanager.ui.orders.OrderDetailScreen
 import com.techyshishy.beadmanager.ui.orders.OrderDetailViewModel
 import com.techyshishy.beadmanager.ui.orders.OrdersScreen
@@ -67,11 +69,12 @@ fun AdaptiveScaffold() {
     val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
     val catalogSnackbarHostState = remember { SnackbarHostState() }
 
-    // Orders tab: four-level nav state (projects → project detail → orders → order detail).
+    // Orders tab: five-level nav state (projects → project detail → orders → order detail → finalize).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var ordersProjectName by rememberSaveable { mutableStateOf("") }
     var ordersShowOrdersList by rememberSaveable { mutableStateOf(false) }
     var ordersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var ordersShowFinalizing by rememberSaveable { mutableStateOf(false) }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -165,6 +168,7 @@ fun AdaptiveScaffold() {
             AppTab.PROJECTS -> {
                 BackHandler(ordersProjectId != null) {
                     when {
+                        ordersShowFinalizing -> ordersShowFinalizing = false
                         ordersOrderId != null -> ordersOrderId = null
                         ordersShowOrdersList -> ordersShowOrdersList = false
                         else -> {
@@ -174,6 +178,15 @@ fun AdaptiveScaffold() {
                     }
                 }
                 when {
+                    ordersShowFinalizing && ordersOrderId != null -> {
+                        val finalizeVm: FinalizeOrderViewModel =
+                            hiltViewModel(key = "finalize_$ordersOrderId")
+                        FinalizeOrderScreen(
+                            orderId = ordersOrderId!!,
+                            viewModel = finalizeVm,
+                            onNavigateBack = { ordersShowFinalizing = false },
+                        )
+                    }
                     ordersOrderId != null -> {
                         val orderDetailVm: OrderDetailViewModel =
                             hiltViewModel(key = "order_detail_$ordersOrderId")
@@ -181,6 +194,7 @@ fun AdaptiveScaffold() {
                             orderId = ordersOrderId!!,
                             viewModel = orderDetailVm,
                             onNavigateBack = { ordersOrderId = null },
+                            onFinalize = { ordersShowFinalizing = true },
                         )
                     }
                     ordersShowOrdersList && ordersProjectId != null -> {

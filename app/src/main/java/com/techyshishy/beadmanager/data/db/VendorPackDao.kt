@@ -39,4 +39,27 @@ interface VendorPackDao {
         "SELECT url FROM vendor_packs WHERE beadCode = :beadCode AND vendorKey = :vendorKey AND grams = :grams LIMIT 1"
     )
     suspend fun packUrl(beadCode: String, vendorKey: String, grams: Double): String?
+
+    /**
+     * Look up a specific pack SKU by its (beadCode, vendorKey, grams) identity key.
+     * Returns null if no matching row exists.
+     */
+    @Query(
+        "SELECT * FROM vendor_packs WHERE beadCode = :beadCode AND vendorKey = :vendorKey AND grams = :grams LIMIT 1"
+    )
+    suspend fun packByKey(beadCode: String, vendorKey: String, grams: Double): VendorPackEntity?
+
+    /**
+     * Records the outcome of a live price check for a single SKU.
+     * Called after a successful scrape; never called on fetch failure.
+     */
+    @Query(
+        "UPDATE vendor_packs SET priceCents = :priceCents, available = :available, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
+    )
+    suspend fun updatePackCheck(
+        id: Long,
+        priceCents: Int,
+        available: Boolean,
+        lastCheckedEpochSeconds: Long,
+    )
 }

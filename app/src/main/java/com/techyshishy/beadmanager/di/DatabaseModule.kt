@@ -26,7 +26,7 @@ object DatabaseModule {
         BeadDatabase::class.java,
         "bead_catalog.db",
     )
-        .addMigrations(BeadDatabase.MIGRATION_1_2, BeadDatabase.MIGRATION_2_3)
+        .addMigrations(BeadDatabase.MIGRATION_1_2, BeadDatabase.MIGRATION_2_3, BeadDatabase.MIGRATION_3_4)
         .build()
 
     @Provides

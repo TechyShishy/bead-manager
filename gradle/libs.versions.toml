@@ -2,6 +2,8 @@
 agp = "8.7.0"
 kotlin = "2.1.10"
 ksp = "2.1.10-1.0.31"
+jsoup = "1.17.2"
+okhttp = "4.12.0"
 coreKtx = "1.15.0"
 activityCompose = "1.10.1"
 composeBom = "2025.02.00"
@@ -67,6 +69,12 @@ google-identity-googleid = { group = "com.google.android.libraries.identity.goog
 # Image loading
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# HTTP client (scraper layer)
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+# HTML parsing (FMG scraper)
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 
 # Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }

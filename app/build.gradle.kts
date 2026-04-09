@@ -146,6 +146,12 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // HTTP client (scraper layer — explicit dep, aligned with Coil's transitive version)
+    implementation(libs.okhttp)
+
+    // HTML parsing (FMG product page scraper)
+    implementation(libs.jsoup)
+
     // Serialization (JSON parsing for the catalog seed)
     implementation(libs.kotlinx.serialization.json)
 

@@ -43,7 +43,7 @@ class CatalogSeeder @Inject constructor(
 ) {
 
     companion object {
-        private const val CATALOG_VERSION = 3
+        private const val CATALOG_VERSION = 4
         private const val CATALOG_ASSET = "delica-beads.json"
 
         private val KEY_CATALOG_VERSION = intPreferencesKey("catalog_version")
@@ -129,6 +129,8 @@ class CatalogSeeder @Inject constructor(
                         vendorKey = key,
                         grams = grams,
                         url = option.url,
+                        priceCents = option.priceCents,
+                        available = option.available,
                     )
                 }
             }
@@ -165,5 +167,7 @@ class CatalogSeeder @Inject constructor(
     private data class PurchaseOptionJson(
         val grams: Double?,
         val url: String,
+        @SerialName("price_cents") val priceCents: Int? = null,
+        val available: Boolean? = null,
     )
 }

@@ -93,4 +93,18 @@
     <string name="bead_added_to_project">Added %1$s to %2$s</string>
     <string name="bead_updated_in_project">Updated %1$s target in %2$s</string>
     <string name="update_target">Update target</string>
+
+    <!-- Finalize order / live price check -->
+    <string name="finalize_order">Finalize Order</string>
+    <string name="finalize_checking_prices">Checking prices…</string>
+    <string name="finalize_no_pending_items">No pending items. Order is already finalized.</string>
+    <string name="finalize_unavailable_title">Items out of stock</string>
+    <string name="finalize_unavailable_body">The following items are currently unavailable. Remove or replace them before finalizing.</string>
+    <string name="finalize_connectivity_error">An internet connection is required to check prices before finalizing.</string>
+    <string name="finalize_unknown_error">Something went wrong. Please try again.</string>
+    <string name="finalize_pack_label">%1$d × %2$s g</string>
+    <string name="finalize_open_vendor">Open in vendor</string>
+    <string name="finalize_price_unavailable">Price check failed</string>
+    <string name="retry">Retry</string>
+    <string name="go_back">Go Back</string>
 </resources>

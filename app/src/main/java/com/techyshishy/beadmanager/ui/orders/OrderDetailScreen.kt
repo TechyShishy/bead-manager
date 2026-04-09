@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,12 +69,14 @@ fun OrderDetailScreen(
     orderId: String,
     viewModel: OrderDetailViewModel,
     onNavigateBack: () -> Unit,
+    onFinalize: () -> Unit,
 ) {
     LaunchedEffect(orderId) { viewModel.initialize(orderId) }
 
     val order by viewModel.order.collectAsState()
     val receivedGramsPerBead by viewModel.receivedGramsPerBead.collectAsState()
     val projectTargetGrams by viewModel.projectTargetGrams.collectAsState()
+    val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue && it.vendorKey.isNotBlank() } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
     var selectVendorTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
@@ -92,6 +95,19 @@ fun OrderDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.navigate_back),
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onFinalize,
+                        enabled = hasPendingItems,
+                    ) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = stringResource(R.string.finalize_order),
+                            tint = if (hasPendingItems) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
                 },

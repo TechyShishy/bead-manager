@@ -12,10 +12,9 @@ import androidx.room.PrimaryKey
  * offered by that vendor. The [grams] + [url] pair uniquely identifies a purchasable SKU.
  *
  * This table is seeded from the `purchase` field in delica-beads.json and is read-only
- * from the application layer — never written to except during seeding.
- *
- * Order line items reference a pack by (beadCode, vendorKey, grams) to resolve the
- * purchase URL at render time without storing it in Firestore.
+ * from the application layer — never written to except during seeding and the live price
+ * check that runs at order finalization ([priceCents], [available], [lastCheckedEpochSeconds]
+ * are updated by that check).
  */
 @Entity(
     tableName = "vendor_packs",
@@ -38,4 +37,7 @@ data class VendorPackEntity(
     val vendorKey: String,
     val grams: Double,
     val url: String,
+    val priceCents: Int? = null,
+    val available: Boolean? = null,
+    val lastCheckedEpochSeconds: Long? = null,
 )
