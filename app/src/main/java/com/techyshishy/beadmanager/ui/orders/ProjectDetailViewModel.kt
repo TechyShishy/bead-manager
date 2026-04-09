@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.orders
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
+import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
@@ -53,6 +54,31 @@ class ProjectDetailViewModel @Inject constructor(
     val orderCount: StateFlow<Int> = orders
         .map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * Most significant active order status per bead code.
+     *
+     * A bead appears here only when at least one order contains a non-terminal item for it
+     * (i.e. status is PENDING or ORDERED). RECEIVED and SKIPPED items are excluded.
+     * When a bead has items at multiple active statuses, ORDERED takes precedence over PENDING
+     * — the user cares most that something is already on order.
+     */
+    val activeOrderStatus: StateFlow<Map<String, OrderItemStatus>> = orders
+        .map { orderList ->
+            val result = mutableMapOf<String, OrderItemStatus>()
+            for (order in orderList) {
+                for (item in order.items) {
+                    val status = OrderItemStatus.fromFirestore(item.status)
+                    if (status == OrderItemStatus.RECEIVED || status == OrderItemStatus.SKIPPED) continue
+                    val current = result[item.beadCode]
+                    if (current == null || status == OrderItemStatus.ORDERED) {
+                        result[item.beadCode] = status
+                    }
+                }
+            }
+            result
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
      * Current inventory quantity per bead code, in grams.

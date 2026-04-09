@@ -48,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
+import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
@@ -73,6 +74,7 @@ fun ProjectDetailScreen(
     val project by viewModel.project.collectAsState()
     val orderCount by viewModel.orderCount.collectAsState()
     val inventoryGrams by viewModel.inventoryGrams.collectAsState()
+    val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
     val scope = rememberCoroutineScope()
 
     val beads = project?.beads ?: emptyList()
@@ -174,6 +176,7 @@ fun ProjectDetailScreen(
                     ProjectBeadRow(
                         bead = bead,
                         inventoryGrams = inventoryGrams[bead.beadCode] ?: 0.0,
+                        activeOrderStatus = activeOrderStatus[bead.beadCode],
                         checked = bead.beadCode in checkedCodes,
                         onCheckedChange = { checked ->
                             checkedCodes = if (checked) {
@@ -216,6 +219,7 @@ fun ProjectDetailScreen(
 private fun ProjectBeadRow(
     bead: ProjectBeadEntry,
     inventoryGrams: Double,
+    activeOrderStatus: OrderItemStatus?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
@@ -294,6 +298,24 @@ private fun ProjectBeadRow(
                 modifier = Modifier.fillMaxWidth(),
                 color = if (inventorySufficient) MaterialTheme.colorScheme.tertiary
                         else MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (activeOrderStatus != null) {
+            Text(
+                text = when (activeOrderStatus) {
+                    OrderItemStatus.ORDERED  -> stringResource(R.string.bead_order_status_ordered)
+                    OrderItemStatus.PENDING  -> stringResource(R.string.bead_order_status_pending)
+                    OrderItemStatus.RECEIVED,
+                    OrderItemStatus.SKIPPED  -> "" // unreachable: filtered by ViewModel
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = when (activeOrderStatus) {
+                    OrderItemStatus.ORDERED  -> MaterialTheme.colorScheme.primary
+                    OrderItemStatus.PENDING  -> MaterialTheme.colorScheme.onSurfaceVariant
+                    OrderItemStatus.RECEIVED,
+                    OrderItemStatus.SKIPPED  -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(start = 44.dp, top = 2.dp, end = 48.dp),
             )
         }
     }
