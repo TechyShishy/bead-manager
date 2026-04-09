@@ -82,7 +82,7 @@ class CatalogRepository @Inject constructor(
                         lastCheckedEpochSeconds = nowEpochSeconds,
                     )
                     true
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     false
                 }
                 Outcome(pack.id, success)

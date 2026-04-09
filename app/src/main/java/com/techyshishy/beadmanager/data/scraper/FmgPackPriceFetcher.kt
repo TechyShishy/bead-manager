@@ -28,7 +28,7 @@ class FmgPackPriceFetcher @Inject constructor(
     private val okHttpClient: OkHttpClient,
 ) : PackPriceFetcher {
 
-    private val priceRegex = Regex("""\$(\d+\.\d{2})""")
+    private val priceRegex = Regex("""\$\s*(\d+\.\d{2})""")
 
     override suspend fun fetch(url: String): ScrapedPack = withContext(Dispatchers.IO) {
         val request = Request.Builder()
