@@ -71,7 +71,6 @@ fun ProjectDetailScreen(
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
     val project by viewModel.project.collectAsState()
-    val receivedGrams by viewModel.receivedGrams.collectAsState()
     val orderCount by viewModel.orderCount.collectAsState()
     val inventoryGrams by viewModel.inventoryGrams.collectAsState()
     val scope = rememberCoroutineScope()
@@ -172,14 +171,10 @@ fun ProjectDetailScreen(
                     .padding(innerPadding),
             ) {
                 items(beads, key = { it.beadCode }) { bead ->
-                    val received = receivedGrams[bead.beadCode] ?: 0.0
-                    val atOrOverTarget = received >= bead.targetGrams
                     ProjectBeadRow(
                         bead = bead,
-                        receivedGrams = received,
                         inventoryGrams = inventoryGrams[bead.beadCode] ?: 0.0,
                         checked = bead.beadCode in checkedCodes,
-                        atOrOverTarget = atOrOverTarget,
                         onCheckedChange = { checked ->
                             checkedCodes = if (checked) {
                                 checkedCodes + bead.beadCode
@@ -220,16 +215,14 @@ fun ProjectDetailScreen(
 @Composable
 private fun ProjectBeadRow(
     bead: ProjectBeadEntry,
-    receivedGrams: Double,
     inventoryGrams: Double,
     checked: Boolean,
-    atOrOverTarget: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
     // Sufficient means inventory already covers the target — no order needed.
     val progress = if (bead.targetGrams > 0.0) {
-        (receivedGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
+        (inventoryGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
     } else 0f
 
     val deficit = (bead.targetGrams - inventoryGrams).coerceAtLeast(0.0)
@@ -264,7 +257,7 @@ private fun ProjectBeadRow(
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                     )
-                    if (atOrOverTarget) {
+                    if (inventorySufficient) {
                         Text(
                             text = stringResource(R.string.bead_target_met),
                             style = MaterialTheme.typography.labelSmall,
@@ -299,7 +292,7 @@ private fun ProjectBeadRow(
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.fillMaxWidth(),
-                color = if (atOrOverTarget) MaterialTheme.colorScheme.tertiary
+                color = if (inventorySufficient) MaterialTheme.colorScheme.tertiary
                         else MaterialTheme.colorScheme.primary,
             )
         }

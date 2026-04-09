@@ -21,10 +21,6 @@ import javax.inject.Inject
 
 /**
  * Drives the Project Detail screen (bead list).
- *
- * Combines a live stream of the project document (for the bead list) with a live stream of
- * all orders for that project (for received-grams progress). The resulting [receivedGrams]
- * map is computed reactively — no denormalized write is needed.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -57,26 +53,6 @@ class ProjectDetailViewModel @Inject constructor(
     val orderCount: StateFlow<Int> = orders
         .map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
-
-    /**
-     * Grams received per bead code, summed across all orders.
-     *
-     * Only counts items where [appliedToInventory] is true, so reverted items
-     * are correctly excluded.
-     */
-    val receivedGrams: StateFlow<Map<String, Double>> = orders
-        .map { orderList ->
-            val map = mutableMapOf<String, Double>()
-            for (order in orderList) {
-                for (item in order.items) {
-                    if (item.appliedToInventory) {
-                        map[item.beadCode] = (map[item.beadCode] ?: 0.0) + item.packGrams * item.quantityUnits
-                    }
-                }
-            }
-            map
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
      * Current inventory quantity per bead code, in grams.
