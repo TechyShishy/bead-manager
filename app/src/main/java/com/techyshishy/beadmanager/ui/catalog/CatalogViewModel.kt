@@ -133,7 +133,7 @@ class CatalogViewModel @Inject constructor(
                         else compareByDescending { it.catalogEntry.bead.plating })
                             .thenBy(numericKey),
                     )
-                    SortBy.COUNT -> filtered.sortedWith(
+                    SortBy.COUNT_GRAMS, SortBy.COUNT_BEADS -> filtered.sortedWith(
                         (if (asc) compareBy<BeadWithInventory> { it.inventory?.quantityGrams ?: 0.0 }
                         else compareByDescending { it.inventory?.quantityGrams ?: 0.0 })
                             .thenBy(numericKey),

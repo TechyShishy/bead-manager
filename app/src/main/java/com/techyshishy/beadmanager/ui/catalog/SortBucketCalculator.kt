@@ -5,6 +5,9 @@ import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
 
+// Also declared as a private const in BeadDetailPane.kt — keep in sync.
+private const val BEADS_PER_GRAM = 208
+
 private val DB_NUMBER_STEPS = listOf(10, 25, 50, 100, 250, 500, 1000)
 
 /**
@@ -30,7 +33,8 @@ fun computeSortBuckets(
         SortBy.DYED -> computeCategoricalBuckets(beads) { it.catalogEntry.bead.dyed }
         SortBy.GALVANIZED -> computeCategoricalBuckets(beads) { it.catalogEntry.bead.galvanized }
         SortBy.PLATING -> computeCategoricalBuckets(beads) { it.catalogEntry.bead.plating }
-        SortBy.COUNT -> computeCountBuckets(beads, ascending)
+        SortBy.COUNT_GRAMS -> computeCountBuckets(beads, ascending)
+        SortBy.COUNT_BEADS -> computeCountBeadsBuckets(beads, ascending)
     }
 }
 
@@ -120,6 +124,39 @@ private fun quantileBuckets(quantities: List<Double>, startOffset: Int): List<So
         val qMax = maxOf(qA, qB)
         val label = if (qMin == qMax) "${"%.1f".format(qMin)}g"
                     else "${"%.1f".format(qMin)}g – ${"%.1f".format(qMax)}g"
+        SortBucket(label = label, startIndex = startOffset + startIdx)
+    }
+}
+
+private fun computeCountBeadsBuckets(beads: List<BeadWithInventory>, ascending: Boolean): List<SortBucket> {
+    val quantities = beads.map { (it.inventory?.quantityGrams ?: 0.0) * BEADS_PER_GRAM }
+    return if (ascending) {
+        val zeroEnd = quantities.indexOfFirst { it > 0.0 }.takeIf { it >= 0 } ?: beads.size
+        buildList {
+            if (zeroEnd > 0) add(SortBucket(label = "Unowned", startIndex = 0))
+            addAll(quantileBucketsBeads(quantities.subList(zeroEnd, beads.size), startOffset = zeroEnd))
+        }
+    } else {
+        val zeroStart = quantities.indexOfFirst { it <= 0.0 }.takeIf { it >= 0 } ?: beads.size
+        buildList {
+            addAll(quantileBucketsBeads(quantities.subList(0, zeroStart), startOffset = 0))
+            if (zeroStart < beads.size) add(SortBucket(label = "Unowned", startIndex = zeroStart))
+        }
+    }
+}
+
+private fun quantileBucketsBeads(quantities: List<Double>, startOffset: Int): List<SortBucket> {
+    if (quantities.isEmpty()) return emptyList()
+    val n = quantities.size
+    val targetBuckets = minOf(10, n)
+    return (0 until targetBuckets).map { i ->
+        val startIdx = i * n / targetBuckets
+        val endIdx = (i + 1) * n / targetBuckets - 1
+        val qA = quantities[startIdx]
+        val qB = quantities[endIdx]
+        val qMin = minOf(qA, qB).toLong()
+        val qMax = maxOf(qA, qB).toLong()
+        val label = if (qMin == qMax) "$qMin beads" else "$qMin – $qMax beads"
         SortBucket(label = label, startIndex = startOffset + startIdx)
     }
 }

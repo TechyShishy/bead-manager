@@ -1,7 +1,7 @@
 package com.techyshishy.beadmanager.ui.catalog
 
 enum class SortBy {
-    DB_NUMBER, COLOR_GROUP, GLASS_GROUP, DYED, GALVANIZED, PLATING, COUNT
+    DB_NUMBER, COLOR_GROUP, GLASS_GROUP, DYED, GALVANIZED, PLATING, COUNT_GRAMS, COUNT_BEADS
 }
 
 enum class SortDirection { ASCENDING, DESCENDING }

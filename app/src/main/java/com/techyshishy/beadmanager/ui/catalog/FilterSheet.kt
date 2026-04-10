@@ -156,7 +156,8 @@ private fun SortBy.label(): String = when (this) {
     SortBy.DYED -> stringResource(R.string.dyed)
     SortBy.GALVANIZED -> stringResource(R.string.galvanized)
     SortBy.PLATING -> stringResource(R.string.plating)
-    SortBy.COUNT -> stringResource(R.string.sort_most_owned)
+    SortBy.COUNT_GRAMS -> stringResource(R.string.sort_quantity_grams)
+    SortBy.COUNT_BEADS -> stringResource(R.string.sort_quantity_beads)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
