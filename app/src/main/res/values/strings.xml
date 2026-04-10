@@ -16,8 +16,8 @@
     <string name="dyed">Dyed</string>
     <string name="galvanized">Galvanized</string>
     <string name="plating">Plating</string>
-    <string name="sort_quantity_grams">Quantity (g)</string>
-    <string name="sort_quantity_beads">Quantity (beads)</string>
+    <string name="sort_quantity_grams">Weight</string>
+    <string name="sort_quantity_beads">Count</string>
     <string name="sort_direction_ascending">Ascending</string>
     <string name="sort_direction_descending">Descending</string>
     <string name="owned_only">Owned only</string>
