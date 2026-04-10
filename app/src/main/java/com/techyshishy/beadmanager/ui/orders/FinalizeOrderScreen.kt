@@ -92,6 +92,12 @@ fun FinalizeOrderScreen(
                 modifier = Modifier.padding(innerPadding),
             )
 
+            is FinalizeOrderViewModel.UiState.ScrapingError -> ErrorContent(
+                message = stringResource(R.string.finalize_scraping_error),
+                onRetry = { viewModel.initiate(orderId) },
+                modifier = Modifier.padding(innerPadding),
+            )
+
             is FinalizeOrderViewModel.UiState.UnknownError -> ErrorContent(
                 message = stringResource(R.string.finalize_unknown_error),
                 onRetry = { viewModel.initiate(orderId) },

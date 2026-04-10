@@ -4,7 +4,7 @@ import com.techyshishy.beadmanager.data.db.BeadDao
 import com.techyshishy.beadmanager.data.db.BeadWithVendors
 import com.techyshishy.beadmanager.data.db.VendorPackDao
 import com.techyshishy.beadmanager.data.db.VendorPackEntity
-import com.techyshishy.beadmanager.data.scraper.NoConnectivityException
+import com.techyshishy.beadmanager.data.scraper.ScrapingFailedException
 import com.techyshishy.beadmanager.data.scraper.VendorPackPriceFetcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -56,7 +56,7 @@ class CatalogRepository @Inject constructor(
      * Packs with unsupported vendor keys (anything other than "ac" and "fmg") are skipped
      * silently — they are neither fetched nor counted as failures.
      *
-     * @throws NoConnectivityException if every stale-pack fetch fails and no fresh packs exist.
+     * @throws ScrapingFailedException if every stale-pack fetch fails and no fresh packs exist.
      */
     suspend fun checkAndUpdatePacks(
         packs: List<VendorPackEntity>,
@@ -93,7 +93,7 @@ class CatalogRepository @Inject constructor(
         val freshCount = packs.size - stale.size
 
         if (failedIds.size == checkable.size && checkable.isNotEmpty() && freshCount == 0) {
-            throw NoConnectivityException()
+            throw ScrapingFailedException()
         }
 
         PriceCheckResult(failedPackIds = failedIds)
