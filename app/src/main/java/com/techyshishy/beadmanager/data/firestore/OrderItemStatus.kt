@@ -10,6 +10,7 @@ import android.util.Log
  */
 enum class OrderItemStatus {
     PENDING,
+    FINALIZED,
     ORDERED,
     RECEIVED,
     SKIPPED;

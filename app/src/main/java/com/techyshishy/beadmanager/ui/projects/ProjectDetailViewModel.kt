@@ -64,9 +64,9 @@ class ProjectDetailViewModel @Inject constructor(
      * Most significant active order status per bead code.
      *
      * A bead appears here only when at least one order contains a non-terminal item for it
-     * (i.e. status is PENDING or ORDERED). RECEIVED and SKIPPED items are excluded.
-     * When a bead has items at multiple active statuses, ORDERED takes precedence over PENDING
-     * — the user cares most that something is already on order.
+     * (i.e. status is PENDING, FINALIZED, or ORDERED). RECEIVED and SKIPPED items are excluded.
+     * When a bead has items at multiple active statuses, ORDERED takes precedence over FINALIZED
+     * which takes precedence over PENDING — the user cares most that something is already on order.
      */
     val activeOrderStatus: StateFlow<Map<String, OrderItemStatus>> = activeOrders
         .map { orderList ->
@@ -76,7 +76,10 @@ class ProjectDetailViewModel @Inject constructor(
                     val status = OrderItemStatus.fromFirestore(item.status)
                     if (status == OrderItemStatus.RECEIVED || status == OrderItemStatus.SKIPPED) continue
                     val current = result[item.beadCode]
-                    if (current == null || status == OrderItemStatus.ORDERED) {
+                    if (current == null ||
+                        status == OrderItemStatus.ORDERED ||
+                        (status == OrderItemStatus.FINALIZED && current == OrderItemStatus.PENDING)
+                    ) {
                         result[item.beadCode] = status
                     }
                 }
@@ -132,7 +135,7 @@ class ProjectDetailViewModel @Inject constructor(
      * is subtracted from [OrderItemEntry.targetGrams]; items whose target drops to zero are
      * removed entirely. Manually-added items (no contribution recorded) are preserved.
      *
-     * No-ops if the order has been finalized (any item is ORDERED or RECEIVED), because
+     * No-ops if the order has been finalized (any item is FINALIZED, ORDERED, or RECEIVED), because
      * removing a project from a committed order would silently corrupt its history.
      */
     fun detachProject(orderId: String) {
@@ -140,7 +143,7 @@ class ProjectDetailViewModel @Inject constructor(
         val order = activeOrders.value.firstOrNull { it.orderId == orderId } ?: return
         val isFinalized = order.items.any {
             val s = OrderItemStatus.fromFirestore(it.status)
-            s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
+            s == OrderItemStatus.FINALIZED || s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
         }
         if (isFinalized) return
         viewModelScope.launch {

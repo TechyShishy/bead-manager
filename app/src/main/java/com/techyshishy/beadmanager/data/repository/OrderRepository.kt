@@ -288,11 +288,6 @@ class OrderRepository @Inject constructor(
         allItems: List<OrderItemEntry>,
         assignedItems: List<OrderItemEntry>,
     ) {
-        // Build a lookup: (beadCode, vendorLess-original) → replacement items.
-        // Vendor-less items in allItems are identified by vendorKey == "".
-        // Fallback-replaced items have a different vendorKey in assignedItems.
-        val assignedByBead = assignedItems.groupBy { it.beadCode }
-
         // Start by removing all vendor-less PENDING items from allItems and any PENDING items
         // whose bead code appears in assignedItems (they will be replaced).
         val beadCodesWithAssignment = assignedItems.map { it.beadCode }.toSet()
@@ -301,10 +296,12 @@ class OrderRepository @Inject constructor(
             !(isPending && item.beadCode in beadCodesWithAssignment)
         }
 
-        // Add the resolved items (already have correct vendorKey/pack), transitioned to ORDERED.
+        // Add the resolved items (already have correct vendorKey/pack), transitioned to FINALIZED.
+        // Items remain FINALIZED until the user explicitly marks each vendor's items as ordered
+        // from the finalize screen.
         val resolved = assignedItems.map { item ->
             if (item.vendorKey.isNotBlank()) {
-                item.copy(status = OrderItemStatus.ORDERED.firestoreValue)
+                item.copy(status = OrderItemStatus.FINALIZED.firestoreValue)
             } else {
                 item
             }
@@ -315,6 +312,50 @@ class OrderRepository @Inject constructor(
 
     suspend fun removeProjectIdFromOrder(orderId: String, projectId: String) =
         source.removeProjectIdFromOrder(orderId, projectId)
+
+    /**
+     * Transitions all FINALIZED items for [vendorKey] to ORDERED.
+     * Items in any other status are left unchanged.
+     */
+    suspend fun markVendorItemsOrdered(
+        orderId: String,
+        vendorKey: String,
+        allItems: List<OrderItemEntry>,
+    ) {
+        val updated = allItems.map { item ->
+            if (item.vendorKey == vendorKey &&
+                OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED
+            ) {
+                item.copy(status = OrderItemStatus.ORDERED.firestoreValue)
+            } else {
+                item
+            }
+        }
+        source.updateItems(orderId, updated)
+    }
+
+    /**
+     * Reverts all FINALIZED items to PENDING and clears their vendor assignments.
+     * Items in any other status are left unchanged.
+     */
+    suspend fun reopenOrder(
+        orderId: String,
+        allItems: List<OrderItemEntry>,
+    ) {
+        val updated = allItems.map { item ->
+            if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED) {
+                item.copy(
+                    status = OrderItemStatus.PENDING.firestoreValue,
+                    vendorKey = "",
+                    packGrams = 0.0,
+                    quantityUnits = 0,
+                )
+            } else {
+                item
+            }
+        }
+        source.updateItems(orderId, updated)
+    }
 
     /**
      * Detaches [projectId] from an order:

@@ -247,6 +247,33 @@ class FinalizeOrderUseCase @Inject constructor(
     }
 
     /**
+     * Resolves an already-finalized order into a [FinalizeResult] without re-running the price
+     * check. Used when the user returns to the finalize screen after navigating away. Vendor
+     * assignments are read from the FINALIZED items in Firestore; URLs and last-known prices are
+     * resolved from Room.
+     */
+    suspend fun resolveExistingOrder(orderId: String): FinalizeResult {
+        val order = orderRepository.orderStream(orderId).first()
+            ?: error("Order $orderId not found")
+        val finalizedItems = order.items
+            .filter { OrderItemStatus.fromFirestore(it.status) == OrderItemStatus.FINALIZED }
+            .map { item ->
+                val pack = catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
+                FinalizedItem(
+                    beadCode = item.beadCode,
+                    vendorKey = item.vendorKey,
+                    packGrams = item.packGrams,
+                    quantityUnits = item.quantityUnits,
+                    url = pack?.url ?: "",
+                    priceCents = pack?.priceCents,
+                    available = pack?.available,
+                    fetchFailed = false,
+                )
+            }
+        return FinalizeResult(items = finalizedItems)
+    }
+
+    /**
      * Builds the list of assignment updates to pass to [OrderRepository.finalizeOrder].
      *
      * Unassigned items are replaced by one entry per pack in their selection combination.

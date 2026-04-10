@@ -114,7 +114,7 @@ fun OrdersScreen(
         val hasActiveItems = remember(order) {
             order.items.any {
                 val status = OrderItemStatus.fromFirestore(it.status)
-                status == OrderItemStatus.PENDING || status == OrderItemStatus.ORDERED
+                status == OrderItemStatus.PENDING || status == OrderItemStatus.FINALIZED || status == OrderItemStatus.ORDERED
             }
         }
         AlertDialog(

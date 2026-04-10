@@ -72,6 +72,7 @@ fun OrderDetailScreen(
 
     val order by viewModel.order.collectAsState()
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
+    val isFrozen = order?.items?.any { it.status == OrderItemStatus.FINALIZED.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
 
@@ -95,12 +96,12 @@ fun OrderDetailScreen(
                 actions = {
                     IconButton(
                         onClick = onFinalize,
-                        enabled = hasPendingItems,
+                        enabled = hasPendingItems || isFrozen,
                     ) {
                         Icon(
                             Icons.Filled.CheckCircle,
                             contentDescription = stringResource(R.string.finalize_order),
-                            tint = if (hasPendingItems) MaterialTheme.colorScheme.primary
+                            tint = if (hasPendingItems || isFrozen) MaterialTheme.colorScheme.primary
                                    else MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
@@ -108,11 +109,13 @@ fun OrderDetailScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddSheet = true },
-                modifier = Modifier.navigationBarsPadding(),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_item))
+            if (!isFrozen) {
+                FloatingActionButton(
+                    onClick = { showAddSheet = true },
+                    modifier = Modifier.navigationBarsPadding(),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_item))
+                }
             }
         },
     ) { innerPadding ->
@@ -140,6 +143,7 @@ fun OrderDetailScreen(
                 items(sortedItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
                     OrderItemRow(
                         item = item,
+                        isFrozen = isFrozen,
                         onMarkReceived = { viewModel.markItemReceived(item) },
                         onRevertReceived = { viewModel.revertItemReceived(item) },
                         onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
@@ -187,6 +191,7 @@ fun OrderDetailScreen(
 @Composable
 private fun OrderItemRow(
     item: OrderItemEntry,
+    isFrozen: Boolean,
     onMarkReceived: () -> Unit,
     onRevertReceived: () -> Unit,
     onUpdateStatus: (OrderItemStatus) -> Unit,
@@ -218,11 +223,11 @@ private fun OrderItemRow(
                 )
             }
             if (!isVendorless) StatusBadge(status)
-            IconButton(onClick = onRemove, enabled = !item.appliedToInventory) {
+            IconButton(onClick = onRemove, enabled = !item.appliedToInventory && !isFrozen) {
                 Icon(
                     Icons.Filled.Delete,
                     contentDescription = stringResource(R.string.remove_item),
-                    tint = if (!item.appliedToInventory)
+                    tint = if (!item.appliedToInventory && !isFrozen)
                         MaterialTheme.colorScheme.error
                     else
                         MaterialTheme.colorScheme.outlineVariant,
@@ -270,6 +275,9 @@ private fun OrderItemRow(
                             label = { Text(stringResource(R.string.revert_pending)) },
                         )
                     }
+                    OrderItemStatus.FINALIZED -> {
+                        // Managed from the finalize screen; no actions available here.
+                    }
                 }
             }
         }
@@ -298,6 +306,11 @@ private fun StatusBadge(status: OrderItemStatus) {
             stringResource(R.string.status_skipped),
             MaterialTheme.colorScheme.errorContainer,
             MaterialTheme.colorScheme.onErrorContainer,
+        )
+        OrderItemStatus.FINALIZED -> Triple(
+            stringResource(R.string.status_finalized),
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
         )
     }
     FilterChip(

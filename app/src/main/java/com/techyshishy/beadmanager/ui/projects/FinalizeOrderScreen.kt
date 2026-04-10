@@ -25,9 +25,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -35,6 +37,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +59,14 @@ fun FinalizeOrderScreen(
     LaunchedEffect(orderId) { viewModel.initiate(orderId) }
 
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState) {
+        when (uiState) {
+            is FinalizeOrderViewModel.UiState.AllOrdered -> onNavigateBack()
+            is FinalizeOrderViewModel.UiState.Reopened -> onNavigateBack()
+            else -> Unit
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -75,8 +88,10 @@ fun FinalizeOrderScreen(
                 modifier = Modifier.padding(innerPadding),
             )
 
-            is FinalizeOrderViewModel.UiState.Success -> SuccessContent(
+            is FinalizeOrderViewModel.UiState.FinalizedView -> FinalizedViewContent(
                 items = state.items,
+                onMarkVendorOrdered = { vendorKey -> viewModel.markVendorOrdered(vendorKey) },
+                onReopen = { viewModel.reopen() },
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -103,6 +118,11 @@ fun FinalizeOrderScreen(
                 onRetry = { viewModel.initiate(orderId) },
                 modifier = Modifier.padding(innerPadding),
             )
+
+            is FinalizeOrderViewModel.UiState.AllOrdered,
+            is FinalizeOrderViewModel.UiState.Reopened -> CheckingContent(
+                modifier = Modifier.padding(innerPadding),
+            )
         }
     }
 }
@@ -125,10 +145,14 @@ private fun CheckingContent(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SuccessContent(
+private fun FinalizedViewContent(
     items: List<FinalizedItem>,
+    onMarkVendorOrdered: (vendorKey: String) -> Unit,
+    onReopen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showReopenDialog by remember { mutableStateOf(false) }
+
     if (items.isEmpty()) {
         Column(
             modifier = modifier
@@ -139,6 +163,12 @@ private fun SuccessContent(
                 text = stringResource(R.string.finalize_no_pending_items),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (showReopenDialog) {
+            ReopenConfirmDialog(
+                onConfirm = { onReopen(); showReopenDialog = false },
+                onDismiss = { showReopenDialog = false },
             )
         }
         return
@@ -152,14 +182,53 @@ private fun SuccessContent(
     ) {
         byVendor.forEach { (vendorKey, vendorItems) ->
             item(key = "header_$vendorKey") {
-                VendorFinalizeHeader(vendorKey)
+                VendorFinalizeHeader(
+                    vendorKey = vendorKey,
+                    onMarkOrdered = { onMarkVendorOrdered(vendorKey) },
+                )
             }
             items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
                 FinalizedItemRow(item)
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
             }
         }
+        item(key = "reopen_button") {
+            OutlinedButton(
+                onClick = { showReopenDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Text(stringResource(R.string.finalize_reopen_order))
+            }
+        }
     }
+
+    if (showReopenDialog) {
+        ReopenConfirmDialog(
+            onConfirm = { onReopen(); showReopenDialog = false },
+            onDismiss = { showReopenDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun ReopenConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.finalize_reopen_order)) },
+        text = { Text(stringResource(R.string.finalize_reopen_confirm)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.finalize_reopen))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -233,14 +302,24 @@ private fun ErrorContent(
 }
 
 @Composable
-private fun VendorFinalizeHeader(vendorKey: String) {
+private fun VendorFinalizeHeader(vendorKey: String, onMarkOrdered: () -> Unit) {
     val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey
-    Text(
-        text = displayName,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = displayName,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Button(onClick = onMarkOrdered) {
+            Text(stringResource(R.string.finalize_mark_vendor_ordered))
+        }
+    }
     HorizontalDivider()
 }
 

@@ -262,7 +262,7 @@ private fun ActiveOrderRow(
     val isFinalized = remember(order) {
         order.items.any {
             val s = OrderItemStatus.fromFirestore(it.status)
-            s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
+            s == OrderItemStatus.FINALIZED || s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
         }
     }
     val dateLabel = order.createdAt?.let { ts ->
@@ -383,17 +383,19 @@ private fun ProjectBeadRow(
         if (activeOrderStatus != null) {
             Text(
                 text = when (activeOrderStatus) {
-                    OrderItemStatus.ORDERED  -> stringResource(R.string.bead_order_status_ordered)
-                    OrderItemStatus.PENDING  -> stringResource(R.string.bead_order_status_pending)
+                    OrderItemStatus.ORDERED   -> stringResource(R.string.bead_order_status_ordered)
+                    OrderItemStatus.FINALIZED -> stringResource(R.string.bead_order_status_pending)
+                    OrderItemStatus.PENDING   -> stringResource(R.string.bead_order_status_pending)
                     OrderItemStatus.RECEIVED,
-                    OrderItemStatus.SKIPPED  -> "" // unreachable: filtered by ViewModel
+                    OrderItemStatus.SKIPPED   -> "" // unreachable: filtered by ViewModel
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = when (activeOrderStatus) {
-                    OrderItemStatus.ORDERED  -> MaterialTheme.colorScheme.primary
-                    OrderItemStatus.PENDING  -> MaterialTheme.colorScheme.onSurfaceVariant
+                    OrderItemStatus.ORDERED   -> MaterialTheme.colorScheme.primary
+                    OrderItemStatus.FINALIZED -> MaterialTheme.colorScheme.onSurfaceVariant
+                    OrderItemStatus.PENDING   -> MaterialTheme.colorScheme.onSurfaceVariant
                     OrderItemStatus.RECEIVED,
-                    OrderItemStatus.SKIPPED  -> MaterialTheme.colorScheme.onSurfaceVariant
+                    OrderItemStatus.SKIPPED   -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 modifier = Modifier.padding(start = 44.dp, top = 2.dp, end = 48.dp),
             )

@@ -47,7 +47,7 @@
     <string name="new_order">New Order</string>
     <string name="delete_order">Delete order</string>
     <string name="confirm_delete_order">Delete this order and all its items?</string>
-    <string name="confirm_delete_order_with_active_items">This order has items that are still pending or ordered. Deleting it will permanently remove those items without receiving them into inventory. Delete anyway?</string>
+    <string name="confirm_delete_order_with_active_items">This order has items that are still pending, finalized, or ordered. Deleting it will permanently remove those items without receiving them into inventory. Delete anyway?</string>
     <string name="order_created">Order — %1$s</string>
     <string name="order_progress">%1$d / %2$d received</string>
 
@@ -64,6 +64,7 @@
     <string name="confirm_remove_item">Remove %1$s from this order?</string>
 
     <string name="status_pending">Pending</string>
+    <string name="status_finalized">Finalized</string>
     <string name="status_ordered">Ordered</string>
     <string name="status_received">Received</string>
     <string name="status_skipped">Skipped</string>
@@ -111,6 +112,10 @@
     <string name="finalize_order">Finalize Order</string>
     <string name="finalize_checking_prices">Checking prices…</string>
     <string name="finalize_no_pending_items">No pending items. Order is already finalized.</string>
+    <string name="finalize_mark_vendor_ordered">Mark as Ordered</string>
+    <string name="finalize_reopen_order">Reopen Order</string>
+    <string name="finalize_reopen_confirm">Clear vendor assignments and reopen this order for editing?</string>
+    <string name="finalize_reopen">Reopen</string>
     <string name="finalize_unavailable_title">Items out of stock</string>
     <string name="finalize_unavailable_body">The following items are currently unavailable. Remove or replace them before finalizing.</string>
     <string name="finalize_connectivity_error">An internet connection is required to check prices before finalizing.</string>
