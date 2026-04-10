@@ -37,7 +37,7 @@ class OrdersViewModel @Inject constructor(
     fun createOrder() {
         val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
         viewModelScope.launch {
-            orderRepository.createOrder(OrderEntry(projectId = projectId))
+            orderRepository.createOrder(OrderEntry(projectIds = listOf(projectId)))
         }
     }
 

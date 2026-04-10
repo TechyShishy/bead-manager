@@ -17,8 +17,19 @@ class OrderRepository @Inject constructor(
     fun ordersStream(projectId: String): Flow<List<OrderEntry>> =
         source.ordersStream(projectId)
 
+    fun allOrdersStream(): Flow<List<OrderEntry>> =
+        source.allOrdersStream()
+
     fun orderStream(orderId: String): Flow<OrderEntry?> =
         source.orderStream(orderId)
+
+    /** Used by MigrationViewModel to backfill projectIds from legacy projectId field. */
+    suspend fun getAllOrdersSnapshot(): List<OrderEntry> =
+        source.getAllOrdersSnapshot()
+
+    /** Used by MigrationViewModel to write projectId into projectIds array. */
+    suspend fun addProjectIdToOrder(orderId: String, projectId: String) =
+        source.addProjectIdToOrder(orderId, projectId)
 
     suspend fun createOrder(entry: OrderEntry): String =
         source.createOrder(entry)
@@ -59,7 +70,7 @@ class OrderRepository @Inject constructor(
                 status = OrderItemStatus.PENDING.firestoreValue,
             )
         }
-        val entry = OrderEntry(projectId = projectId, items = items)
+        val entry = OrderEntry(projectIds = listOf(projectId), items = items)
         return source.createOrder(entry)
     }
 

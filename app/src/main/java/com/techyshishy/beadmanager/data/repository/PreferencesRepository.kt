@@ -20,6 +20,8 @@ class PreferencesRepository @Inject constructor(
             doublePreferencesKey("global_low_stock_threshold_grams")
         private val KEY_MIGRATION_THRESHOLD_V1 =
             booleanPreferencesKey("migration_threshold_v1_done")
+        private val KEY_MIGRATION_ORDER_PROJECT_IDS_V1 =
+            booleanPreferencesKey("migration_order_project_ids_v1_done")
         const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
     }
 
@@ -39,5 +41,13 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setMigrationThresholdV1Done() {
         dataStore.edit { prefs -> prefs[KEY_MIGRATION_THRESHOLD_V1] = true }
+    }
+
+    val migrationOrderProjectIdsV1Done: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_MIGRATION_ORDER_PROJECT_IDS_V1] ?: false
+    }
+
+    suspend fun setMigrationOrderProjectIdsV1Done() {
+        dataStore.edit { prefs -> prefs[KEY_MIGRATION_ORDER_PROJECT_IDS_V1] = true }
     }
 }

@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import com.techyshishy.beadmanager.BuildConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -39,18 +40,45 @@ class FirestoreOrderSource @Inject constructor(
         auth.currentUser?.uid ?: error("No signed-in user — order access requires authentication.")
 
     /**
-     * Live stream of all orders belonging to [projectId].
+     * Live stream of all orders associated with [projectId].
+     * Queries the [projectIds] array field. Only returns orders whose [projectIds] list
+     * contains [projectId]; documents that have not yet been migrated (empty [projectIds])
+     * are excluded. The migration in MigrationViewModel backfills all existing documents
+     * before this query runs on first launch after upgrade.
+     *
      * Emits a new list whenever any order document in the result set changes.
      */
     fun ordersStream(projectId: String): Flow<List<OrderEntry>> {
         val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
         return callbackFlow {
             val query = ordersRef(uid)
-                .whereEqualTo("projectId", projectId)
+                .whereArrayContains("projectIds", projectId)
                 .orderBy("createdAt", Query.Direction.ASCENDING)
             val registration = query.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e("FirestoreOrder", "Snapshot listener error", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot == null) return@addSnapshotListener
+                val entries = snapshot.documents.mapNotNull { it.toObject(OrderEntry::class.java) }
+                trySend(entries)
+            }
+            awaitClose { registration.remove() }
+        }
+    }
+
+    /**
+     * Live stream of all orders for the signed-in user, across all projects.
+     * Sorted newest-first. Intended for the unified Orders tab.
+     */
+    fun allOrdersStream(): Flow<List<OrderEntry>> {
+        val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+        return callbackFlow {
+            val query = ordersRef(uid)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+            val registration = query.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirestoreOrder", "All-orders stream error", error)
                     return@addSnapshotListener
                 }
                 if (snapshot == null) return@addSnapshotListener
@@ -75,7 +103,8 @@ class FirestoreOrderSource @Inject constructor(
     /**
      * Replaces the entire items array on an existing order and refreshes [lastUpdated].
      *
-     * Uses [SetOptions.merge] so [createdAt] and [projectId] are not touched.
+     * Uses [SetOptions.merge] so only [items] and [lastUpdated] are written; all other
+     * fields — including [createdAt] and [projectIds] — are preserved.
      * The server fills in [lastUpdated] via FieldValue.serverTimestamp().
      */
     suspend fun updateItems(orderId: String, items: List<OrderItemEntry>) {
@@ -120,15 +149,47 @@ class FirestoreOrderSource @Inject constructor(
      * Deletes all order documents for a given project.
      * Called by [com.techyshishy.beadmanager.data.repository.ProjectRepository] before
      * deleting the parent project document, since Firestore has no server-side cascades.
+     *
+     * Queries both [projectIds] (current field) and the legacy [projectId] field so that
+     * pre-migration documents are caught regardless of whether the migration has run yet.
+     * The union is deduplicated by document ID before batching.
      */
     suspend fun deleteOrdersForProject(projectId: String) {
         val uid = requireUid()
-        val snapshot = ordersRef(uid).whereEqualTo("projectId", projectId).get().await()
+        val byArray = ordersRef(uid).whereArrayContains("projectIds", projectId).get().await()
+        val byLegacy = ordersRef(uid).whereEqualTo("projectId", projectId).get().await()
+        val toDelete = (byArray.documents + byLegacy.documents).distinctBy { it.id }
         // Batch deletions; cap at 500 per the Firestore batch write limit.
-        snapshot.documents.chunked(500).forEach { chunk ->
+        toDelete.chunked(500).forEach { chunk ->
             val batch = firestore.batch()
             chunk.forEach { doc -> batch.delete(doc.reference) }
             batch.commit().await()
         }
+    }
+
+    /**
+     * One-shot read of all order documents for the signed-in user, fetched from the server.
+     * Used by the migration to backfill [OrderEntry.projectIds] from [OrderEntry.projectId].
+     *
+     * [Source.SERVER] is required: a cache-only read might return an incomplete set of
+     * documents, which would cause the migration to silently mark itself done while leaving
+     * some documents un-backfilled. Failing with an exception when offline is preferable —
+     * the completion flag is not set and the migration retries on the next launch.
+     */
+    suspend fun getAllOrdersSnapshot(): List<OrderEntry> {
+        val uid = requireUid()
+        return ordersRef(uid).get(Source.SERVER).await()
+            .documents.mapNotNull { it.toObject(OrderEntry::class.java) }
+    }
+
+    /**
+     * Writes [projectIds] to an order document using arrayUnion, so concurrent writes
+     * accumulate rather than overwrite. Does not touch any other fields.
+     */
+    suspend fun addProjectIdToOrder(orderId: String, projectId: String) {
+        val uid = requireUid()
+        ordersRef(uid).document(orderId)
+            .update("projectIds", FieldValue.arrayUnion(projectId))
+            .await()
     }
 }
