@@ -342,7 +342,7 @@ private fun FinalizedItemRow(item: FinalizedItem) {
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 8.dp),
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             modifier = Modifier.fillMaxWidth(),
         ) {
             AsyncImage(
@@ -370,11 +370,21 @@ private fun FinalizedItemRow(item: FinalizedItem) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (item.priceCents != null) {
+                    val unitDollars = item.priceCents / 100
+                    val unitCents = item.priceCents % 100
+                    Text(
+                        text = "$${unitDollars}.${unitCents.toString().padStart(2, '0')}/pack",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             if (item.priceCents != null) {
-                val dollars = item.priceCents / 100
-                val cents = item.priceCents % 100
+                val totalCents = item.quantityUnits * item.priceCents
+                val dollars = totalCents / 100
+                val cents = totalCents % 100
                 Text(
                     text = "$${dollars}.${cents.toString().padStart(2, '0')}",
                     style = MaterialTheme.typography.bodyMedium,
