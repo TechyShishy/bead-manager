@@ -57,7 +57,6 @@ import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
-import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import java.math.BigDecimal
 import java.text.DateFormat
 
@@ -132,27 +131,21 @@ fun OrderDetailScreen(
                 )
             }
         } else {
-            // Group items by vendorKey; preserve creation order within each group.
-            val byVendor = currentOrder.items.groupBy { it.vendorKey }
+            val sortedItems = currentOrder.items.sortedBy { it.beadCode }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                byVendor.forEach { (vendorKey, vendorItems) ->
-                    item(key = "header_$vendorKey") {
-                        VendorSectionHeader(vendorKey)
-                    }
-                    items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
-                        OrderItemRow(
-                            item = item,
-                            onMarkReceived = { viewModel.markItemReceived(item) },
-                            onRevertReceived = { viewModel.revertItemReceived(item) },
-                            onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
-                            onRemove = { removeTarget = item },
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                    }
+                items(sortedItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
+                    OrderItemRow(
+                        item = item,
+                        onMarkReceived = { viewModel.markItemReceived(item) },
+                        onRevertReceived = { viewModel.revertItemReceived(item) },
+                        onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
+                        onRemove = { removeTarget = item },
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                 }
             }
         }
@@ -188,22 +181,6 @@ fun OrderDetailScreen(
             },
         )
     }
-}
-
-@Composable
-private fun VendorSectionHeader(vendorKey: String) {
-    val displayName = if (vendorKey.isBlank()) {
-        "Needs vendor"
-    } else {
-        CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey
-    }
-    Text(
-        text = displayName,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-    )
-    HorizontalDivider()
 }
 
 @OptIn(ExperimentalLayoutApi::class)
