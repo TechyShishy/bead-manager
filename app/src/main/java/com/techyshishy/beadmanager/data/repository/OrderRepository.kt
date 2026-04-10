@@ -5,6 +5,7 @@ import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -68,7 +69,7 @@ class OrderRepository @Inject constructor(
                 packGrams = 0.0,
                 quantityUnits = 0,
                 status = OrderItemStatus.PENDING.firestoreValue,
-                sourceProjectId = projectId,
+                sourceProjectContributions = mapOf(projectId to targetGrams),
             )
         }
         val entry = OrderEntry(projectIds = listOf(projectId), items = items)
@@ -110,16 +111,16 @@ class OrderRepository @Inject constructor(
     ) {
         val withoutVendorless = allItems.filter { !(it.beadCode == beadCode && it.vendorKey.isBlank()) }
         if (withoutVendorless.size == allItems.size) return  // no vendor-less item found
-        val replacedSourceProjectId = allItems
+        val replacedContributions = allItems
             .firstOrNull { it.beadCode == beadCode && it.vendorKey.isBlank() }
-            ?.sourceProjectId ?: ""
+            ?.effectiveContributions() ?: emptyMap()
         val toAdd = newItems.filter { newItem ->
             withoutVendorless.none {
                 it.beadCode == newItem.beadCode &&
                     it.vendorKey == newItem.vendorKey &&
                     it.packGrams == newItem.packGrams
             }
-        }.map { it.copy(sourceProjectId = replacedSourceProjectId) }
+        }.map { it.copy(sourceProjectContributions = replacedContributions) }
         source.updateItems(orderId, withoutVendorless + toAdd)
     }
 
@@ -317,22 +318,43 @@ class OrderRepository @Inject constructor(
 
     /**
      * Detaches [projectId] from an order:
-     *  1. Removes all items whose [OrderItemEntry.sourceProjectId] == [projectId].
-     *     Items with [sourceProjectId] == "" (manually added, or pre-M3) are preserved.
+     *  1. For each item, subtracts this project's recorded contribution from [targetGrams].
+     *     - Item has no entry for this project in [effectiveContributions] (manually added,
+     *       or predates M3): preserved unchanged.
+     *     - Item's [targetGrams] drops to ≤ 0 after subtraction: removed entirely.
+     *     - Item still has remaining contributors: updated with reduced [targetGrams] and the
+     *       project removed from [OrderItemEntry.sourceProjectContributions].
      *  2. Removes [projectId] from [OrderEntry.projectIds] via arrayRemove.
      *
      * Crash window: if the app terminates between the item removal write and the projectIds
      * update, the items are gone but the projectId remains in the array. The order still shows
-     * as "belonging to" the project, but the user can re-detach, which would be a no-op on
-     * items and complete the projectIds cleanup.
+     * as "belonging to" the project, but the user can re-detach, which is a safe no-op on
+     * items and completes the projectIds cleanup.
      */
     suspend fun detachProject(
         orderId: String,
         projectId: String,
         allItems: List<OrderItemEntry>,
     ) {
-        val remaining = allItems.filter { it.sourceProjectId != projectId }
-        source.updateItems(orderId, remaining)
+        val updated = allItems.mapNotNull { item ->
+            val contributions = item.effectiveContributions()
+            val contribution = contributions[projectId]
+            if (contribution == null) {
+                item  // not contributed by this project; preserve unchanged
+            } else {
+                val remaining = contributions - projectId
+                val newTargetGrams = item.targetGrams - contribution
+                if (newTargetGrams <= 0.0) {
+                    null  // sole or full contributor; remove item
+                } else {
+                    item.copy(
+                        targetGrams = newTargetGrams,
+                        sourceProjectContributions = remaining,
+                    )
+                }
+            }
+        }
+        source.updateItems(orderId, updated)
         source.removeProjectIdFromOrder(orderId, projectId)
     }
 
@@ -340,15 +362,19 @@ class OrderRepository @Inject constructor(
      * Adds items from [projectId]'s selected beads to an existing order, then registers
      * [projectId] in [OrderEntry.projectIds] via arrayUnion.
      *
-     * Each bead produces one vendor-less [OrderItemEntry] with [OrderItemEntry.sourceProjectId]
-     * set to [projectId]. [targetGrams] is computed by the same logic as [createOrderFromBeads]:
+     * Each bead produces one vendor-less [OrderItemEntry] with [targetGrams] set to the
+     * inventory deficit (or full project target for repeat orders). Items with zero deficit
+     * are skipped. [targetGrams] is computed by the same logic as [createOrderFromBeads]:
      * full project target when [activeOrderStatus] records an active order for the bead
      * (indicating a parallel re-order), otherwise the inventory deficit.
      *
-     * Duplicate triples already present in the order are silently skipped by [addItems].
+     * If a vendor-less item for the same bead already exists in the order, the deficit is
+     * merged into that item ([targetGrams] accumulated, project added to
+     * [OrderItemEntry.sourceProjectContributions]) rather than creating a duplicate.
      *
      * The existing items for the order are fetched from Firestore (cache-first) to provide
-     * the deduplication baseline, so no [existingItems] parameter is needed at the call site.
+     * the merge/deduplication baseline, so no [existingItems] parameter is needed at the
+     * call site.
      */
     suspend fun importProjectItems(
         orderId: String,
@@ -359,13 +385,16 @@ class OrderRepository @Inject constructor(
     ) {
         require(selectedBeads.isNotEmpty()) { "Cannot import with no beads selected." }
         val existingItems = source.orderSnapshot(orderId)?.items ?: emptyList()
-        val newItems = selectedBeads.map { bead ->
+
+        // Build candidate items for this project.
+        val candidateItems = selectedBeads.mapNotNull { bead ->
             val targetGrams = if (activeOrderStatus.containsKey(bead.beadCode)) {
                 bead.targetGrams
             } else {
                 val inStock = inventoryGrams[bead.beadCode] ?: 0.0
                 (bead.targetGrams - inStock).coerceAtLeast(0.0)
             }
+            if (targetGrams == 0.0) return@mapNotNull null  // nothing to contribute; skip
             OrderItemEntry(
                 beadCode = bead.beadCode,
                 vendorKey = "",
@@ -373,10 +402,38 @@ class OrderRepository @Inject constructor(
                 packGrams = 0.0,
                 quantityUnits = 0,
                 status = OrderItemStatus.PENDING.firestoreValue,
-                sourceProjectId = projectId,
+                sourceProjectContributions = mapOf(projectId to targetGrams),
             )
         }
-        addItems(orderId, newItems, existingItems)
+        // All selected beads are already covered by inventory; nothing to contribute.
+        if (candidateItems.isEmpty()) return
+
+        // Merge into existing vendor-less items where the same bead already appears;
+        // append as new items where it does not.
+        var hasMerges = false
+        val mutableExisting = existingItems.toMutableList()
+        val toAppend = mutableListOf<OrderItemEntry>()
+        for (candidate in candidateItems) {
+            val existingIndex = mutableExisting.indexOfFirst {
+                it.beadCode == candidate.beadCode && it.vendorKey.isBlank() && it.packGrams == 0.0
+            }
+            if (existingIndex >= 0) {
+                val existing = mutableExisting[existingIndex]
+                @Suppress("DEPRECATION")
+                mutableExisting[existingIndex] = existing.copy(
+                    targetGrams = existing.targetGrams + candidate.targetGrams,
+                    sourceProjectContributions = existing.effectiveContributions() + candidate.sourceProjectContributions,
+                    sourceProjectId = "",  // clear stale M3 scalar now that map owns the state
+                )
+                hasMerges = true
+            } else {
+                toAppend.add(candidate)
+            }
+        }
+
+        if (hasMerges || toAppend.isNotEmpty()) {
+            source.updateItems(orderId, mutableExisting + toAppend)
+        }
         source.addProjectIdToOrder(orderId, projectId)
     }
 }

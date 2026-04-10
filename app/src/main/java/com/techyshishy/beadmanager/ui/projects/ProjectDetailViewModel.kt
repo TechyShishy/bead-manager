@@ -128,9 +128,9 @@ class ProjectDetailViewModel @Inject constructor(
     }
 
     /**
-     * Detaches this project from [orderId], removing all items that were contributed by
-     * this project (those with [OrderItemEntry.sourceProjectId] == this project's ID).
-     * Items added manually (sourceProjectId == "") are preserved.
+     * Detaches this project from [orderId]. Each order item's contribution from this project
+     * is subtracted from [OrderItemEntry.targetGrams]; items whose target drops to zero are
+     * removed entirely. Manually-added items (no contribution recorded) are preserved.
      */
     fun detachProject(orderId: String) {
         val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
