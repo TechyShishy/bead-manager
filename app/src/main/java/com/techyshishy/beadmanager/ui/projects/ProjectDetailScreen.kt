@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -39,7 +40,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,10 +48,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
+import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
-import kotlinx.coroutines.launch
 import java.math.BigDecimal
+import java.text.DateFormat
 
 /**
  * Inventory quantities below this many grams are treated as zero-deficit for display and
@@ -67,20 +68,21 @@ fun ProjectDetailScreen(
     viewModel: ProjectDetailViewModel,
     onNavigateBack: () -> Unit,
     onViewOrders: (projectId: String, projectName: String) -> Unit,
-    onOrderCreated: (orderId: String) -> Unit,
+    onAddToOrder: (selectedCodes: Set<String>) -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
     val project by viewModel.project.collectAsState()
     val orderCount by viewModel.orderCount.collectAsState()
+    val activeOrders by viewModel.activeOrders.collectAsState()
     val inventoryGrams by viewModel.inventoryGrams.collectAsState()
     val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
-    val scope = rememberCoroutineScope()
 
     val beads = project?.beads ?: emptyList()
 
     var checkedCodes by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
+    var detachTarget by remember { mutableStateOf<OrderEntry?>(null) }
 
     // Drop checked codes that were removed from the bead list.
     LaunchedEffect(beads) {
@@ -137,18 +139,12 @@ fun ProjectDetailScreen(
             ExtendedFloatingActionButton(
                 onClick = {
                     if (checkedCodes.isNotEmpty()) {
-                        scope.launch {
-                            val orderId = viewModel.createOrderFromSelection(checkedCodes)
-                            if (orderId != null) {
-                                checkedCodes = emptySet()
-                                onOrderCreated(orderId)
-                            }
-                        }
+                        onAddToOrder(checkedCodes)
                     }
                 },
                 expanded = checkedCodes.isNotEmpty(),
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.create_order)) },
+                text = { Text(stringResource(R.string.add_to_order)) },
                 modifier = Modifier.navigationBarsPadding(),
             )
         },
@@ -172,6 +168,28 @@ fun ProjectDetailScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
+                if (activeOrders.isNotEmpty()) {
+                    item(key = "active_orders_header") {
+                        Text(
+                            text = stringResource(R.string.active_orders_header),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(
+                                start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp,
+                            ),
+                        )
+                    }
+                    items(activeOrders, key = { "order_${it.orderId}" }) { order ->
+                        ActiveOrderRow(
+                            order = order,
+                            onDetach = { detachTarget = order },
+                        )
+                        HorizontalDivider()
+                    }
+                    item(key = "active_orders_spacer") {
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
                 items(beads, key = { it.beadCode }) { bead ->
                     ProjectBeadRow(
                         bead = bead,
@@ -212,6 +230,56 @@ fun ProjectDetailScreen(
                 }
             },
         )
+    }
+
+    detachTarget?.let { order ->
+        AlertDialog(
+            onDismissRequest = { detachTarget = null },
+            title = { Text(stringResource(R.string.confirm_detach_project_title)) },
+            text = { Text(stringResource(R.string.confirm_detach_project_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.detachProject(order.orderId)
+                    detachTarget = null
+                }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { detachTarget = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ActiveOrderRow(
+    order: OrderEntry,
+    onDetach: () -> Unit,
+) {
+    val dateLabel = order.createdAt?.let { ts ->
+        DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
+    } ?: "…"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.order_created, dateLabel),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onDetach) {
+            Icon(
+                Icons.Filled.LinkOff,
+                contentDescription = stringResource(R.string.confirm_detach_project_title),
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 

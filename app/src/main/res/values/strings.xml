@@ -84,6 +84,14 @@
     <string name="bead_in_stock_sufficient">%1$s g in stock · enough</string>
     <string name="create_order">Create Order</string>
     <string name="view_orders">View Orders</string>
+    <string name="add_to_order">Add to Order…</string>
+    <string name="active_orders_header">In these orders</string>
+    <string name="confirm_detach_project_title">Remove from order?</string>
+    <string name="confirm_detach_project_body">Items contributed by this project will be removed. Manually added items will stay.</string>
+    <string name="add_to_order_screen_title">Add to Order</string>
+    <string name="no_eligible_orders">No other orders.\n\nTap New Order to create a fresh one with the selected beads.</string>
+    <string name="add_to_existing_order_confirm_title">Add to this order?</string>
+    <string name="add_to_existing_order_confirm">Add the selected beads from this project to this order?</string>
     <string name="select_vendor">Select vendor</string>
     <string name="bead_vendor_target">%1$s — target %2$s g</string>
     <string name="over_target_warning">Already received %1$s g; ordering this will exceed the %2$s g project target.</string>

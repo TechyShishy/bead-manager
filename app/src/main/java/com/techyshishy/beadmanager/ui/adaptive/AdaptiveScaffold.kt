@@ -40,6 +40,8 @@ import com.techyshishy.beadmanager.ui.catalog.CatalogViewModel
 import com.techyshishy.beadmanager.ui.detail.BeadDetailPane
 import com.techyshishy.beadmanager.ui.detail.BeadDetailViewModel
 import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
+import com.techyshishy.beadmanager.ui.projects.AddToOrderScreen
+import com.techyshishy.beadmanager.ui.projects.AddToOrderViewModel
 import com.techyshishy.beadmanager.ui.projects.AllOrdersScreen
 import com.techyshishy.beadmanager.ui.projects.AllOrdersViewModel
 import com.techyshishy.beadmanager.ui.projects.FinalizeOrderScreen
@@ -80,6 +82,8 @@ fun AdaptiveScaffold() {
     var ordersShowOrdersList by rememberSaveable { mutableStateOf(false) }
     var ordersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     var ordersShowFinalizing by rememberSaveable { mutableStateOf(false) }
+    // Non-null while the AddToOrderScreen picker is open; holds the checked bead codes.
+    var ordersAddToOrderCodes by rememberSaveable { mutableStateOf<Set<String>?>(null) }
 
     // All-Orders tab: two-level nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -191,6 +195,7 @@ fun AdaptiveScaffold() {
                     when {
                         ordersShowFinalizing -> ordersShowFinalizing = false
                         ordersOrderId != null -> ordersOrderId = null
+                        ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
                         ordersShowOrdersList -> ordersShowOrdersList = false
                         else -> {
                             ordersProjectId = null
@@ -229,6 +234,30 @@ fun AdaptiveScaffold() {
                             onNavigateBack = { ordersShowOrdersList = false },
                         )
                     }
+                    ordersAddToOrderCodes != null && ordersProjectId != null -> {
+                        // Same key as the ProjectDetailScreen branch so that both branches
+                        // share the same ViewModel instance (Hilt returns the cached VM).
+                        val projectDetailVm: ProjectDetailViewModel =
+                            hiltViewModel(key = "project_detail_$ordersProjectId")
+                        val addToOrderVm: AddToOrderViewModel =
+                            hiltViewModel(key = "add_to_order_$ordersProjectId")
+                        val selectedCodes = ordersAddToOrderCodes!!
+                        AddToOrderScreen(
+                            projectId = ordersProjectId!!,
+                            viewModel = addToOrderVm,
+                            onNavigateBack = { ordersAddToOrderCodes = null },
+                            onNewOrder = {
+                                projectDetailVm.createOrderFromSelection(selectedCodes)
+                            },
+                            onImportIntoOrder = { orderId ->
+                                projectDetailVm.importProjectItems(orderId, selectedCodes)
+                            },
+                            onNavigateToOrder = { orderId ->
+                                ordersAddToOrderCodes = null
+                                ordersOrderId = orderId
+                            },
+                        )
+                    }
                     ordersProjectId != null -> {
                         val projectDetailVm: ProjectDetailViewModel =
                             hiltViewModel(key = "project_detail_$ordersProjectId")
@@ -240,9 +269,7 @@ fun AdaptiveScaffold() {
                                 ordersProjectName = ""
                             },
                             onViewOrders = { _, _ -> ordersShowOrdersList = true },
-                            onOrderCreated = { orderId ->
-                                ordersOrderId = orderId
-                            },
+                            onAddToOrder = { codes -> ordersAddToOrderCodes = codes },
                         )
                     }
                     else -> {

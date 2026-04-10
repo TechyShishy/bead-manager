@@ -37,4 +37,10 @@ data class OrderItemEntry(
     val status: String = OrderItemStatus.PENDING.firestoreValue,
     val receivedAt: Timestamp? = null,
     val appliedToInventory: Boolean = false,
+    /**
+     * Project that originally contributed this item, set at order-creation or import time.
+     * The empty string means the item was added manually or predates M3; such items are
+     * never auto-removed when detaching a project from an order.
+     */
+    val sourceProjectId: String = "",
 )

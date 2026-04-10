@@ -192,4 +192,26 @@ class FirestoreOrderSource @Inject constructor(
             .update("projectIds", FieldValue.arrayUnion(projectId))
             .await()
     }
+
+    /**
+     * Removes [projectId] from an order's [projectIds] array using arrayRemove.
+     * If [projectId] is not present, the call is a no-op.
+     */
+    suspend fun removeProjectIdFromOrder(orderId: String, projectId: String) {
+        val uid = requireUid()
+        ordersRef(uid).document(orderId)
+            .update("projectIds", FieldValue.arrayRemove(projectId))
+            .await()
+    }
+
+    /**
+     * One-shot fetch of a single order document, using the Firestore default source
+     * (local cache first, falls back to server). Returns null if the document does not exist.
+     * Used when an immediate snapshot is needed without subscribing to a stream.
+     */
+    suspend fun orderSnapshot(orderId: String): OrderEntry? {
+        val uid = requireUid()
+        return ordersRef(uid).document(orderId).get().await()
+            .toObject(OrderEntry::class.java)
+    }
 }

@@ -68,6 +68,7 @@ class OrderRepository @Inject constructor(
                 packGrams = 0.0,
                 quantityUnits = 0,
                 status = OrderItemStatus.PENDING.firestoreValue,
+                sourceProjectId = projectId,
             )
         }
         val entry = OrderEntry(projectIds = listOf(projectId), items = items)
@@ -109,13 +110,16 @@ class OrderRepository @Inject constructor(
     ) {
         val withoutVendorless = allItems.filter { !(it.beadCode == beadCode && it.vendorKey.isBlank()) }
         if (withoutVendorless.size == allItems.size) return  // no vendor-less item found
+        val replacedSourceProjectId = allItems
+            .firstOrNull { it.beadCode == beadCode && it.vendorKey.isBlank() }
+            ?.sourceProjectId ?: ""
         val toAdd = newItems.filter { newItem ->
             withoutVendorless.none {
                 it.beadCode == newItem.beadCode &&
                     it.vendorKey == newItem.vendorKey &&
                     it.packGrams == newItem.packGrams
             }
-        }
+        }.map { it.copy(sourceProjectId = replacedSourceProjectId) }
         source.updateItems(orderId, withoutVendorless + toAdd)
     }
 
@@ -306,5 +310,73 @@ class OrderRepository @Inject constructor(
         }
 
         source.updateItems(orderId, retained + resolved)
+    }
+
+    suspend fun removeProjectIdFromOrder(orderId: String, projectId: String) =
+        source.removeProjectIdFromOrder(orderId, projectId)
+
+    /**
+     * Detaches [projectId] from an order:
+     *  1. Removes all items whose [OrderItemEntry.sourceProjectId] == [projectId].
+     *     Items with [sourceProjectId] == "" (manually added, or pre-M3) are preserved.
+     *  2. Removes [projectId] from [OrderEntry.projectIds] via arrayRemove.
+     *
+     * Crash window: if the app terminates between the item removal write and the projectIds
+     * update, the items are gone but the projectId remains in the array. The order still shows
+     * as "belonging to" the project, but the user can re-detach, which would be a no-op on
+     * items and complete the projectIds cleanup.
+     */
+    suspend fun detachProject(
+        orderId: String,
+        projectId: String,
+        allItems: List<OrderItemEntry>,
+    ) {
+        val remaining = allItems.filter { it.sourceProjectId != projectId }
+        source.updateItems(orderId, remaining)
+        source.removeProjectIdFromOrder(orderId, projectId)
+    }
+
+    /**
+     * Adds items from [projectId]'s selected beads to an existing order, then registers
+     * [projectId] in [OrderEntry.projectIds] via arrayUnion.
+     *
+     * Each bead produces one vendor-less [OrderItemEntry] with [OrderItemEntry.sourceProjectId]
+     * set to [projectId]. [targetGrams] is computed by the same logic as [createOrderFromBeads]:
+     * full project target when [activeOrderStatus] records an active order for the bead
+     * (indicating a parallel re-order), otherwise the inventory deficit.
+     *
+     * Duplicate triples already present in the order are silently skipped by [addItems].
+     *
+     * The existing items for the order are fetched from Firestore (cache-first) to provide
+     * the deduplication baseline, so no [existingItems] parameter is needed at the call site.
+     */
+    suspend fun importProjectItems(
+        orderId: String,
+        projectId: String,
+        selectedBeads: List<ProjectBeadEntry>,
+        inventoryGrams: Map<String, Double>,
+        activeOrderStatus: Map<String, OrderItemStatus>,
+    ) {
+        require(selectedBeads.isNotEmpty()) { "Cannot import with no beads selected." }
+        val existingItems = source.orderSnapshot(orderId)?.items ?: emptyList()
+        val newItems = selectedBeads.map { bead ->
+            val targetGrams = if (activeOrderStatus.containsKey(bead.beadCode)) {
+                bead.targetGrams
+            } else {
+                val inStock = inventoryGrams[bead.beadCode] ?: 0.0
+                (bead.targetGrams - inStock).coerceAtLeast(0.0)
+            }
+            OrderItemEntry(
+                beadCode = bead.beadCode,
+                vendorKey = "",
+                targetGrams = targetGrams,
+                packGrams = 0.0,
+                quantityUnits = 0,
+                status = OrderItemStatus.PENDING.firestoreValue,
+                sourceProjectId = projectId,
+            )
+        }
+        addItems(orderId, newItems, existingItems)
+        source.addProjectIdToOrder(orderId, projectId)
     }
 }

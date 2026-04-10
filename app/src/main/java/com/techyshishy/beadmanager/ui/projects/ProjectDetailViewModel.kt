@@ -44,14 +44,19 @@ class ProjectDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val orders: StateFlow<List<OrderEntry>> = _projectId
+    /**
+     * All orders that currently list this project in their [projectIds] array.
+     * Sorted oldest-first (by createdAt) since [FirestoreOrderSource.ordersStream] uses
+     * ASCENDING order for the per-project query.
+     */
+    val activeOrders: StateFlow<List<OrderEntry>> = _projectId
         .flatMapLatest { id ->
             if (id.isBlank()) flowOf(emptyList())
             else orderRepository.ordersStream(id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val orderCount: StateFlow<Int> = orders
+    val orderCount: StateFlow<Int> = activeOrders
         .map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
@@ -63,7 +68,7 @@ class ProjectDetailViewModel @Inject constructor(
      * When a bead has items at multiple active statuses, ORDERED takes precedence over PENDING
      * — the user cares most that something is already on order.
      */
-    val activeOrderStatus: StateFlow<Map<String, OrderItemStatus>> = orders
+    val activeOrderStatus: StateFlow<Map<String, OrderItemStatus>> = activeOrders
         .map { orderList ->
             val result = mutableMapOf<String, OrderItemStatus>()
             for (order in orderList) {
@@ -120,5 +125,36 @@ class ProjectDetailViewModel @Inject constructor(
         val selected = beads.filter { it.beadCode in selectedBeadCodes }
         if (selected.isEmpty()) return null
         return orderRepository.createOrderFromBeads(projectId, selected, inventoryGrams.value, activeOrderStatus.value)
+    }
+
+    /**
+     * Detaches this project from [orderId], removing all items that were contributed by
+     * this project (those with [OrderItemEntry.sourceProjectId] == this project's ID).
+     * Items added manually (sourceProjectId == "") are preserved.
+     */
+    fun detachProject(orderId: String) {
+        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
+        val order = activeOrders.value.firstOrNull { it.orderId == orderId } ?: return
+        viewModelScope.launch {
+            orderRepository.detachProject(orderId, projectId, order.items)
+        }
+    }
+
+    /**
+     * Adds items from this project's selected beads to an existing order.
+     * The existing order's items are fetched internally for deduplication.
+     */
+    suspend fun importProjectItems(orderId: String, selectedBeadCodes: Set<String>) {
+        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
+        val beads = project.value?.beads ?: return
+        val selected = beads.filter { it.beadCode in selectedBeadCodes }
+        if (selected.isEmpty()) return
+        orderRepository.importProjectItems(
+            orderId = orderId,
+            projectId = projectId,
+            selectedBeads = selected,
+            inventoryGrams = inventoryGrams.value,
+            activeOrderStatus = activeOrderStatus.value,
+        )
     }
 }
