@@ -131,10 +131,18 @@ class ProjectDetailViewModel @Inject constructor(
      * Detaches this project from [orderId]. Each order item's contribution from this project
      * is subtracted from [OrderItemEntry.targetGrams]; items whose target drops to zero are
      * removed entirely. Manually-added items (no contribution recorded) are preserved.
+     *
+     * No-ops if the order has been finalized (any item is ORDERED or RECEIVED), because
+     * removing a project from a committed order would silently corrupt its history.
      */
     fun detachProject(orderId: String) {
         val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
         val order = activeOrders.value.firstOrNull { it.orderId == orderId } ?: return
+        val isFinalized = order.items.any {
+            val s = OrderItemStatus.fromFirestore(it.status)
+            s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
+        }
+        if (isFinalized) return
         viewModelScope.launch {
             orderRepository.detachProject(orderId, projectId, order.items)
         }

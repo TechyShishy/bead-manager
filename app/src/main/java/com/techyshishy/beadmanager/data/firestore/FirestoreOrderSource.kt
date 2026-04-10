@@ -56,11 +56,12 @@ class FirestoreOrderSource @Inject constructor(
                 .orderBy("createdAt", Query.Direction.ASCENDING)
             val registration = query.addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e("FirestoreOrder", "Snapshot listener error", error)
+                    Log.e("FirestoreOrder", "ordersStream[$projectId] snapshot error", error)
                     return@addSnapshotListener
                 }
                 if (snapshot == null) return@addSnapshotListener
                 val entries = snapshot.documents.mapNotNull { it.toObject(OrderEntry::class.java) }
+                Log.d("FirestoreOrder", "ordersStream[$projectId] snapshot fired: ${entries.size} orders (fromCache=${snapshot.metadata.isFromCache}, hasPendingWrites=${snapshot.metadata.hasPendingWrites()})")
                 trySend(entries)
             }
             awaitClose { registration.remove() }
@@ -141,8 +142,10 @@ class FirestoreOrderSource @Inject constructor(
     }
 
     suspend fun deleteOrder(orderId: String) {
+        Log.d("FirestoreOrder", "deleteOrder($orderId) starting")
         val uid = requireUid()
         ordersRef(uid).document(orderId).delete().await()
+        Log.d("FirestoreOrder", "deleteOrder($orderId) delete().await() returned")
     }
 
     /**

@@ -88,6 +88,7 @@
     <string name="active_orders_header">In these orders</string>
     <string name="confirm_detach_project_title">Remove from order?</string>
     <string name="confirm_detach_project_body">Items contributed by this project will be removed. Manually added items will stay.</string>
+    <string name="detach_project_locked">Cannot remove from a finalized order</string>
     <string name="add_to_order_screen_title">Add to Order</string>
     <string name="no_eligible_orders">No other orders.\n\nTap New Order to create a fresh one with the selected beads.</string>
     <string name="add_to_existing_order_confirm_title">Add to this order?</string>

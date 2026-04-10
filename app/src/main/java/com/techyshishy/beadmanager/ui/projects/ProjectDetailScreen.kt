@@ -259,6 +259,12 @@ private fun ActiveOrderRow(
     order: OrderEntry,
     onDetach: () -> Unit,
 ) {
+    val isFinalized = remember(order) {
+        order.items.any {
+            val s = OrderItemStatus.fromFirestore(it.status)
+            s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
+        }
+    }
     val dateLabel = order.createdAt?.let { ts ->
         DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
     } ?: "…"
@@ -273,11 +279,17 @@ private fun ActiveOrderRow(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onDetach) {
+        IconButton(onClick = onDetach, enabled = !isFinalized) {
             Icon(
                 Icons.Filled.LinkOff,
-                contentDescription = stringResource(R.string.confirm_detach_project_title),
-                tint = MaterialTheme.colorScheme.error,
+                contentDescription = stringResource(
+                    if (isFinalized) R.string.detach_project_locked
+                    else R.string.confirm_detach_project_title
+                ),
+                // M3 IconButton does not automatically apply disabled alpha to an explicit
+                // tint — the disabled appearance must be set manually here.
+                tint = if (isFinalized) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                       else MaterialTheme.colorScheme.error,
             )
         }
     }
