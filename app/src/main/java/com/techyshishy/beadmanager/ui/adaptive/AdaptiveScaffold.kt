@@ -4,12 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -38,6 +40,8 @@ import com.techyshishy.beadmanager.ui.catalog.CatalogViewModel
 import com.techyshishy.beadmanager.ui.detail.BeadDetailPane
 import com.techyshishy.beadmanager.ui.detail.BeadDetailViewModel
 import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
+import com.techyshishy.beadmanager.ui.projects.AllOrdersScreen
+import com.techyshishy.beadmanager.ui.projects.AllOrdersViewModel
 import com.techyshishy.beadmanager.ui.projects.FinalizeOrderScreen
 import com.techyshishy.beadmanager.ui.projects.FinalizeOrderViewModel
 import com.techyshishy.beadmanager.ui.projects.OrderDetailScreen
@@ -51,7 +55,7 @@ import com.techyshishy.beadmanager.ui.projects.ProjectsViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
 import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
-enum class AppTab { CATALOG, PROJECTS, SETTINGS }
+enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -62,6 +66,7 @@ fun AdaptiveScaffold() {
     val catalogViewModel: CatalogViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val projectsViewModel: ProjectsViewModel = hiltViewModel()
+    val allOrdersViewModel: AllOrdersViewModel = hiltViewModel()
     // Triggers one-time data migrations immediately on first composition post-auth.
     hiltViewModel<MigrationViewModel>()
 
@@ -69,12 +74,16 @@ fun AdaptiveScaffold() {
     val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
     val catalogSnackbarHostState = remember { SnackbarHostState() }
 
-    // Orders tab: five-level nav state (projects → project detail → orders → order detail → finalize).
+    // Projects tab: five-level nav state (projects → project detail → orders → order detail → finalize).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var ordersProjectName by rememberSaveable { mutableStateOf("") }
     var ordersShowOrdersList by rememberSaveable { mutableStateOf(false) }
     var ordersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     var ordersShowFinalizing by rememberSaveable { mutableStateOf(false) }
+
+    // All-Orders tab: two-level nav state (list → order detail → finalize).
+    var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var allOrdersShowFinalizing by rememberSaveable { mutableStateOf(false) }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -100,6 +109,18 @@ fun AdaptiveScaffold() {
                     )
                 },
                 label = { Text(stringResource(R.string.projects)) },
+            )
+            item(
+                selected = currentTab == AppTab.ORDERS,
+                onClick = { currentTab = AppTab.ORDERS },
+                icon = {
+                    Icon(
+                        if (currentTab == AppTab.ORDERS) Icons.Filled.ShoppingCart
+                        else Icons.Outlined.ShoppingCart,
+                        contentDescription = null,
+                    )
+                },
+                label = { Text(stringResource(R.string.orders)) },
             )
             item(
                 selected = currentTab == AppTab.SETTINGS,
@@ -232,6 +253,50 @@ fun AdaptiveScaffold() {
                                 ordersProjectName = projectName
                                 ordersShowOrdersList = false
                             },
+                        )
+                    }
+                }
+            }
+
+            AppTab.ORDERS -> {
+                BackHandler(allOrdersOrderId != null) {
+                    when {
+                        allOrdersShowFinalizing -> allOrdersShowFinalizing = false
+                        else -> allOrdersOrderId = null
+                    }
+                }
+                when {
+                    allOrdersShowFinalizing && allOrdersOrderId != null -> {
+                        // Keys are prefixed "all_" to keep these VM instances independent
+                        // from the identically-keyed VMs in AppTab.PROJECTS. Both tabs may
+                        // observe the same Firestore document simultaneously; sharing a key
+                        // would cause back-navigation in one tab to clear state the other
+                        // tab still needs.
+                        val finalizeVm: FinalizeOrderViewModel =
+                            hiltViewModel(key = "all_finalize_$allOrdersOrderId")
+                        FinalizeOrderScreen(
+                            orderId = allOrdersOrderId!!,
+                            viewModel = finalizeVm,
+                            onNavigateBack = { allOrdersShowFinalizing = false },
+                        )
+                    }
+                    allOrdersOrderId != null -> {
+                        val orderDetailVm: OrderDetailViewModel =
+                            hiltViewModel(key = "all_order_detail_$allOrdersOrderId")
+                        OrderDetailScreen(
+                            orderId = allOrdersOrderId!!,
+                            viewModel = orderDetailVm,
+                            onNavigateBack = { allOrdersOrderId = null },
+                            onFinalize = { allOrdersShowFinalizing = true },
+                        )
+                    }
+                    else -> {
+                        // Order-level deletion is only available from the Projects tab
+                        // (OrdersScreen). The Orders tab is a purchasing-review view;
+                        // destructive management actions are intentionally absent here.
+                        AllOrdersScreen(
+                            viewModel = allOrdersViewModel,
+                            onOrderSelected = { orderId -> allOrdersOrderId = orderId },
                         )
                     }
                 }
