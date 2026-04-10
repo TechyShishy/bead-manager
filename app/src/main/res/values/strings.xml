@@ -44,6 +44,7 @@
     <string name="new_order">New Order</string>
     <string name="delete_order">Delete order</string>
     <string name="confirm_delete_order">Delete this order and all its items?</string>
+    <string name="confirm_delete_order_with_active_items">This order has items that are still pending or ordered. Deleting it will permanently remove those items without receiving them into inventory. Delete anyway?</string>
     <string name="order_created">Order — %1$s</string>
     <string name="order_progress">%1$d / %2$d received</string>
 

@@ -111,10 +111,23 @@ fun OrdersScreen(
     }
 
     deleteTarget?.let { order ->
+        val hasActiveItems = remember(order) {
+            order.items.any {
+                val status = OrderItemStatus.fromFirestore(it.status)
+                status == OrderItemStatus.PENDING || status == OrderItemStatus.ORDERED
+            }
+        }
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text(stringResource(R.string.delete_order)) },
-            text = { Text(stringResource(R.string.confirm_delete_order)) },
+            text = {
+                Text(
+                    stringResource(
+                        if (hasActiveItems) R.string.confirm_delete_order_with_active_items
+                        else R.string.confirm_delete_order
+                    )
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteOrder(order.orderId)
