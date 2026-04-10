@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.orders
+package com.techyshishy.beadmanager.ui.projects
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -22,12 +21,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,48 +37,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.firestore.OrderEntry
-import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import java.text.DateFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OrdersScreen(
-    projectId: String,
-    projectName: String,
-    viewModel: OrdersViewModel,
-    onOrderSelected: (orderId: String) -> Unit,
-    onNavigateBack: () -> Unit,
+fun ProjectsScreen(
+    viewModel: ProjectsViewModel,
+    onProjectSelected: (projectId: String, projectName: String) -> Unit,
 ) {
-    LaunchedEffect(projectId) { viewModel.initialize(projectId) }
+    val projects by viewModel.projects.collectAsState()
 
-    val orders by viewModel.orders.collectAsState()
-    var deleteTarget by remember { mutableStateOf<OrderEntry?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(projectName) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.navigate_back),
-                        )
-                    }
-                },
-            )
+            TopAppBar(title = { Text(stringResource(R.string.projects)) })
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.createOrder() },
+                onClick = { showCreateDialog = true },
                 modifier = Modifier.navigationBarsPadding(),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_order))
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_project))
             }
         },
     ) { innerPadding ->
-        if (orders.isEmpty()) {
+        if (projects.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -87,7 +72,7 @@ fun OrdersScreen(
                     .padding(horizontal = 16.dp, vertical = 32.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.no_orders),
+                    text = stringResource(R.string.no_projects),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -98,11 +83,11 @@ fun OrdersScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                items(orders, key = { it.orderId }) { order ->
-                    OrderRow(
-                        order = order,
-                        onClick = { onOrderSelected(order.orderId) },
-                        onDelete = { deleteTarget = order },
+                items(projects, key = { it.projectId }) { project ->
+                    ProjectRow(
+                        project = project,
+                        onClick = { onProjectSelected(project.projectId, project.name) },
+                        onDelete = { deleteTarget = project },
                     )
                     HorizontalDivider()
                 }
@@ -110,27 +95,24 @@ fun OrdersScreen(
         }
     }
 
-    deleteTarget?.let { order ->
-        val hasActiveItems = remember(order) {
-            order.items.any {
-                val status = OrderItemStatus.fromFirestore(it.status)
-                status == OrderItemStatus.PENDING || status == OrderItemStatus.ORDERED
-            }
-        }
+    if (showCreateDialog) {
+        CreateProjectDialog(
+            onConfirm = { name ->
+                viewModel.createProject(name)
+                showCreateDialog = false
+            },
+            onDismiss = { showCreateDialog = false },
+        )
+    }
+
+    deleteTarget?.let { project ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text(stringResource(R.string.delete_order)) },
-            text = {
-                Text(
-                    stringResource(
-                        if (hasActiveItems) R.string.confirm_delete_order_with_active_items
-                        else R.string.confirm_delete_order
-                    )
-                )
-            },
+            title = { Text(stringResource(R.string.delete_project)) },
+            text = { Text(stringResource(R.string.confirm_delete_project, project.name)) },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteOrder(order.orderId)
+                    viewModel.deleteProject(project.projectId)
                     deleteTarget = null
                 }) {
                     Text(stringResource(android.R.string.ok))
@@ -146,16 +128,11 @@ fun OrdersScreen(
 }
 
 @Composable
-private fun OrderRow(
-    order: OrderEntry,
+private fun ProjectRow(
+    project: ProjectEntry,
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val itemCount = order.items.size
-    val receivedCount = order.items.count {
-        OrderItemStatus.fromFirestore(it.status) == OrderItemStatus.RECEIVED
-    }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,22 +141,13 @@ private fun OrderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            val dateLabel = order.createdAt?.let { ts ->
-                DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
-            } ?: "…"
             Text(
-                text = stringResource(R.string.order_created, dateLabel),
+                text = project.name,
                 style = MaterialTheme.typography.bodyLarge,
             )
-            if (itemCount > 0) {
+            project.createdAt?.let { ts ->
                 Text(
-                    text = stringResource(R.string.order_progress, receivedCount, itemCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.no_items),
+                    text = DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -189,9 +157,43 @@ private fun OrderRow(
         IconButton(onClick = onDelete) {
             Icon(
                 Icons.Filled.Delete,
-                contentDescription = stringResource(R.string.delete_order),
+                contentDescription = stringResource(R.string.delete_project),
                 tint = MaterialTheme.colorScheme.error,
             )
         }
     }
+}
+
+@Composable
+private fun CreateProjectDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.new_project)) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.project_name)) },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text(stringResource(android.R.string.ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }

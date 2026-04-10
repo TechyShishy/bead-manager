@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.orders
+package com.techyshishy.beadmanager.ui.projects
 
 import android.content.Intent
 import android.net.Uri

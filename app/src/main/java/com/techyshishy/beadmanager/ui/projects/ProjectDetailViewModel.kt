@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.orders
+package com.techyshishy.beadmanager.ui.projects
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

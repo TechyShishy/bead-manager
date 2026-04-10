@@ -38,16 +38,16 @@ import com.techyshishy.beadmanager.ui.catalog.CatalogViewModel
 import com.techyshishy.beadmanager.ui.detail.BeadDetailPane
 import com.techyshishy.beadmanager.ui.detail.BeadDetailViewModel
 import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
-import com.techyshishy.beadmanager.ui.orders.FinalizeOrderScreen
-import com.techyshishy.beadmanager.ui.orders.FinalizeOrderViewModel
-import com.techyshishy.beadmanager.ui.orders.OrderDetailScreen
-import com.techyshishy.beadmanager.ui.orders.OrderDetailViewModel
-import com.techyshishy.beadmanager.ui.orders.OrdersScreen
-import com.techyshishy.beadmanager.ui.orders.OrdersViewModel
-import com.techyshishy.beadmanager.ui.orders.ProjectDetailScreen
-import com.techyshishy.beadmanager.ui.orders.ProjectDetailViewModel
-import com.techyshishy.beadmanager.ui.orders.ProjectsScreen
-import com.techyshishy.beadmanager.ui.orders.ProjectsViewModel
+import com.techyshishy.beadmanager.ui.projects.FinalizeOrderScreen
+import com.techyshishy.beadmanager.ui.projects.FinalizeOrderViewModel
+import com.techyshishy.beadmanager.ui.projects.OrderDetailScreen
+import com.techyshishy.beadmanager.ui.projects.OrderDetailViewModel
+import com.techyshishy.beadmanager.ui.projects.OrdersScreen
+import com.techyshishy.beadmanager.ui.projects.OrdersViewModel
+import com.techyshishy.beadmanager.ui.projects.ProjectDetailScreen
+import com.techyshishy.beadmanager.ui.projects.ProjectDetailViewModel
+import com.techyshishy.beadmanager.ui.projects.ProjectsScreen
+import com.techyshishy.beadmanager.ui.projects.ProjectsViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
 import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
