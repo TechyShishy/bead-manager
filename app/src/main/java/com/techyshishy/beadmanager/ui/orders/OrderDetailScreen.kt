@@ -211,11 +211,13 @@ private fun OrderItemRow(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                 )
-                Text(
-                    text = packLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (packLabel.isNotEmpty()) {
+                    Text(
+                        text = packLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (!isVendorless) StatusBadge(status)
             IconButton(onClick = onRemove, enabled = !item.appliedToInventory) {
@@ -317,10 +319,7 @@ private fun StatusBadge(status: OrderItemStatus) {
 }
 
 private fun formatPackLabel(item: OrderItemEntry): String {
-    if (item.vendorKey.isBlank()) {
-        val targetStr = BigDecimal.valueOf(item.targetGrams).stripTrailingZeros().toPlainString()
-        return "Target: ${targetStr}g — vendor not yet selected"
-    }
+    if (item.vendorKey.isBlank()) return ""
     val gramsStr = BigDecimal.valueOf(item.packGrams).stripTrailingZeros().toPlainString()
     val targetStr = BigDecimal.valueOf(item.targetGrams).stripTrailingZeros().toPlainString()
     return "${item.quantityUnits} × ${gramsStr}g  (target ${targetStr}g)"
