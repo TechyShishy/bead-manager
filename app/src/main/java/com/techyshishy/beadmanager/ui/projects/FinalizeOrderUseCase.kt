@@ -41,6 +41,8 @@ data class FinalizedItem(
     val priceCents: Int?,
     val available: Boolean?,
     val fetchFailed: Boolean,
+    val imageUrl: String = "",
+    val hex: String = "",
 ) {
     val packGramsLabel: String
         get() = BigDecimal.valueOf(packGrams).stripTrailingZeros().toPlainString()
@@ -87,6 +89,7 @@ class FinalizeOrderUseCase @Inject constructor(
 
         val (assignedItems, unassignedItems) = pendingItems.partition { it.vendorKey.isNotBlank() }
         val nowSeconds = System.currentTimeMillis() / 1000
+        val beadMap = catalogRepository.allBeadsAsMap()
 
         // Load all packs for each unassigned bead. We'll check all of them so that after
         // the scrape we can re-run selection with fresh prices.
@@ -181,6 +184,7 @@ class FinalizeOrderUseCase @Inject constructor(
                 for (combo in fallback.combination) {
                     val key = Triple(item.beadCode, fallback.vendorKey, combo.packGrams)
                     val pack = allFreshPacks[key]
+                    val bead = beadMap[item.beadCode]
                     finalizedItems.add(
                         FinalizedItem(
                             beadCode = item.beadCode,
@@ -191,12 +195,15 @@ class FinalizeOrderUseCase @Inject constructor(
                             priceCents = pack?.priceCents,
                             available = pack?.available,
                             fetchFailed = false,
+                            imageUrl = bead?.imageUrl ?: "",
+                            hex = bead?.hex ?: "",
                         )
                     )
                 }
             } else {
                 val key = Triple(item.beadCode, item.vendorKey, item.packGrams)
                 val pack = allFreshPacks[key]
+                val bead = beadMap[item.beadCode]
                 finalizedItems.add(
                     FinalizedItem(
                         beadCode = item.beadCode,
@@ -207,6 +214,8 @@ class FinalizeOrderUseCase @Inject constructor(
                         priceCents = pack?.priceCents,
                         available = pack?.available,
                         fetchFailed = pack?.id in checkResult.failedPackIds,
+                        imageUrl = bead?.imageUrl ?: "",
+                        hex = bead?.hex ?: "",
                     )
                 )
             }
@@ -217,6 +226,7 @@ class FinalizeOrderUseCase @Inject constructor(
             for (combo in selection.combination) {
                 val key = Triple(item.beadCode, selection.vendorKey, combo.packGrams)
                 val pack = allFreshPacks[key]
+                val bead = beadMap[item.beadCode]
                 finalizedItems.add(
                     FinalizedItem(
                         beadCode = item.beadCode,
@@ -227,6 +237,8 @@ class FinalizeOrderUseCase @Inject constructor(
                         priceCents = pack?.priceCents,
                         available = pack?.available,
                         fetchFailed = false,
+                        imageUrl = bead?.imageUrl ?: "",
+                        hex = bead?.hex ?: "",
                     )
                 )
             }
@@ -255,10 +267,12 @@ class FinalizeOrderUseCase @Inject constructor(
     suspend fun resolveExistingOrder(orderId: String): FinalizeResult {
         val order = orderRepository.orderStream(orderId).first()
             ?: error("Order $orderId not found")
+        val beadMap = catalogRepository.allBeadsAsMap()
         val finalizedItems = order.items
             .filter { OrderItemStatus.fromFirestore(it.status) == OrderItemStatus.FINALIZED }
             .map { item ->
                 val pack = catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
+                val bead = beadMap[item.beadCode]
                 FinalizedItem(
                     beadCode = item.beadCode,
                     vendorKey = item.vendorKey,
@@ -268,6 +282,8 @@ class FinalizeOrderUseCase @Inject constructor(
                     priceCents = pack?.priceCents,
                     available = pack?.available,
                     fetchFailed = false,
+                    imageUrl = bead?.imageUrl ?: "",
+                    hex = bead?.hex ?: "",
                 )
             }
         return FinalizeResult(items = finalizedItems)

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -44,9 +45,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
+import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
@@ -77,6 +83,7 @@ fun ProjectDetailScreen(
     val activeOrders by viewModel.activeOrders.collectAsState()
     val inventoryGrams by viewModel.inventoryGrams.collectAsState()
     val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
+    val beadLookup by viewModel.beadLookup.collectAsState()
 
     val beads = project?.beads ?: emptyList()
 
@@ -191,8 +198,11 @@ fun ProjectDetailScreen(
                     }
                 }
                 items(beads, key = { it.beadCode }) { bead ->
+                    val catalogBead = beadLookup[bead.beadCode]
                     ProjectBeadRow(
                         bead = bead,
+                        imageUrl = catalogBead?.imageUrl ?: "",
+                        hex = catalogBead?.hex ?: "",
                         inventoryGrams = inventoryGrams[bead.beadCode] ?: 0.0,
                         activeOrderStatus = activeOrderStatus[bead.beadCode],
                         checked = bead.beadCode in checkedCodes,
@@ -298,6 +308,8 @@ private fun ActiveOrderRow(
 @Composable
 private fun ProjectBeadRow(
     bead: ProjectBeadEntry,
+    imageUrl: String,
+    hex: String,
     inventoryGrams: Double,
     activeOrderStatus: OrderItemStatus?,
     checked: Boolean,
@@ -314,6 +326,9 @@ private fun ProjectBeadRow(
     val inventorySufficient = deficit == 0.0
     val invStr = BigDecimal.valueOf(inventoryGrams).stripTrailingZeros().toPlainString()
     val deficitStr = BigDecimal.valueOf(deficit).stripTrailingZeros().toPlainString()
+    val hexColor = remember(hex) {
+        runCatching { Color(hex.toColorInt()) }.getOrDefault(Color.Gray)
+    }
 
     Column(
         modifier = Modifier
@@ -330,6 +345,18 @@ private fun ProjectBeadRow(
                 enabled = !inventorySufficient,
                 modifier = Modifier.size(40.dp),
             )
+            Spacer(Modifier.width(4.dp))
+
+            AsyncImage(
+                model = imageUrl.takeIf { it.isNotBlank() },
+                contentDescription = null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.small),
+                placeholder = ColorPainter(hexColor),
+                error = ColorPainter(hexColor),
+            )
+            Spacer(Modifier.width(8.dp))
 
             Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
                 Row(
@@ -372,7 +399,7 @@ private fun ProjectBeadRow(
 
         Spacer(Modifier.height(4.dp))
 
-        Box(modifier = Modifier.padding(start = 44.dp, end = 48.dp)) {
+        Box(modifier = Modifier.padding(start = 104.dp, end = 48.dp)) {
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.fillMaxWidth(),
@@ -397,7 +424,7 @@ private fun ProjectBeadRow(
                     OrderItemStatus.RECEIVED,
                     OrderItemStatus.SKIPPED   -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                modifier = Modifier.padding(start = 44.dp, top = 2.dp, end = 48.dp),
+                modifier = Modifier.padding(start = 104.dp, top = 2.dp, end = 48.dp),
             )
         }
     }

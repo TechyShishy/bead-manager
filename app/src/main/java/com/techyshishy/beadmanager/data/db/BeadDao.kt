@@ -32,4 +32,7 @@ interface BeadDao {
 
     @Query("SELECT DISTINCT glassGroup FROM beads ORDER BY glassGroup ASC")
     fun distinctGlassGroups(): Flow<List<String>>
+
+    @Query("SELECT * FROM beads ORDER BY code ASC")
+    fun allBeads(): Flow<List<BeadEntity>>
 }

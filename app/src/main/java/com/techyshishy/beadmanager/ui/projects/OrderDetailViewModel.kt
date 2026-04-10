@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.db.BeadEntity
+import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +23,7 @@ import javax.inject.Inject
 @HiltViewModel
 class OrderDetailViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
+    private val catalogRepository: CatalogRepository,
 ) : ViewModel() {
 
     private val _orderId = MutableStateFlow("")
@@ -35,6 +38,10 @@ class OrderDetailViewModel @Inject constructor(
             else orderRepository.orderStream(id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val beadLookup: StateFlow<Map<String, BeadEntity>> = catalogRepository
+        .allBeadsLookup()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
      * Adds pre-computed line items to the current order.

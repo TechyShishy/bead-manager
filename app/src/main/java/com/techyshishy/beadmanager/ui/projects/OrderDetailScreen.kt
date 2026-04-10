@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,13 +48,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
+import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
@@ -71,6 +77,7 @@ fun OrderDetailScreen(
     LaunchedEffect(orderId) { viewModel.initialize(orderId) }
 
     val order by viewModel.order.collectAsState()
+    val beadLookup by viewModel.beadLookup.collectAsState()
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
     val isFrozen = order?.items?.any { it.status == OrderItemStatus.FINALIZED.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
@@ -141,8 +148,11 @@ fun OrderDetailScreen(
                     .padding(innerPadding),
             ) {
                 items(sortedItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
+                    val bead = beadLookup[item.beadCode]
                     OrderItemRow(
                         item = item,
+                        imageUrl = bead?.imageUrl ?: "",
+                        hex = bead?.hex ?: "",
                         isFrozen = isFrozen,
                         onMarkReceived = { viewModel.markItemReceived(item) },
                         onRevertReceived = { viewModel.revertItemReceived(item) },
@@ -191,6 +201,8 @@ fun OrderDetailScreen(
 @Composable
 private fun OrderItemRow(
     item: OrderItemEntry,
+    imageUrl: String,
+    hex: String,
     isFrozen: Boolean,
     onMarkReceived: () -> Unit,
     onRevertReceived: () -> Unit,
@@ -200,6 +212,9 @@ private fun OrderItemRow(
     val isVendorless = item.vendorKey.isBlank()
     val status = OrderItemStatus.fromFirestore(item.status)
     val packLabel = formatPackLabel(item)
+    val hexColor = remember(hex) {
+        runCatching { Color(hex.toColorInt()) }.getOrDefault(Color.Gray)
+    }
 
     Column(
         modifier = Modifier
@@ -210,6 +225,16 @@ private fun OrderItemRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            AsyncImage(
+                model = imageUrl.takeIf { it.isNotBlank() },
+                contentDescription = null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.small),
+                placeholder = ColorPainter(hexColor),
+                error = ColorPainter(hexColor),
+            )
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.beadCode,

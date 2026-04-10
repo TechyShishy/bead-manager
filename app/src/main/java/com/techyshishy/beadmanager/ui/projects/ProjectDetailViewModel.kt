@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
+import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +31,7 @@ class ProjectDetailViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val orderRepository: OrderRepository,
     private val inventoryRepository: InventoryRepository,
+    private val catalogRepository: CatalogRepository,
 ) : ViewModel() {
 
     private val _projectId = MutableStateFlow("")
@@ -97,6 +100,10 @@ class ProjectDetailViewModel @Inject constructor(
     val inventoryGrams: StateFlow<Map<String, Double>> = inventoryRepository
         .inventoryStream()
         .map { inv -> inv.mapValues { (_, entry) -> entry.quantityGrams } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val beadLookup: StateFlow<Map<String, BeadEntity>> = catalogRepository
+        .allBeadsLookup()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     // ── Bead list mutations ──────────────────────────────────────────────────

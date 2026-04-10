@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,10 +43,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
+import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 
@@ -326,6 +332,9 @@ private fun VendorFinalizeHeader(vendorKey: String, onMarkOrdered: () -> Unit) {
 @Composable
 private fun FinalizedItemRow(item: FinalizedItem) {
     val context = LocalContext.current
+    val hexColor = remember(item.hex) {
+        runCatching { Color(item.hex.toColorInt()) }.getOrDefault(Color.Gray)
+    }
 
     Column(
         modifier = Modifier
@@ -336,6 +345,16 @@ private fun FinalizedItemRow(item: FinalizedItem) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            AsyncImage(
+                model = item.imageUrl.takeIf { it.isNotBlank() },
+                contentDescription = null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.small),
+                placeholder = ColorPainter(hexColor),
+                error = ColorPainter(hexColor),
+            )
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.beadCode,

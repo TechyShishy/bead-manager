@@ -1,6 +1,7 @@
 package com.techyshishy.beadmanager.data.repository
 
 import com.techyshishy.beadmanager.data.db.BeadDao
+import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.BeadWithVendors
 import com.techyshishy.beadmanager.data.db.VendorPackDao
 import com.techyshishy.beadmanager.data.db.VendorPackEntity
@@ -10,6 +11,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,12 @@ class CatalogRepository @Inject constructor(
 
     fun distinctGlassGroups(): Flow<List<String>> =
         beadDao.distinctGlassGroups()
+
+    fun allBeadsLookup(): Flow<Map<String, BeadEntity>> =
+        beadDao.allBeads().map { list -> list.associateBy { it.code } }
+
+    suspend fun allBeadsAsMap(): Map<String, BeadEntity> =
+        beadDao.allBeads().first().associateBy { it.code }
 
     /** Vendor keys that carry the given bead, alphabetically ordered. */
     fun vendorKeysForBead(beadCode: String): Flow<List<String>> =
