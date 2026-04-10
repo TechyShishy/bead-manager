@@ -54,14 +54,12 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import java.math.BigDecimal
 import java.text.DateFormat
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,12 +72,9 @@ fun OrderDetailScreen(
     LaunchedEffect(orderId) { viewModel.initialize(orderId) }
 
     val order by viewModel.order.collectAsState()
-    val receivedGramsPerBead by viewModel.receivedGramsPerBead.collectAsState()
-    val projectTargetGrams by viewModel.projectTargetGrams.collectAsState()
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
-    var selectVendorTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
 
     Scaffold(
         topBar = {
@@ -155,7 +150,6 @@ fun OrderDetailScreen(
                             onRevertReceived = { viewModel.revertItemReceived(item) },
                             onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
                             onRemove = { removeTarget = item },
-                            onSelectVendor = { selectVendorTarget = item },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                     }
@@ -171,22 +165,6 @@ fun OrderDetailScreen(
                 showAddSheet = false
             },
             onDismiss = { showAddSheet = false },
-        )
-    }
-
-    selectVendorTarget?.let { item ->
-        SelectVendorBottomSheet(
-            beadCode = item.beadCode,
-            targetGrams = item.targetGrams,
-            alreadyReceivedGrams = receivedGramsPerBead[item.beadCode] ?: 0.0,
-            projectTargetGrams = projectTargetGrams[item.beadCode],
-            onAssign = { newItems ->
-                viewModel.assignVendor(item.beadCode, newItems)
-                selectVendorTarget = null
-            },
-            onDismiss = { selectVendorTarget = null },
-            vendorKeysForBead = { viewModel.vendorKeysForBead(item.beadCode) },
-            packsForVendor = { vendorKey -> viewModel.packsForVendor(item.beadCode, vendorKey) },
         )
     }
 
@@ -236,7 +214,6 @@ private fun OrderItemRow(
     onRevertReceived: () -> Unit,
     onUpdateStatus: (OrderItemStatus) -> Unit,
     onRemove: () -> Unit,
-    onSelectVendor: () -> Unit,
 ) {
     val isVendorless = item.vendorKey.isBlank()
     val status = OrderItemStatus.fromFirestore(item.status)
@@ -278,12 +255,7 @@ private fun OrderItemRow(
 
         Spacer(Modifier.height(6.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (isVendorless) {
-                SuggestionChip(
-                    onClick = onSelectVendor,
-                    label = { Text(stringResource(R.string.select_vendor)) },
-                )
-            } else {
+            if (!isVendorless) {
                 when (status) {
                     OrderItemStatus.PENDING -> {
                         SuggestionChip(
@@ -377,83 +349,6 @@ private fun formatPackLabel(item: OrderItemEntry): String {
     return "${item.quantityUnits} × ${gramsStr}g  (target ${targetStr}g)"
 }
 
-/**
- * Represents one pack size and how many units of it to order.
- */
-private data class PackCombination(val packGrams: Double, val quantity: Int)
-
-/**
- * Returns the combination of packs from [availablePacks] that reaches [targetGrams] with
- * minimum waste, and among equal-waste solutions, the fewest total units.
- *
- * Uses unbounded knapsack DP scaled to integers (×10) so that half-gram pack sizes
- * (e.g. 7.5g) become clean integers (75). All known Delica pack sizes are multiples
- * of 0.5g, so the scale factor of 10 is always exact.
- *
- * Returns an empty list if [availablePacks] is empty, [targetGrams] ≤ 0, or the target
- * exceeds the practical ceiling (10 kg).
- */
-private fun computeOptimalCombination(
-    availablePacks: List<Double>,
-    targetGrams: Double,
-): List<PackCombination> {
-    if (availablePacks.isEmpty() || targetGrams <= 0.0 || targetGrams > 10_000.0) return emptyList()
-
-    val scale = 10
-    val targetInt = (targetGrams * scale).roundToInt()
-    val packsInt = availablePacks
-        .map { (it * scale).roundToInt() }
-        .filter { it > 0 }
-        .distinct()
-    if (packsInt.isEmpty()) return emptyList()
-
-    // DP ceiling: worst-case overshoot is at most one more unit of the largest pack.
-    val maxPack = packsInt.max()
-    val ceiling = targetInt + maxPack
-
-    val INF = Int.MAX_VALUE / 2
-    // dp[i] = minimum units to reach exactly i scaled grams; INF if unreachable.
-    val dp = IntArray(ceiling + 1) { INF }
-    // parent[i] = scaled pack size used in the last step to reach i.
-    val parent = IntArray(ceiling + 1) { -1 }
-    dp[0] = 0
-
-    for (i in 1..ceiling) {
-        for (pack in packsInt) {
-            if (pack <= i && dp[i - pack] < INF) {
-                val candidate = dp[i - pack] + 1
-                if (candidate < dp[i]) {
-                    dp[i] = candidate
-                    parent[i] = pack
-                }
-            }
-        }
-    }
-
-    // Find the minimum reachable total >= targetInt.
-    val reachable = (targetInt..ceiling).firstOrNull { dp[it] < INF } ?: return emptyList()
-
-    // Backtrack through parent[] to count how many of each pack size are used.
-    val counts = mutableMapOf<Int, Int>()
-    var remaining = reachable
-    while (remaining > 0) {
-        val p = parent[remaining]
-        counts[p] = (counts[p] ?: 0) + 1
-        remaining -= p
-    }
-
-    // Map scaled integers back to the original Double values (verbatim from VendorPackEntity).
-    return counts
-        .map { (scaledGrams, qty) ->
-            // !! is safe: scaledGrams came from availablePacks via the same scale factor.
-            PackCombination(
-                packGrams = availablePacks.first { (it * scale).roundToInt() == scaledGrams },
-                quantity = qty,
-            )
-        }
-        .sortedByDescending { it.packGrams }  // largest packs first for readability
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddItemBottomSheet(
@@ -534,169 +429,6 @@ private fun AddItemBottomSheet(
                         }
                     },
                     enabled = canAdd,
-                ) {
-                    Text(stringResource(android.R.string.ok))
-                }
-            }
-        }
-    }
-}
-
-/**
- * Bottom sheet for assigning a vendor to a vendor-less order item.
- *
- * The bead code and target grams are pre-filled from the item and are read-only.
- * An over-target warning is shown when the combination total plus already-received grams
- * would exceed the project target for this bead.
- */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-private fun SelectVendorBottomSheet(
-    beadCode: String,
-    targetGrams: Double,
-    alreadyReceivedGrams: Double,
-    projectTargetGrams: Double?,
-    onAssign: (items: List<OrderItemEntry>) -> Unit,
-    onDismiss: () -> Unit,
-    vendorKeysForBead: () -> kotlinx.coroutines.flow.Flow<List<String>>,
-    packsForVendor: (vendorKey: String) -> kotlinx.coroutines.flow.Flow<List<VendorPackEntity>>,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    var selectedVendorKey by rememberSaveable { mutableStateOf<String?>(null) }
-
-    val vendorKeys by vendorKeysForBead().collectAsState(emptyList())
-    val packs by packsForVendor(selectedVendorKey ?: "").collectAsState(emptyList())
-
-    LaunchedEffect(vendorKeys) {
-        if (selectedVendorKey != null && selectedVendorKey !in vendorKeys) {
-            selectedVendorKey = null
-        }
-    }
-
-    val combination = remember(packs, targetGrams) {
-        if (packs.isNotEmpty()) computeOptimalCombination(packs.map { it.grams }, targetGrams)
-        else emptyList()
-    }
-
-    val totalGrams = combination.sumOf { it.packGrams * it.quantity }
-    val overTarget = projectTargetGrams != null &&
-        alreadyReceivedGrams + totalGrams > projectTargetGrams + 0.001
-
-    val canAssign = selectedVendorKey != null && combination.isNotEmpty()
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
-                .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.select_vendor),
-                style = MaterialTheme.typography.titleMedium,
-            )
-
-            // Bead code — read-only display
-            val targetStr = BigDecimal.valueOf(targetGrams).stripTrailingZeros().toPlainString()
-            Text(
-                text = stringResource(R.string.bead_vendor_target, beadCode, targetStr),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            // Vendor chips
-            if (vendorKeys.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.vendor),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    vendorKeys.forEach { key ->
-                        val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[key] ?: key
-                        FilterChip(
-                            selected = key == selectedVendorKey,
-                            onClick = { selectedVendorKey = key },
-                            label = { Text(displayName) },
-                        )
-                    }
-                }
-            }
-
-            // Combination preview
-            if (combination.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    combination.forEach { c ->
-                        val gramsStr = BigDecimal.valueOf(c.packGrams).stripTrailingZeros().toPlainString()
-                        Text(
-                            text = stringResource(R.string.quantity_units, c.quantity, gramsStr),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    val totalStr = BigDecimal.valueOf(totalGrams).stripTrailingZeros().toPlainString()
-                    if (totalGrams != targetGrams) {
-                        Text(
-                            text = "Total: ${totalStr}g (target ${targetStr}g)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            } else if (selectedVendorKey != null && packs.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.combination_no_solution),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            // Over-target warning
-            if (overTarget && combination.isNotEmpty()) {
-                val receivedStr = BigDecimal.valueOf(alreadyReceivedGrams).stripTrailingZeros().toPlainString()
-                val projTargetStr = BigDecimal.valueOf(projectTargetGrams!!).stripTrailingZeros().toPlainString()
-                Text(
-                    text = stringResource(R.string.over_target_warning, receivedStr, projTargetStr),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-                TextButton(
-                    onClick = {
-                        val vk = selectedVendorKey ?: return@TextButton
-                        if (combination.isEmpty()) return@TextButton
-                        val newItems = combination.map { c ->
-                            OrderItemEntry(
-                                beadCode = beadCode,
-                                vendorKey = vk,
-                                targetGrams = targetGrams,
-                                packGrams = c.packGrams,
-                                quantityUnits = c.quantity,
-                            )
-                        }
-                        onAssign(newItems)
-                    },
-                    enabled = canAssign,
-                    colors = if (overTarget) {
-                        androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        )
-                    } else {
-                        androidx.compose.material3.ButtonDefaults.textButtonColors()
-                    },
                 ) {
                     Text(stringResource(android.R.string.ok))
                 }
