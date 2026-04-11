@@ -7,6 +7,7 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +24,7 @@ class OrderRepository @Inject constructor(
 
     fun orderStream(orderId: String): Flow<OrderEntry?> =
         source.orderStream(orderId)
+            .map { order -> order?.copy(items = order.items.distinctBy { Triple(it.beadCode, it.vendorKey, it.packGrams) }) }
 
     /** Used by MigrationViewModel to backfill projectIds from legacy projectId field. */
     suspend fun getAllOrdersSnapshot(): List<OrderEntry> =
@@ -337,12 +339,19 @@ class OrderRepository @Inject constructor(
     /**
      * Reverts all FINALIZED items to PENDING and clears their vendor assignments.
      * Items in any other status are left unchanged.
+     *
+     * Pack-split finalization creates multiple FINALIZED items per bead (one per pack size),
+     * each carrying identical targetGrams and sourceProjectContributions copied from the
+     * original vendor-less item. After reverting all of them to vendor-less, duplicates with
+     * the same beadCode would exist. The first occurrence is kept; extras are dropped.
+     * targetGrams and contributions are the same on all split items so keeping the first is
+     * semantically correct.
      */
     suspend fun reopenOrder(
         orderId: String,
         allItems: List<OrderItemEntry>,
     ) {
-        val updated = allItems.map { item ->
+        val reverted = allItems.map { item ->
             if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED) {
                 item.copy(
                     status = OrderItemStatus.PENDING.firestoreValue,
@@ -352,6 +361,14 @@ class OrderRepository @Inject constructor(
                 )
             } else {
                 item
+            }
+        }
+        val seenVendorless = mutableSetOf<String>()
+        val updated = reverted.filter { item ->
+            if (item.vendorKey.isBlank() && item.packGrams == 0.0) {
+                seenVendorless.add(item.beadCode)  // true on first insert, false on duplicate → deduplicates
+            } else {
+                true
             }
         }
         source.updateItems(orderId, updated)
