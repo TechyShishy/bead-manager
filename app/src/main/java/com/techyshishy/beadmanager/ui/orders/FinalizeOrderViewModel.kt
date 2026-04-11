@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.projects
+package com.techyshishy.beadmanager.ui.orders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -6,6 +6,9 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.scraper.NoConnectivityException
 import com.techyshishy.beadmanager.data.scraper.ScrapingFailedException
+import com.techyshishy.beadmanager.domain.FinalizeOrderUseCase
+import com.techyshishy.beadmanager.domain.FinalizedItem
+import com.techyshishy.beadmanager.domain.UnavailablePacksException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

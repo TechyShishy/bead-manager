@@ -40,16 +40,14 @@ import com.techyshishy.beadmanager.ui.catalog.CatalogViewModel
 import com.techyshishy.beadmanager.ui.detail.BeadDetailPane
 import com.techyshishy.beadmanager.ui.detail.BeadDetailViewModel
 import com.techyshishy.beadmanager.ui.migration.MigrationViewModel
-import com.techyshishy.beadmanager.ui.projects.AddToOrderScreen
-import com.techyshishy.beadmanager.ui.projects.AddToOrderViewModel
-import com.techyshishy.beadmanager.ui.projects.AllOrdersScreen
-import com.techyshishy.beadmanager.ui.projects.AllOrdersViewModel
-import com.techyshishy.beadmanager.ui.projects.FinalizeOrderScreen
-import com.techyshishy.beadmanager.ui.projects.FinalizeOrderViewModel
-import com.techyshishy.beadmanager.ui.projects.OrderDetailScreen
-import com.techyshishy.beadmanager.ui.projects.OrderDetailViewModel
-import com.techyshishy.beadmanager.ui.projects.OrdersScreen
-import com.techyshishy.beadmanager.ui.projects.OrdersViewModel
+import com.techyshishy.beadmanager.ui.orders.AddToOrderScreen
+import com.techyshishy.beadmanager.ui.orders.AddToOrderViewModel
+import com.techyshishy.beadmanager.ui.orders.AllOrdersScreen
+import com.techyshishy.beadmanager.ui.orders.AllOrdersViewModel
+import com.techyshishy.beadmanager.ui.orders.FinalizeOrderScreen
+import com.techyshishy.beadmanager.ui.orders.FinalizeOrderViewModel
+import com.techyshishy.beadmanager.ui.orders.OrderDetailScreen
+import com.techyshishy.beadmanager.ui.orders.OrderDetailViewModel
 import com.techyshishy.beadmanager.ui.projects.ProjectDetailScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectDetailViewModel
 import com.techyshishy.beadmanager.ui.projects.ProjectsScreen
@@ -76,18 +74,17 @@ fun AdaptiveScaffold() {
     val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
     val catalogSnackbarHostState = remember { SnackbarHostState() }
 
-    // Projects tab: five-level nav state (projects → project detail → orders → order detail → finalize).
+    // Projects tab: nav state (projects → project detail → add-to-order).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
-    var ordersProjectName by rememberSaveable { mutableStateOf("") }
-    var ordersShowOrdersList by rememberSaveable { mutableStateOf(false) }
-    var ordersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
-    var ordersShowFinalizing by rememberSaveable { mutableStateOf(false) }
     // Non-null while the AddToOrderScreen picker is open; holds the checked bead codes.
     var ordersAddToOrderCodes by rememberSaveable { mutableStateOf<Set<String>?>(null) }
 
-    // All-Orders tab: two-level nav state (list → order detail → finalize).
+    // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     var allOrdersShowFinalizing by rememberSaveable { mutableStateOf(false) }
+    // True when the current order detail was opened via redirect from the Projects tab;
+    // back navigation should return to Projects rather than staying in Orders.
+    var allOrdersCameFromProjects by rememberSaveable { mutableStateOf(false) }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -116,6 +113,9 @@ fun AdaptiveScaffold() {
             )
             item(
                 selected = currentTab == AppTab.ORDERS,
+                // allOrdersCameFromProjects is intentionally not cleared here; the flag tracks
+                // order provenance, not the current tab. Clearing on tab tap would mean a user
+                // who manually taps PROJECTS and returns loses the back-to-Projects behaviour.
                 onClick = { currentTab = AppTab.ORDERS },
                 icon = {
                     Icon(
@@ -193,47 +193,11 @@ fun AdaptiveScaffold() {
             AppTab.PROJECTS -> {
                 BackHandler(ordersProjectId != null) {
                     when {
-                        ordersShowFinalizing -> ordersShowFinalizing = false
-                        ordersOrderId != null -> ordersOrderId = null
                         ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
-                        ordersShowOrdersList -> ordersShowOrdersList = false
-                        else -> {
-                            ordersProjectId = null
-                            ordersProjectName = ""
-                        }
+                        else -> ordersProjectId = null
                     }
                 }
                 when {
-                    ordersShowFinalizing && ordersOrderId != null -> {
-                        val finalizeVm: FinalizeOrderViewModel =
-                            hiltViewModel(key = "finalize_$ordersOrderId")
-                        FinalizeOrderScreen(
-                            orderId = ordersOrderId!!,
-                            viewModel = finalizeVm,
-                            onNavigateBack = { ordersShowFinalizing = false },
-                        )
-                    }
-                    ordersOrderId != null -> {
-                        val orderDetailVm: OrderDetailViewModel =
-                            hiltViewModel(key = "order_detail_$ordersOrderId")
-                        OrderDetailScreen(
-                            orderId = ordersOrderId!!,
-                            viewModel = orderDetailVm,
-                            onNavigateBack = { ordersOrderId = null },
-                            onFinalize = { ordersShowFinalizing = true },
-                        )
-                    }
-                    ordersShowOrdersList && ordersProjectId != null -> {
-                        val ordersVm: OrdersViewModel =
-                            hiltViewModel(key = "orders_$ordersProjectId")
-                        OrdersScreen(
-                            projectId = ordersProjectId!!,
-                            projectName = ordersProjectName,
-                            viewModel = ordersVm,
-                            onOrderSelected = { orderId -> ordersOrderId = orderId },
-                            onNavigateBack = { ordersShowOrdersList = false },
-                        )
-                    }
                     ordersAddToOrderCodes != null && ordersProjectId != null -> {
                         // Same key as the ProjectDetailScreen branch so that both branches
                         // share the same ViewModel instance (Hilt returns the cached VM).
@@ -254,7 +218,9 @@ fun AdaptiveScaffold() {
                             },
                             onNavigateToOrder = { orderId ->
                                 ordersAddToOrderCodes = null
-                                ordersOrderId = orderId
+                                allOrdersOrderId = orderId
+                                allOrdersCameFromProjects = true
+                                currentTab = AppTab.ORDERS
                             },
                         )
                     }
@@ -266,19 +232,15 @@ fun AdaptiveScaffold() {
                             viewModel = projectDetailVm,
                             onNavigateBack = {
                                 ordersProjectId = null
-                                ordersProjectName = ""
                             },
-                            onViewOrders = { _, _ -> ordersShowOrdersList = true },
                             onAddToOrder = { codes -> ordersAddToOrderCodes = codes },
                         )
                     }
                     else -> {
                         ProjectsScreen(
                             viewModel = projectsViewModel,
-                            onProjectSelected = { projectId, projectName ->
+                            onProjectSelected = { projectId, _ ->
                                 ordersProjectId = projectId
-                                ordersProjectName = projectName
-                                ordersShowOrdersList = false
                             },
                         )
                     }
@@ -286,19 +248,26 @@ fun AdaptiveScaffold() {
             }
 
             AppTab.ORDERS -> {
+                // Shared exit logic for both the system back gesture and the TopAppBar ← button.
+                // Clearing allOrdersCameFromProjects must happen in both paths — using a single
+                // lambda here ensures they stay in sync.
+                val onExitOrderDetail: () -> Unit = {
+                    allOrdersOrderId = null
+                    if (allOrdersCameFromProjects) {
+                        allOrdersCameFromProjects = false
+                        currentTab = AppTab.PROJECTS
+                    }
+                }
                 BackHandler(allOrdersOrderId != null) {
                     when {
                         allOrdersShowFinalizing -> allOrdersShowFinalizing = false
-                        else -> allOrdersOrderId = null
+                        else -> onExitOrderDetail()
                     }
                 }
                 when {
                     allOrdersShowFinalizing && allOrdersOrderId != null -> {
-                        // Keys are prefixed "all_" to keep these VM instances independent
-                        // from the identically-keyed VMs in AppTab.PROJECTS. Both tabs may
-                        // observe the same Firestore document simultaneously; sharing a key
-                        // would cause back-navigation in one tab to clear state the other
-                        // tab still needs.
+                        // Keys are prefixed "all_" to keep these VM instances distinct
+                        // from any order opened in the same session via a different path.
                         val finalizeVm: FinalizeOrderViewModel =
                             hiltViewModel(key = "all_finalize_$allOrdersOrderId")
                         FinalizeOrderScreen(
@@ -313,14 +282,13 @@ fun AdaptiveScaffold() {
                         OrderDetailScreen(
                             orderId = allOrdersOrderId!!,
                             viewModel = orderDetailVm,
-                            onNavigateBack = { allOrdersOrderId = null },
+                            onNavigateBack = onExitOrderDetail,
                             onFinalize = { allOrdersShowFinalizing = true },
                         )
                     }
                     else -> {
-                        // Order-level deletion is only available from the Projects tab
-                        // (OrdersScreen). The Orders tab is a purchasing-review view;
-                        // destructive management actions are intentionally absent here.
+                        // The Orders tab is a purchasing-review view; order deletion is
+                        // intentionally absent here.
                         AllOrdersScreen(
                             viewModel = allOrdersViewModel,
                             onOrderSelected = { orderId -> allOrdersOrderId = orderId },

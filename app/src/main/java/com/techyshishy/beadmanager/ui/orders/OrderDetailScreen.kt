@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.projects
+package com.techyshishy.beadmanager.ui.orders
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

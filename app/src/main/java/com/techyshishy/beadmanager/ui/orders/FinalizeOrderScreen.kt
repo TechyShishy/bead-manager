@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.projects
+package com.techyshishy.beadmanager.ui.orders
 
 import android.content.Intent
 import android.net.Uri
@@ -54,6 +54,7 @@ import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
+import com.techyshishy.beadmanager.domain.FinalizedItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

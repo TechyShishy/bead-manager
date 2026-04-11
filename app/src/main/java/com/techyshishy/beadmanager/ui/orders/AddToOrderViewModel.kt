@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.projects
+package com.techyshishy.beadmanager.ui.orders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -37,7 +37,10 @@ class AddToOrderViewModel @Inject constructor(
         if (_projectId.value != projectId) _projectId.value = projectId
     }
 
-    @Suppress("DEPRECATION") // intentional: legacy projectId read for pre-migration name resolution
+    // Reads deprecated `projectId` field in two places:
+    //   (1) filter: exclude pre-migration orders where projectId was set but projectIds is empty
+    //   (2) name-map fallback: resolve the display name for those same legacy orders
+    @Suppress("DEPRECATION")
     val eligibleOrders: StateFlow<List<AllOrderItem>> = combine(
         _projectId,
         orderRepository.allOrdersStream(),
@@ -46,7 +49,9 @@ class AddToOrderViewModel @Inject constructor(
         if (projectId.isBlank()) return@combine emptyList()
         val nameById = projects.associate { it.projectId to it.name }
         orders
-            .filter { order -> order.projectIds.none { it == projectId } }
+            .filter { order ->
+                order.projectIds.none { it == projectId } && order.projectId != projectId
+            }
             .map { order ->
                 val names = order.projectIds.mapNotNull { nameById[it] }
                     .ifEmpty { listOfNotNull(nameById[order.projectId]) }

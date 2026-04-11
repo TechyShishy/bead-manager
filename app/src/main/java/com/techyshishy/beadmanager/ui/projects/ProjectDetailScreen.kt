@@ -16,13 +16,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -73,13 +70,11 @@ fun ProjectDetailScreen(
     projectId: String,
     viewModel: ProjectDetailViewModel,
     onNavigateBack: () -> Unit,
-    onViewOrders: (projectId: String, projectName: String) -> Unit,
     onAddToOrder: (selectedCodes: Set<String>) -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
     val project by viewModel.project.collectAsState()
-    val orderCount by viewModel.orderCount.collectAsState()
     val activeOrders by viewModel.activeOrders.collectAsState()
     val inventoryGrams by viewModel.inventoryGrams.collectAsState()
     val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
@@ -121,23 +116,6 @@ fun ProjectDetailScreen(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.navigate_back),
                         )
-                    }
-                },
-                actions = {
-                    // View orders — badge shows order count when > 0
-                    IconButton(
-                        onClick = {
-                            val p = project ?: return@IconButton
-                            onViewOrders(p.projectId, p.name)
-                        },
-                    ) {
-                        if (orderCount > 0) {
-                            BadgedBox(badge = { Badge { Text(orderCount.toString()) } }) {
-                                Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.view_orders))
-                            }
-                        } else {
-                            Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.view_orders))
-                        }
                     }
                 },
             )

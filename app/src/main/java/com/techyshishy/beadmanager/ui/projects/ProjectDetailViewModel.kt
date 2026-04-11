@@ -59,10 +59,6 @@ class ProjectDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val orderCount: StateFlow<Int> = activeOrders
-        .map { it.size }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
-
     /**
      * Most significant active order status per bead code.
      *

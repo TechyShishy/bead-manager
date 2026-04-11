@@ -1,4 +1,4 @@
-package com.techyshishy.beadmanager.ui.projects
+package com.techyshishy.beadmanager.domain
 
 import android.content.Context
 import android.net.ConnectivityManager
