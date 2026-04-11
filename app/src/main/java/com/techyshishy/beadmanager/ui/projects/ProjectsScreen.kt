@@ -1,5 +1,7 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -27,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.domain.ImportResult
 import java.text.DateFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,10 +55,36 @@ fun ProjectsScreen(
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
+    var importError by remember { mutableStateOf<ImportResult.Failure?>(null) }
+
+    val rgpPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri?.let { viewModel.importFromRgp(it) }
+    }
+
+    LaunchedEffect(viewModel.importResult) {
+        viewModel.importResult.collect { result ->
+            when (result) {
+                is ImportResult.Success -> onProjectSelected(result.projectId, result.name)
+                is ImportResult.Failure -> importError = result
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.projects)) })
+            TopAppBar(
+                title = { Text(stringResource(R.string.projects)) },
+                actions = {
+                    IconButton(onClick = { rgpPicker.launch(arrayOf("*/*")) }) {
+                        Icon(
+                            Icons.Outlined.FileOpen,
+                            contentDescription = stringResource(R.string.import_from_rgp),
+                        )
+                    }
+                },
+            )
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -125,6 +156,48 @@ fun ProjectsScreen(
             },
         )
     }
+
+    importError?.let { error ->
+        ImportErrorDialog(
+            error = error,
+            onDismiss = { importError = null },
+        )
+    }
+}
+
+@Composable
+private fun ImportErrorDialog(
+    error: ImportResult.Failure,
+    onDismiss: () -> Unit,
+) {
+    val message = when (error) {
+        is ImportResult.Failure.NotGzip ->
+            stringResource(R.string.import_failed_not_gzip)
+        is ImportResult.Failure.InvalidJson ->
+            stringResource(R.string.import_failed_invalid_json)
+        is ImportResult.Failure.NoDelicaCodes ->
+            stringResource(R.string.import_failed_no_delica_codes)
+        is ImportResult.Failure.UnrecognizedCodes -> {
+            val displayed = error.codes.take(5)
+            val overflow = error.codes.size - displayed.size
+            val codeList = if (overflow > 0) {
+                displayed.joinToString(", ") + " (+$overflow more)"
+            } else {
+                displayed.joinToString(", ")
+            }
+            stringResource(R.string.import_failed_unrecognized_codes, codeList)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.import_failed_title)) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.ok))
+            }
+        },
+    )
 }
 
 @Composable

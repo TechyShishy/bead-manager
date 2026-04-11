@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.di
 
+import android.content.ContentResolver
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -27,6 +28,12 @@ object AppModule {
     fun provideDataStore(
         @ApplicationContext context: Context,
     ): DataStore<Preferences> = context.appDataStore
+
+    @Provides
+    @Singleton
+    fun provideContentResolver(
+        @ApplicationContext context: Context,
+    ): ContentResolver = context.contentResolver
 
     @Provides
     @Singleton

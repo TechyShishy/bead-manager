@@ -1,12 +1,10 @@
 package com.techyshishy.beadmanager.ui.catalog
 
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
+import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
 import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
-
-// Also declared as a private const in BeadDetailPane.kt — keep in sync.
-private const val BEADS_PER_GRAM = 208
 
 private val DB_NUMBER_STEPS = listOf(10, 25, 50, 100, 250, 500, 1000)
 

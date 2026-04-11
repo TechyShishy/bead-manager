@@ -78,6 +78,7 @@ import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
+import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
 import java.math.BigDecimal
 import java.text.NumberFormat
 import kotlinx.coroutines.launch
@@ -86,8 +87,6 @@ import kotlinx.serialization.json.Json
 // Consistent with all other decode sites: ignoreUnknownKeys guards against future
 // catalog schema additions silently causing failures.
 private val catalogJson = Json { ignoreUnknownKeys = true }
-
-private const val BEADS_PER_GRAM = 208
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
