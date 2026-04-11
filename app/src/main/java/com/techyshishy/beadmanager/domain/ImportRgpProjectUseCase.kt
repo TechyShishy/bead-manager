@@ -12,6 +12,7 @@ import com.techyshishy.beadmanager.data.rgp.RgpParseException
 import com.techyshishy.beadmanager.data.rgp.parseRgp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToLong
 import java.io.IOException
 import javax.inject.Inject
 
@@ -84,16 +85,20 @@ class ImportRgpProjectUseCase @Inject constructor(
             .filter { it.value.startsWith("DB") }
             .associate { (letter, code) -> letter to code }
 
-        val gramsByCode = mutableMapOf<String, Double>()
+        // Accumulate integer bead counts per code, then divide once and round to 2 decimal places.
+        // Dividing per-step and summing doubles produces 15+ decimal places of IEEE 754 noise.
+        val countsByCode = mutableMapOf<String, Int>()
         for ((letter, code) in dbCodeByLetter) {
             val count = beadCountByLetter[letter] ?: continue
-            gramsByCode[code] = (gramsByCode[code] ?: 0.0) + count.toDouble() / BEADS_PER_GRAM
+            countsByCode[code] = (countsByCode[code] ?: 0) + count
         }
 
         // Guard: a colorMapping with DB codes but none referenced in any step is a degenerate file.
-        if (gramsByCode.isEmpty()) return ImportResult.Failure.NoDelicaCodes
+        if (countsByCode.isEmpty()) return ImportResult.Failure.NoDelicaCodes
 
-        val beads = gramsByCode.map { (code, grams) ->
+        val beads = countsByCode.map { (code, count) ->
+            val scaled = count.toDouble() / BEADS_PER_GRAM * 100.0
+            val grams = scaled.roundToLong() / 100.0
             ProjectBeadEntry(beadCode = code, targetGrams = grams)
         }
 
