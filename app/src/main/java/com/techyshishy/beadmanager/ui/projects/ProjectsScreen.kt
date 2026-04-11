@@ -3,14 +3,13 @@ package com.techyshishy.beadmanager.ui.projects
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -18,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,9 +53,11 @@ fun ProjectsScreen(
     onProjectSelected: (projectId: String, projectName: String) -> Unit,
 ) {
     val projects by viewModel.projects.collectAsState()
+    val selectedIds by viewModel.selectedIds.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
+    var showDeleteSelectedDialog by remember { mutableStateOf(false) }
     var importError by remember { mutableStateOf<ImportResult.Failure?>(null) }
 
     val rgpPicker = rememberLauncherForActivityResult(
@@ -77,6 +80,15 @@ fun ProjectsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.projects)) },
                 actions = {
+                    if (selectedIds.isNotEmpty()) {
+                        IconButton(onClick = { showDeleteSelectedDialog = true }) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.delete_selected),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                     IconButton(onClick = { rgpPicker.launch(arrayOf("*/*")) }) {
                         Icon(
                             Icons.Outlined.FileOpen,
@@ -114,9 +126,20 @@ fun ProjectsScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
+                item {
+                    SelectAllRow(
+                        projects = projects,
+                        selectedIds = selectedIds,
+                        onSelectAll = { viewModel.selectAll(projects.map { it.projectId }) },
+                        onDeselectAll = { viewModel.deselectAll() },
+                    )
+                    HorizontalDivider()
+                }
                 items(projects, key = { it.projectId }) { project ->
                     ProjectRow(
                         project = project,
+                        isSelected = project.projectId in selectedIds,
+                        onCheckedChange = { viewModel.toggleSelection(project.projectId) },
                         onClick = { onProjectSelected(project.projectId, project.name) },
                         onDelete = { deleteTarget = project },
                     )
@@ -151,6 +174,34 @@ fun ProjectsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+
+    if (showDeleteSelectedDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteSelectedDialog = false },
+            title = { Text(stringResource(R.string.delete_selected)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.confirm_delete_selected_projects,
+                        selectedIds.size,
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteSelected()
+                    showDeleteSelectedDialog = false
+                }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteSelectedDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -203,17 +254,26 @@ private fun ImportErrorDialog(
 @Composable
 private fun ProjectRow(
     project: ProjectEntry,
+    isSelected: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Checkbox(
+            checked = isSelected,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(top = 12.dp, bottom = 12.dp, start = 4.dp),
+        ) {
             Text(
                 text = project.name,
                 style = MaterialTheme.typography.bodyLarge,
@@ -226,7 +286,6 @@ private fun ProjectRow(
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
         IconButton(onClick = onDelete) {
             Icon(
                 Icons.Filled.Delete,
@@ -234,6 +293,38 @@ private fun ProjectRow(
                 tint = MaterialTheme.colorScheme.error,
             )
         }
+    }
+}
+
+@Composable
+private fun SelectAllRow(
+    projects: List<ProjectEntry>,
+    selectedIds: Set<String>,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+) {
+    val selectedCount = projects.count { it.projectId in selectedIds }
+    val state = when (selectedCount) {
+        0 -> ToggleableState.Off
+        projects.size -> ToggleableState.On
+        else -> ToggleableState.Indeterminate
+    }
+    val toggle = { if (state == ToggleableState.On) onDeselectAll() else onSelectAll() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = toggle),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TriStateCheckbox(
+            state = state,
+            onClick = null,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.select_all),
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 

@@ -49,6 +49,9 @@
     <string name="project_name">Project name</string>
     <string name="delete_project">Delete project</string>
     <string name="confirm_delete_project">Delete "%1$s"? This will also delete all its orders.</string>
+    <string name="select_all">Select all</string>
+    <string name="delete_selected">Delete selected</string>
+    <string name="confirm_delete_selected_projects">Delete %1$d project(s) and all their orders?</string>
 
     <string name="no_orders">No orders yet. Tap + to create one.</string>
     <string name="new_order">New Order</string>
