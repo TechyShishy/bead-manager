@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,6 +48,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
@@ -174,6 +178,47 @@ fun ProjectDetailScreen(
                     item(key = "active_orders_spacer") {
                         Spacer(Modifier.height(8.dp))
                     }
+                }
+                item(key = "select_all_beads") {
+                    val eligibleCodes = beads
+                        .filter { bead ->
+                            val deficit = (bead.targetGrams - (inventoryGrams[bead.beadCode] ?: 0.0))
+                                .coerceAtLeast(0.0)
+                                .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
+                            deficit > 0.0
+                        }
+                        .map { it.beadCode }
+                        .toSet()
+                    val selectedEligible = checkedCodes.intersect(eligibleCodes)
+                    val triState = when (selectedEligible.size) {
+                        0 -> ToggleableState.Off
+                        eligibleCodes.size -> ToggleableState.On
+                        else -> ToggleableState.Indeterminate
+                    }
+                    val toggle = {
+                        checkedCodes = if (triState == ToggleableState.On) emptySet()
+                        else eligibleCodes
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics(mergeDescendants = true) {}
+                            .clickable(onClick = toggle)
+                            .padding(start = 4.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TriStateCheckbox(
+                            state = triState,
+                            onClick = null,
+                            modifier = Modifier.size(40.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.select_all),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    HorizontalDivider()
                 }
                 items(beads, key = { it.beadCode }) { bead ->
                     val catalogBead = beadLookup[bead.beadCode]
