@@ -25,8 +25,9 @@
     <string name="settings">Settings</string>
     <string name="settings_section_inventory">Inventory</string>
     <string name="settings_section_vendor">Vendor Preferences</string>
-    <string name="settings_prefer_fmg">Prefer Fire Mountain Gems</string>
-    <string name="settings_prefer_fmg_description">FMG is selected first when both vendors carry a bead</string>
+    <string name="settings_vendor_priority_description">Vendors are tried in priority order when selecting packs. Use the arrows to reorder.</string>
+    <string name="settings_vendor_move_up">Move %1$s up</string>
+    <string name="settings_vendor_move_down">Move %1$s down</string>
     <string name="settings_buy_up">Discount buy-up optimization</string>
     <string name="settings_buy_up_description">Suggest adding FMG items to cross a discount tier when it saves money</string>
     <string name="global_low_stock_threshold">Low-stock threshold</string>

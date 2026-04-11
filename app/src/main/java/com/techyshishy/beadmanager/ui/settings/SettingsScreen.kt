@@ -7,13 +7,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -65,13 +70,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 
             HorizontalDivider()
 
-            VendorPreferenceRow(
-                preferFmg = vendorPriority.firstOrNull() == "fmg",
-                onPreferFmgChange = { preferFmg ->
-                    viewModel.setVendorPriorityOrder(
-                        if (preferFmg) listOf("fmg", "ac") else listOf("ac", "fmg")
-                    )
-                },
+            VendorPrioritySection(
+                priorityOrder = vendorPriority,
+                onReorder = { viewModel.setVendorPriorityOrder(it) },
             )
             BuyUpRow(
                 enabled = buyUpEnabled,
@@ -98,29 +99,78 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 }
 
 @Composable
-private fun VendorPreferenceRow(
-    preferFmg: Boolean,
-    onPreferFmgChange: (Boolean) -> Unit,
+private fun VendorPrioritySection(
+    priorityOrder: List<Pair<String, String>>,
+    onReorder: (List<String>) -> Unit,
+) {
+    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)) {
+        Text(
+            text = stringResource(R.string.settings_vendor_priority_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        priorityOrder.forEachIndexed { index, (vendorKey, displayName) ->
+            VendorPriorityRow(
+                rank = index + 1,
+                displayName = displayName,
+                canMoveUp = index > 0,
+                canMoveDown = index < priorityOrder.lastIndex,
+                onMoveUp = {
+                    val updated = priorityOrder.toMutableList()
+                    updated.add(index - 1, updated.removeAt(index))
+                    onReorder(updated.map { it.first })
+                },
+                onMoveDown = {
+                    val updated = priorityOrder.toMutableList()
+                    updated.add(index + 1, updated.removeAt(index))
+                    onReorder(updated.map { it.first })
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun VendorPriorityRow(
+    rank: Int,
+    displayName: String,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.settings_prefer_fmg),
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.settings_prefer_fmg_description),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(
+            text = rank.toString(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .width(24.dp)
+                .padding(top = 2.dp),
+        )
+        Text(
+            text = displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+            Icon(
+                Icons.Filled.KeyboardArrowUp,
+                contentDescription = stringResource(R.string.settings_vendor_move_up, displayName),
             )
         }
-        Switch(checked = preferFmg, onCheckedChange = onPreferFmgChange)
+        IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+            Icon(
+                Icons.Filled.KeyboardArrowDown,
+                contentDescription = stringResource(R.string.settings_vendor_move_down, displayName),
+            )
+        }
     }
 }
 

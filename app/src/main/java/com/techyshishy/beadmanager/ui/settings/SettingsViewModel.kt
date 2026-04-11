@@ -6,9 +6,11 @@ import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_BUY_UP_ENABLED
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_VENDOR_PRIORITY_ORDER
+import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,9 +24,14 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.globalLowStockThreshold
             .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD)
 
-    val vendorPriorityOrder: StateFlow<List<String>> =
+    val vendorPriorityOrder: StateFlow<List<Pair<String, String>>> =
         preferencesRepository.vendorPriorityOrder
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_VENDOR_PRIORITY_ORDER)
+            .map { keys -> keys.map { k -> k to (CatalogSeeder.VENDOR_DISPLAY_NAMES[k] ?: k) } }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                DEFAULT_VENDOR_PRIORITY_ORDER.map { k -> k to (CatalogSeeder.VENDOR_DISPLAY_NAMES[k] ?: k) },
+            )
 
     val buyUpEnabled: StateFlow<Boolean> =
         preferencesRepository.buyUpEnabled
