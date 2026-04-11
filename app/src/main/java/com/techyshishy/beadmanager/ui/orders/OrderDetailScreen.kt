@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -100,26 +102,32 @@ fun OrderDetailScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(
-                        onClick = onFinalize,
-                        enabled = hasPendingItems || isFrozen,
-                    ) {
-                        Icon(
-                            Icons.Filled.CheckCircle,
-                            contentDescription = stringResource(R.string.finalize_order),
-                            tint = if (hasPendingItems || isFrozen) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.outlineVariant,
-                        )
-                    }
-                },
             )
+        },
+        bottomBar = {
+            if (hasPendingItems || isFrozen) {
+                Button(
+                    onClick = onFinalize,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                    )
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(stringResource(R.string.finalize_order))
+                }
+            }
         },
         floatingActionButton = {
             if (!isFrozen) {
                 FloatingActionButton(
                     onClick = { showAddSheet = true },
-                    modifier = Modifier.navigationBarsPadding(),
+                    modifier = if (hasPendingItems) Modifier else Modifier.navigationBarsPadding(),
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_item))
                 }
