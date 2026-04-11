@@ -10,11 +10,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class AllOrdersViewModel @Inject constructor(
-    orderRepository: OrderRepository,
+    private val orderRepository: OrderRepository,
     projectRepository: ProjectRepository,
 ) : ViewModel() {
 
@@ -46,4 +47,10 @@ class AllOrdersViewModel @Inject constructor(
             AllOrderItem(order = order, projectNames = names)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun deleteOrder(orderId: String) {
+        viewModelScope.launch {
+            orderRepository.deleteOrder(orderId)
+        }
+    }
 }

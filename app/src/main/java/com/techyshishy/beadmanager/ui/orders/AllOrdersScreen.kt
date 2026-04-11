@@ -8,15 +8,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -33,6 +42,7 @@ fun AllOrdersScreen(
     onOrderSelected: (orderId: String) -> Unit,
 ) {
     val orders by viewModel.orders.collectAsState()
+    var deleteTarget by remember { mutableStateOf<AllOrderItem?>(null) }
 
     Scaffold(
         topBar = {
@@ -64,11 +74,48 @@ fun AllOrdersScreen(
                     AllOrderRow(
                         item = item,
                         onClick = { onOrderSelected(item.order.orderId) },
+                        onDelete = { deleteTarget = item },
                     )
                     HorizontalDivider()
                 }
             }
         }
+    }
+
+    deleteTarget?.let { item ->
+        val hasActiveItems = remember(item) {
+            item.order.items.any {
+                val status = OrderItemStatus.fromFirestore(it.status)
+                status == OrderItemStatus.PENDING ||
+                    status == OrderItemStatus.FINALIZED ||
+                    status == OrderItemStatus.ORDERED
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(stringResource(R.string.delete_order)) },
+            text = {
+                Text(
+                    stringResource(
+                        if (hasActiveItems) R.string.confirm_delete_order_with_active_items
+                        else R.string.confirm_delete_order
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteOrder(item.order.orderId)
+                    deleteTarget = null
+                }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
 }
 
@@ -76,6 +123,7 @@ fun AllOrdersScreen(
 private fun AllOrderRow(
     item: AllOrderItem,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val order = item.order
     val itemCount = order.items.size
@@ -124,6 +172,13 @@ private fun AllOrderRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = stringResource(R.string.delete_order),
+                tint = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
