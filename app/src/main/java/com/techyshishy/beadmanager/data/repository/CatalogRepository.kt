@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.data.repository
 import com.techyshishy.beadmanager.data.db.BeadDao
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.BeadWithVendors
+import com.techyshishy.beadmanager.data.db.VendorLinkDao
 import com.techyshishy.beadmanager.data.db.VendorPackDao
 import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.scraper.ScrapingFailedException
@@ -19,6 +20,7 @@ import javax.inject.Singleton
 @Singleton
 class CatalogRepository @Inject constructor(
     private val beadDao: BeadDao,
+    private val vendorLinkDao: VendorLinkDao,
     private val vendorPackDao: VendorPackDao,
     private val vendorPackPriceFetcher: VendorPackPriceFetcher,
 ) {
@@ -62,6 +64,28 @@ class CatalogRepository @Inject constructor(
      */
     suspend fun allPacksByVendor(vendorKey: String): List<VendorPackEntity> =
         vendorPackDao.allPacksByVendor(vendorKey)
+
+    /**
+     * Returns a map of (beadCode, vendorKey) → beadName for the given bead codes.
+     * Missing or null names are excluded from the map.
+     *
+     * Returns an empty map immediately when [beadCodes] is empty (avoids an SQLite
+     * "zero-argument IN" error on some API levels).
+     *
+     * The key is `(beadCode to vendorKey)` — not the reverse. Both fields are String so an
+     * inverted lookup compiles silently.
+     * TODO: introduce a typealias (e.g. `BeadVendorKey = Pair<String, String>`) to make the
+     *       intended key order discoverable from the type signature.
+     */
+    suspend fun vendorNamesForBeads(beadCodes: List<String>): Map<Pair<String, String>, String> {
+        if (beadCodes.isEmpty()) return emptyMap()
+        return vendorLinkDao.linksForBeads(beadCodes)
+            .mapNotNull { link ->
+                val name = link.beadName?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                (link.beadCode to link.vendorKey) to name
+            }
+            .toMap()
+    }
 
     /**
      * Live-checks [packs] against their vendor pages and writes the results to Room.

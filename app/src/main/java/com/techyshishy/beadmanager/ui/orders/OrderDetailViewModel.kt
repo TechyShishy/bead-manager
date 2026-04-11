@@ -8,13 +8,16 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -24,6 +27,7 @@ import javax.inject.Inject
 class OrderDetailViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val catalogRepository: CatalogRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     private val _orderId = MutableStateFlow("")
@@ -41,6 +45,31 @@ class OrderDetailViewModel @Inject constructor(
 
     val beadLookup: StateFlow<Map<String, BeadEntity>> = catalogRepository
         .allBeadsLookup()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Maps beadCode → canonical color name resolved by walking the saved vendor priority order
+     * and returning the first non-blank name found across the bead's vendor links.
+     * Only codes present in the catalog will appear; unknown or nameless codes are absent.
+     */
+    val beadColorNames: StateFlow<Map<String, String>> =
+        combine(
+            catalogRepository.getAllBeadsWithVendors(),
+            preferencesRepository.vendorPriorityOrder,
+        ) { beadsWithVendors, priorityOrder ->
+            buildMap {
+                for (beadWithVendors in beadsWithVendors) {
+                    val name = priorityOrder
+                        .firstNotNullOfOrNull { vendorKey ->
+                            beadWithVendors.vendorLinks
+                                .firstOrNull { it.vendorKey == vendorKey }
+                                ?.beadName
+                                ?.takeIf { it.isNotBlank() }
+                        }
+                    if (name != null) put(beadWithVendors.bead.code, name)
+                }
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**

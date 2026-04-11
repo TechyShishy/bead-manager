@@ -80,6 +80,7 @@ fun OrderDetailScreen(
 
     val order by viewModel.order.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
+    val beadColorNames by viewModel.beadColorNames.collectAsState()
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
     val isFrozen = order?.items?.any { it.status == OrderItemStatus.FINALIZED.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
@@ -161,6 +162,7 @@ fun OrderDetailScreen(
                         item = item,
                         imageUrl = bead?.imageUrl ?: "",
                         hex = bead?.hex ?: "",
+                        colorName = beadColorNames[item.beadCode],
                         isFrozen = isFrozen,
                         onMarkReceived = { viewModel.markItemReceived(item) },
                         onRevertReceived = { viewModel.revertItemReceived(item) },
@@ -211,6 +213,7 @@ private fun OrderItemRow(
     item: OrderItemEntry,
     imageUrl: String,
     hex: String,
+    colorName: String?,
     isFrozen: Boolean,
     onMarkReceived: () -> Unit,
     onRevertReceived: () -> Unit,
@@ -249,6 +252,13 @@ private fun OrderItemRow(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                 )
+                if (!colorName.isNullOrBlank()) {
+                    Text(
+                        text = colorName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     text = packLabel,
                     style = MaterialTheme.typography.bodySmall,

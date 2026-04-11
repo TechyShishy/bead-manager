@@ -374,6 +374,13 @@ private fun FinalizedItemRow(item: FinalizedItem) {
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                 )
+                if (!item.colorName.isNullOrBlank()) {
+                    Text(
+                        text = item.colorName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     text = stringResource(
                         R.string.finalize_pack_label,

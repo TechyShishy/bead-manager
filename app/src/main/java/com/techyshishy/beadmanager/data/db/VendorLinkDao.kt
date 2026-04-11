@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.data.db
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
+import androidx.room.Query
 
 @Dao
 interface VendorLinkDao {
@@ -12,4 +13,7 @@ interface VendorLinkDao {
     // omits it from the INSERT, preventing a spurious PK conflict on id=0.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(links: List<VendorLinkEntity>)
+
+    @Query("SELECT * FROM vendor_links WHERE beadCode IN (:beadCodes)")
+    suspend fun linksForBeads(beadCodes: List<String>): List<VendorLinkEntity>
 }

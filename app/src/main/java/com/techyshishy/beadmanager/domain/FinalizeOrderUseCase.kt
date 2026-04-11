@@ -59,6 +59,8 @@ data class FinalizedItem(
     val fetchFailed: Boolean,
     val imageUrl: String = "",
     val hex: String = "",
+    /** Vendor-specific color name, resolved from [VendorLinkEntity.beadName]. Null when unavailable. */
+    val colorName: String? = null,
     /** True when this item was added as a buy-up to reach a discount tier. */
     val isBuyUp: Boolean = false,
 ) {
@@ -155,6 +157,7 @@ class FinalizeOrderUseCase @Inject constructor(
         val (assignedItems, unassignedItems) = pendingItems.partition { it.vendorKey.isNotBlank() }
         val nowSeconds = System.currentTimeMillis() / 1000
         val beadMap = catalogRepository.allBeadsAsMap()
+        val beadNames = catalogRepository.vendorNamesForBeads(pendingItems.map { it.beadCode }.distinct())
 
         val unassignedBeadCodes = unassignedItems.map { it.beadCode }.distinct()
         val packsByBead: Map<String, List<VendorPackEntity>> =
@@ -296,6 +299,7 @@ class FinalizeOrderUseCase @Inject constructor(
                         fetchFailed = false,
                         imageUrl = bead?.imageUrl ?: "",
                         hex = bead?.hex ?: "",
+                        colorName = beadNames[item.beadCode to fallback.vendorKey],
                     ))
                 }
             } else {
@@ -313,6 +317,7 @@ class FinalizeOrderUseCase @Inject constructor(
                     fetchFailed = pack?.id in checkResult.failedPackIds,
                     imageUrl = bead?.imageUrl ?: "",
                     hex = bead?.hex ?: "",
+                    colorName = beadNames[item.beadCode to item.vendorKey],
                 ))
             }
         }
@@ -334,6 +339,7 @@ class FinalizeOrderUseCase @Inject constructor(
                     fetchFailed = false,
                     imageUrl = bead?.imageUrl ?: "",
                     hex = bead?.hex ?: "",
+                    colorName = beadNames[item.beadCode to selection.vendorKey],
                 ))
             }
         }
@@ -428,6 +434,7 @@ class FinalizeOrderUseCase @Inject constructor(
                 )
                 val bead = analysis.beadMap[buyUpBeadCode]
                     ?: catalogRepository.allBeadsAsMap()[buyUpBeadCode]
+                val buyUpColorName = catalogRepository.vendorNamesForBeads(listOf(buyUpBeadCode))[buyUpBeadCode to "fmg"]
                 buyUpFinalizedItem = FinalizedItem(
                     beadCode = buyUpBeadCode,
                     vendorKey = "fmg",
@@ -439,6 +446,7 @@ class FinalizeOrderUseCase @Inject constructor(
                     fetchFailed = false,
                     imageUrl = bead?.imageUrl ?: "",
                     hex = bead?.hex ?: "",
+                    colorName = buyUpColorName,
                     isBuyUp = true,
                 )
             }
@@ -489,6 +497,9 @@ class FinalizeOrderUseCase @Inject constructor(
         val totalFmgUnits = firestoreFinalizedItems
             .filter { it.vendorKey == "fmg" }
             .sumOf { it.quantityUnits }
+        val beadNames = catalogRepository.vendorNamesForBeads(
+            firestoreFinalizedItems.map { it.beadCode }.distinct()
+        )
         val finalizedItems = firestoreFinalizedItems.map { item ->
             val pack = catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
             val bead = beadMap[item.beadCode]
@@ -508,6 +519,7 @@ class FinalizeOrderUseCase @Inject constructor(
                 fetchFailed = false,
                 imageUrl = bead?.imageUrl ?: "",
                 hex = bead?.hex ?: "",
+                colorName = beadNames[item.beadCode to item.vendorKey],
                 isBuyUp = item.buyUp,
             )
         }
