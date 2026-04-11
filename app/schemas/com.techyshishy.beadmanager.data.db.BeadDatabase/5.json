@@ -1,0 +1,273 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "572c33c73fe3358fa23a1315f16b3298",
+    "entities": [
+      {
+        "tableName": "beads",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`code` TEXT NOT NULL, `hex` TEXT NOT NULL, `imageUrl` TEXT NOT NULL, `officialUrl` TEXT NOT NULL, `colorGroup` TEXT NOT NULL, `glassGroup` TEXT NOT NULL, `finishes` TEXT NOT NULL, `dyed` TEXT NOT NULL, `galvanized` TEXT NOT NULL, `plating` TEXT NOT NULL, PRIMARY KEY(`code`))",
+        "fields": [
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hex",
+            "columnName": "hex",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUrl",
+            "columnName": "imageUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "officialUrl",
+            "columnName": "officialUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorGroup",
+            "columnName": "colorGroup",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "glassGroup",
+            "columnName": "glassGroup",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishes",
+            "columnName": "finishes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dyed",
+            "columnName": "dyed",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "galvanized",
+            "columnName": "galvanized",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plating",
+            "columnName": "plating",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "code"
+          ]
+        }
+      },
+      {
+        "tableName": "vendor_links",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `beadCode` TEXT NOT NULL, `vendorKey` TEXT NOT NULL, `displayName` TEXT NOT NULL, `url` TEXT NOT NULL, `beadName` TEXT, FOREIGN KEY(`beadCode`) REFERENCES `beads`(`code`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beadCode",
+            "columnName": "beadCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vendorKey",
+            "columnName": "vendorKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beadName",
+            "columnName": "beadName",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vendor_links_beadCode",
+            "unique": false,
+            "columnNames": [
+              "beadCode"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vendor_links_beadCode` ON `${TABLE_NAME}` (`beadCode`)"
+          },
+          {
+            "name": "index_vendor_links_beadCode_vendorKey",
+            "unique": true,
+            "columnNames": [
+              "beadCode",
+              "vendorKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_vendor_links_beadCode_vendorKey` ON `${TABLE_NAME}` (`beadCode`, `vendorKey`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "beads",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "beadCode"
+            ],
+            "referencedColumns": [
+              "code"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "vendor_packs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `beadCode` TEXT NOT NULL, `vendorKey` TEXT NOT NULL, `grams` REAL NOT NULL, `url` TEXT NOT NULL, `priceCents` INTEGER, `tier2PriceCents` INTEGER, `tier3PriceCents` INTEGER, `tier4PriceCents` INTEGER, `available` INTEGER, `lastCheckedEpochSeconds` INTEGER, FOREIGN KEY(`beadCode`) REFERENCES `beads`(`code`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beadCode",
+            "columnName": "beadCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vendorKey",
+            "columnName": "vendorKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grams",
+            "columnName": "grams",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priceCents",
+            "columnName": "priceCents",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tier2PriceCents",
+            "columnName": "tier2PriceCents",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tier3PriceCents",
+            "columnName": "tier3PriceCents",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tier4PriceCents",
+            "columnName": "tier4PriceCents",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "available",
+            "columnName": "available",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastCheckedEpochSeconds",
+            "columnName": "lastCheckedEpochSeconds",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vendor_packs_beadCode",
+            "unique": false,
+            "columnNames": [
+              "beadCode"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vendor_packs_beadCode` ON `${TABLE_NAME}` (`beadCode`)"
+          },
+          {
+            "name": "index_vendor_packs_beadCode_vendorKey_grams",
+            "unique": true,
+            "columnNames": [
+              "beadCode",
+              "vendorKey",
+              "grams"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_vendor_packs_beadCode_vendorKey_grams` ON `${TABLE_NAME}` (`beadCode`, `vendorKey`, `grams`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "beads",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "beadCode"
+            ],
+            "referencedColumns": [
+              "code"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '572c33c73fe3358fa23a1315f16b3298')"
+    ]
+  }
+}
