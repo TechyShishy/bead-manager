@@ -61,14 +61,27 @@ interface VendorPackDao {
     /**
      * Records the outcome of a live price check for a single SKU.
      * Called after a successful scrape; never called on fetch failure.
+     * Tier 2/3/4 prices are FMG-only; AC passes null for those columns.
      */
     @Query(
-        "UPDATE vendor_packs SET priceCents = :priceCents, available = :available, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
+        "UPDATE vendor_packs SET priceCents = :priceCents, tier2PriceCents = :tier2PriceCents, tier3PriceCents = :tier3PriceCents, tier4PriceCents = :tier4PriceCents, available = :available, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
     )
     suspend fun updatePackCheck(
         id: Long,
         priceCents: Int,
+        tier2PriceCents: Int?,
+        tier3PriceCents: Int?,
+        tier4PriceCents: Int?,
         available: Boolean,
         lastCheckedEpochSeconds: Long,
     )
+
+    /**
+     * All packs for a given vendor across every bead in the catalog.
+     * Used by the buy-up analyzer to find the cheapest FMG filler pack.
+     */
+    @Query(
+        "SELECT * FROM vendor_packs WHERE vendorKey = :vendorKey AND available != 0 AND priceCents IS NOT NULL ORDER BY priceCents ASC"
+    )
+    suspend fun allPacksByVendor(vendorKey: String): List<VendorPackEntity>
 }

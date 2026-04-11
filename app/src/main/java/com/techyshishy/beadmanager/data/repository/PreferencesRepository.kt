@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.techyshishy.beadmanager.di.AppDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -22,7 +23,14 @@ class PreferencesRepository @Inject constructor(
             booleanPreferencesKey("migration_threshold_v1_done")
         private val KEY_MIGRATION_ORDER_PROJECT_IDS_V1 =
             booleanPreferencesKey("migration_order_project_ids_v1_done")
+        /** Comma-delimited vendor key ordering, e.g. "fmg,ac". First entry is preferred. */
+        private val KEY_VENDOR_PRIORITY_ORDER =
+            stringPreferencesKey("vendor_priority_order")
+        private val KEY_BUY_UP_ENABLED =
+            booleanPreferencesKey("buy_up_enabled")
         const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
+        val DEFAULT_VENDOR_PRIORITY_ORDER: List<String> = listOf("fmg", "ac")
+        const val DEFAULT_BUY_UP_ENABLED = true
     }
 
     val globalLowStockThreshold: Flow<Double> = dataStore.data.map { prefs ->
@@ -49,5 +57,27 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setMigrationOrderProjectIdsV1Done() {
         dataStore.edit { prefs -> prefs[KEY_MIGRATION_ORDER_PROJECT_IDS_V1] = true }
+    }
+
+    val vendorPriorityOrder: Flow<List<String>> = dataStore.data.map { prefs ->
+        prefs[KEY_VENDOR_PRIORITY_ORDER]
+            ?.split(",")
+            ?.filter { it.isNotBlank() }
+            ?.takeIf { it.isNotEmpty() }
+            ?: DEFAULT_VENDOR_PRIORITY_ORDER
+    }
+
+    suspend fun setVendorPriorityOrder(order: List<String>) {
+        dataStore.edit { prefs ->
+            prefs[KEY_VENDOR_PRIORITY_ORDER] = order.joinToString(",")
+        }
+    }
+
+    val buyUpEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_BUY_UP_ENABLED] ?: DEFAULT_BUY_UP_ENABLED
+    }
+
+    suspend fun setBuyUpEnabled(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_BUY_UP_ENABLED] = enabled }
     }
 }

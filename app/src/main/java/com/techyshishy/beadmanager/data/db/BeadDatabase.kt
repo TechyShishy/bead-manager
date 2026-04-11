@@ -16,13 +16,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *       (beadCode, vendorKey) pair, replacing the single URL in vendor_links
  *   4 — vendor_packs gains priceCents (INT nullable), available (INT nullable 0/1),
  *       and lastCheckedEpochSeconds (INT nullable) for live price-check results
+ *   5 — vendor_packs gains tier2PriceCents, tier3PriceCents, tier4PriceCents (INT nullable)
+ *       for FMG quantity-break discount tiers (qty 15–49, 50–99, 100+)
  *
  * User inventory is intentionally NOT stored here; it lives in Firestore
  * so it syncs across devices automatically.
  */
 @Database(
     entities = [BeadEntity::class, VendorLinkEntity::class, VendorPackEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class BeadDatabase : RoomDatabase() {
@@ -73,6 +75,14 @@ abstract class BeadDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE vendor_packs ADD COLUMN priceCents INTEGER")
                 db.execSQL("ALTER TABLE vendor_packs ADD COLUMN available INTEGER")
                 db.execSQL("ALTER TABLE vendor_packs ADD COLUMN lastCheckedEpochSeconds INTEGER")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN tier2PriceCents INTEGER")
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN tier3PriceCents INTEGER")
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN tier4PriceCents INTEGER")
             }
         }
     }

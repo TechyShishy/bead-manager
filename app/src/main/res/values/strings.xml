@@ -24,6 +24,11 @@
     <string name="clear_all_filters">Clear all filters</string>
     <string name="settings">Settings</string>
     <string name="settings_section_inventory">Inventory</string>
+    <string name="settings_section_vendor">Vendor Preferences</string>
+    <string name="settings_prefer_fmg">Prefer Fire Mountain Gems</string>
+    <string name="settings_prefer_fmg_description">FMG is selected first when both vendors carry a bead</string>
+    <string name="settings_buy_up">Discount buy-up optimization</string>
+    <string name="settings_buy_up_description">Suggest adding FMG items to cross a discount tier when it saves money</string>
     <string name="global_low_stock_threshold">Low-stock threshold</string>
     <string name="global_low_stock_threshold_description">Beads below this quantity are flagged as low stock. Individual beads can override this.</string>
     <string name="settings_threshold_label">Threshold (g)</string>
@@ -125,6 +130,12 @@
     <string name="finalize_pack_label">%1$d × %2$s g</string>
     <string name="finalize_open_vendor">Open in vendor</string>
     <string name="finalize_price_unavailable">Price check failed</string>
+    <string name="buy_up_title">Discount Opportunity</string>
+    <!-- %1$d = number of packs, %2$s = formatted savings e.g. "$1.50" -->
+    <string name="buy_up_body">Adding %1$d more FMG pack(s) crosses the next tier and saves %2$s on your existing items.</string>
+    <string name="buy_up_choose_bead">Bead to add (enter code)</string>
+    <string name="buy_up_accept">Add to order</string>
+    <string name="buy_up_skip">Skip</string>
     <string name="retry">Retry</string>
     <string name="go_back">Go Back</string>
 </resources>

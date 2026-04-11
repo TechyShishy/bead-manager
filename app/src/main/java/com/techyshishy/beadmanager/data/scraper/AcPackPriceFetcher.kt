@@ -40,7 +40,13 @@ class AcPackPriceFetcher @Inject constructor(
                 ?: throw IOException("No variants in AC Shopify response")
             val priceCents = (variant.price.toDouble() * 100).roundToInt()
             val available = variant.inventoryQuantity > 0 || variant.inventoryPolicy == "continue"
-            ScrapedPack(priceCents = priceCents, available = available)
+            ScrapedPack(
+                priceCents = priceCents,
+                tier2PriceCents = null,
+                tier3PriceCents = null,
+                tier4PriceCents = null,
+                available = available,
+            )
         }
     }
 

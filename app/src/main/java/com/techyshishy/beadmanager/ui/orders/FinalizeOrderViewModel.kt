@@ -8,6 +8,8 @@ import com.techyshishy.beadmanager.data.scraper.NoConnectivityException
 import com.techyshishy.beadmanager.data.scraper.ScrapingFailedException
 import com.techyshishy.beadmanager.domain.FinalizeOrderUseCase
 import com.techyshishy.beadmanager.domain.FinalizedItem
+import com.techyshishy.beadmanager.domain.InvalidBuyUpBeadException
+import com.techyshishy.beadmanager.domain.OrderAnalysis
 import com.techyshishy.beadmanager.domain.UnavailablePacksException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,8 @@ class FinalizeOrderViewModel @Inject constructor(
     sealed interface UiState {
         data object Checking : UiState
         data class FinalizedView(val items: List<FinalizedItem>) : UiState
+        /** Scrape and selection done; user decides whether to add buy-up items. */
+        data class BuyUpPrompt(val analysis: OrderAnalysis, val invalidBeadCode: String? = null) : UiState
         data class UnavailableError(val beadCodes: List<String>) : UiState
         data object ConnectivityError : UiState
         data object ScrapingError : UiState
@@ -44,7 +48,10 @@ class FinalizeOrderViewModel @Inject constructor(
      *
      * If the order already has FINALIZED items (the user is returning after navigating away),
      * the stored vendor assignments are resolved from Room without re-running the price check.
-     * Otherwise, runs the full scrape-and-select pipeline via [FinalizeOrderUseCase].
+     * Otherwise, runs [FinalizeOrderUseCase.analyze]. When the result contains a buy-up
+     * suggestion, emits [UiState.BuyUpPrompt] and waits for [acceptBuyUp] or [skipBuyUp].
+     * When there is no suggestion, calls [FinalizeOrderUseCase.commit] immediately and emits
+     * [UiState.FinalizedView].
      */
     fun initiate(orderId: String) {
         currentOrderId = orderId
@@ -58,25 +65,65 @@ class FinalizeOrderViewModel @Inject constructor(
             val hasFinalizedItems = order.items.any {
                 OrderItemStatus.fromFirestore(it.status) == OrderItemStatus.FINALIZED
             }
-            _uiState.value = if (hasFinalizedItems) {
-                runCatching { useCase.resolveExistingOrder(orderId) }.fold(
+            if (hasFinalizedItems) {
+                _uiState.value = runCatching { useCase.resolveExistingOrder(orderId) }.fold(
                     onSuccess = { UiState.FinalizedView(it.items) },
                     onFailure = { UiState.UnknownError },
                 )
+                return@launch
+            }
+
+            val analysis = runCatching { useCase.analyze(orderId) }.fold(
+                onSuccess = { it },
+                onFailure = { e ->
+                    _uiState.value = when (e) {
+                        is UnavailablePacksException -> UiState.UnavailableError(e.beadCodes)
+                        is NoConnectivityException -> UiState.ConnectivityError
+                        is ScrapingFailedException -> UiState.ScrapingError
+                        else -> UiState.UnknownError
+                    }
+                    return@launch
+                },
+            )
+
+            if (analysis.buyUpSuggestion != null) {
+                _uiState.value = UiState.BuyUpPrompt(analysis)
             } else {
-                runCatching { useCase.execute(orderId) }.fold(
-                    onSuccess = { UiState.FinalizedView(it.items) },
-                    onFailure = { e ->
-                        when (e) {
-                            is UnavailablePacksException -> UiState.UnavailableError(e.beadCodes)
-                            is NoConnectivityException -> UiState.ConnectivityError
-                            is ScrapingFailedException -> UiState.ScrapingError
-                            else -> UiState.UnknownError
-                        }
-                    },
-                )
+                commitAnalysis(analysis, buyUpBeadCode = null)
             }
         }
+    }
+
+    /**
+     * Accepts the buy-up suggestion and finalizes with an extra unit of [beadCode].
+     * No-op if not currently in [UiState.BuyUpPrompt].
+     */
+    fun acceptBuyUp(beadCode: String) {
+        val analysis = (_uiState.value as? UiState.BuyUpPrompt)?.analysis ?: return
+        viewModelScope.launch { commitAnalysis(analysis, buyUpBeadCode = beadCode) }
+    }
+
+    /**
+     * Skips the buy-up suggestion and finalizes without extra items.
+     * No-op if not currently in [UiState.BuyUpPrompt].
+     */
+    fun skipBuyUp() {
+        val analysis = (_uiState.value as? UiState.BuyUpPrompt)?.analysis ?: return
+        viewModelScope.launch { commitAnalysis(analysis, buyUpBeadCode = null) }
+    }
+
+    private suspend fun commitAnalysis(analysis: OrderAnalysis, buyUpBeadCode: String?) {
+        _uiState.value = UiState.Checking
+        _uiState.value = runCatching { useCase.commit(analysis, buyUpBeadCode) }.fold(
+            onSuccess = { UiState.FinalizedView(it.items) },
+            onFailure = { e ->
+                when (e) {
+                    // Re-show the prompt so the user can choose a different bead.
+                    is InvalidBuyUpBeadException -> UiState.BuyUpPrompt(analysis, invalidBeadCode = e.beadCode)
+                    else -> UiState.UnknownError
+                }
+            },
+        )
     }
 
     /**

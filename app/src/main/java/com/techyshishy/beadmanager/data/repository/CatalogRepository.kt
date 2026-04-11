@@ -57,6 +57,13 @@ class CatalogRepository @Inject constructor(
         vendorPackDao.packsForBead(beadCode)
 
     /**
+     * All available, priced packs for a given vendor across the entire catalog.
+     * Used by the buy-up analyzer to find the cheapest filler pack.
+     */
+    suspend fun allPacksByVendor(vendorKey: String): List<VendorPackEntity> =
+        vendorPackDao.allPacksByVendor(vendorKey)
+
+    /**
      * Live-checks [packs] against their vendor pages and writes the results to Room.
      *
      * Packs whose [VendorPackEntity.lastCheckedEpochSeconds] is within [staleThresholdSeconds]
@@ -87,6 +94,9 @@ class CatalogRepository @Inject constructor(
                     vendorPackDao.updatePackCheck(
                         id = pack.id,
                         priceCents = scraped.priceCents,
+                        tier2PriceCents = scraped.tier2PriceCents,
+                        tier3PriceCents = scraped.tier3PriceCents,
+                        tier4PriceCents = scraped.tier4PriceCents,
                         available = scraped.available,
                         lastCheckedEpochSeconds = nowEpochSeconds,
                     )

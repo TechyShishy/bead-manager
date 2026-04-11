@@ -37,7 +37,14 @@ data class VendorPackEntity(
     val vendorKey: String,
     val grams: Double,
     val url: String,
+    /** Tier 1 unit price (qty 1–14 for FMG; flat price for AC). */
     val priceCents: Int? = null,
+    /** Tier 2 unit price (qty 15–49). FMG only; null for AC. */
+    val tier2PriceCents: Int? = null,
+    /** Tier 3 unit price (qty 50–99). FMG only; null for AC. */
+    val tier3PriceCents: Int? = null,
+    /** Tier 4 unit price (qty 100+). FMG only; null for AC. */
+    val tier4PriceCents: Int? = null,
     val available: Boolean? = null,
     val lastCheckedEpochSeconds: Long? = null,
 )

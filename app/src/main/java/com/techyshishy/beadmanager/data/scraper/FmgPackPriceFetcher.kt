@@ -13,15 +13,18 @@ import kotlin.math.roundToInt
 /**
  * Fetches price and availability for a Fire Mountain Gems SKU using Jsoup HTML parsing.
  *
- * Price: locates the element with [data-price-book-id="usd-fmg-tier1-prices"] and
- * extracts the first "$X.XX" pattern from its text content. This is the Tier 1
- * (qty 1–14) price — the baseline stored in the catalog.
+ * Price: locates the four tier price blocks by [data-price-book-id] attribute:
+ *   - Tier 1 (qty 1–14):  usd-fmg-tier1-prices
+ *   - Tier 2 (qty 15–49): usd-fmg-tier2-prices
+ *   - Tier 3 (qty 50–99): usd-fmg-tier3-prices
+ *   - Tier 4 (qty 100+): usd-fmg-tier4-prices
+ * Each block's text is matched against the first "$X.XX" pattern.
  *
  * Availability: locates any element with a [data-available] attribute and reads its
  * value. "true" → available; any other value → out of stock. If the attribute element
  * is absent, throws [IOException] (treated as fetch failure, not confirmed-unavailable).
  *
- * If the Tier 1 price block element is absent, throws [IOException].
+ * If any required price block element is absent, throws [IOException].
  */
 @Singleton
 class FmgPackPriceFetcher @Inject constructor(
@@ -43,17 +46,30 @@ class FmgPackPriceFetcher @Inject constructor(
             val body = response.body?.string() ?: throw IOException("FMG empty response body")
             val doc = Jsoup.parse(body, url)
 
-            val priceBlock = doc.selectFirst("[data-price-book-id=usd-fmg-tier1-prices]")
-                ?: throw IOException("Tier 1 price block not found in FMG page: $url")
-            val priceStr = priceRegex.find(priceBlock.text())?.groupValues?.get(1)
-                ?: throw IOException("No price pattern found in Tier 1 block for: $url")
-            val priceCents = (priceStr.toDouble() * 100).roundToInt()
+            fun scrapeTierPrice(tierId: String): Int {
+                val block = doc.selectFirst("[data-price-book-id=$tierId]")
+                    ?: throw IOException("Tier price block '$tierId' not found in FMG page: $url")
+                val priceStr = priceRegex.find(block.text())?.groupValues?.get(1)
+                    ?: throw IOException("No price pattern found in block '$tierId' for: $url")
+                return (priceStr.toDouble() * 100).roundToInt()
+            }
+
+            val priceCents = scrapeTierPrice("usd-fmg-tier1-prices")
+            val tier2PriceCents = scrapeTierPrice("usd-fmg-tier2-prices")
+            val tier3PriceCents = scrapeTierPrice("usd-fmg-tier3-prices")
+            val tier4PriceCents = scrapeTierPrice("usd-fmg-tier4-prices")
 
             val availableEl = doc.selectFirst("[data-available]")
                 ?: throw IOException("data-available attribute not found in FMG page: $url")
             val available = availableEl.attr("data-available") == "true"
 
-            ScrapedPack(priceCents = priceCents, available = available)
+            ScrapedPack(
+                priceCents = priceCents,
+                tier2PriceCents = tier2PriceCents,
+                tier3PriceCents = tier3PriceCents,
+                tier4PriceCents = tier4PriceCents,
+                available = available,
+            )
         }
     }
 }

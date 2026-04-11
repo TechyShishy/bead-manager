@@ -50,6 +50,12 @@ data class OrderItemEntry(
      * [effectiveContributions] to handle pre-M4 normalization transparently.
      */
     val sourceProjectContributions: Map<String, Double> = emptyMap(),
+    /**
+     * True when this item was added as a buy-up to reach a vendor discount tier, not because
+     * the project requires this bead. [targetGrams] is 0.0 for buy-up items.
+     * Firestore stores the field only when true; absent = false for pre-existing documents.
+     */
+    val buyUp: Boolean = false,
 )
 
 /**

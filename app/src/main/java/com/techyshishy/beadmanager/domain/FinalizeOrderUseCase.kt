@@ -3,12 +3,21 @@ package com.techyshishy.beadmanager.domain
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.repository.BuyUpSuggestion
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
-import com.techyshishy.beadmanager.data.repository.selectCheapestVendor
+import com.techyshishy.beadmanager.data.repository.PackCombination
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository
+import com.techyshishy.beadmanager.data.repository.PriceCheckResult
+import com.techyshishy.beadmanager.data.repository.VendorSelection
+import com.techyshishy.beadmanager.data.repository.analyzeBuyUp
+import com.techyshishy.beadmanager.data.repository.applyFmgTier
+import com.techyshishy.beadmanager.data.repository.fmgEffectivePriceCents
+import com.techyshishy.beadmanager.data.repository.selectPreferredVendor
 import com.techyshishy.beadmanager.data.scraper.NoConnectivityException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -24,6 +33,13 @@ import javax.inject.Singleton
  */
 class UnavailablePacksException(val beadCodes: List<String>) :
     Exception("${beadCodes.size} bead(s) have no available vendor: $beadCodes")
+
+/**
+ * Thrown by [FinalizeOrderUseCase.commit] when the chosen buy-up bead code has no available
+ * FMG packs. The user should be prompted to choose a different bead.
+ */
+class InvalidBuyUpBeadException(val beadCode: String) :
+    Exception("No available FMG pack for buy-up bead code: $beadCode")
 
 /**
  * A single finalized item: one order line after vendor selection, price checking, and
@@ -43,6 +59,8 @@ data class FinalizedItem(
     val fetchFailed: Boolean,
     val imageUrl: String = "",
     val hex: String = "",
+    /** True when this item was added as a buy-up to reach a discount tier. */
+    val isBuyUp: Boolean = false,
 ) {
     val packGramsLabel: String
         get() = BigDecimal.valueOf(packGrams).stripTrailingZeros().toPlainString()
@@ -51,30 +69,63 @@ data class FinalizedItem(
 data class FinalizeResult(val items: List<FinalizedItem>)
 
 /**
- * Orchestrates order finalization:
+ * Intermediate result of [FinalizeOrderUseCase.analyze]. Carries all state needed for
+ * [FinalizeOrderUseCase.commit] without re-running scraping or vendor selection.
  *
- * 1. Asserts internet connectivity.
- * 2. For each PENDING vendor-less item, loads all packs for the bead and runs per-vendor DP
- *    using the best available price data to select the cheapest vendor+combination.
- * 3. Live-checks price and availability for all candidate packs (newly selected + pre-assigned).
- * 4. Re-runs vendor selection on vendor-less items using the freshly scraped prices.
- * 5. Throws [UnavailablePacksException] for beads whose selected pack is confirmed OOS with
- *    no fallback vendor; performs automatic fallback to the next-cheapest available vendor
- *    when possible.
- * 6. Writes vendor assignment + ORDERED transition in a single Firestore call.
+ * [items] shows tier-adjusted prices at the current FMG unit count — suitable for a
+ * preview before the user decides on buy-up.
+ * [buyUpSuggestion] is non-null when adding units would reduce the total order cost by
+ * crossing the next FMG quantity-break tier.
+ */
+data class OrderAnalysis(
+    val orderId: String,
+    val items: List<FinalizedItem>,
+    val buyUpSuggestion: BuyUpSuggestion?,
+    val unassignedItems: List<OrderItemEntry>,
+    val assignedItems: List<OrderItemEntry>,
+    val selectionMap: Map<String, VendorSelection>,
+    val fallbackSelections: Map<String, VendorSelection>,
+    val allFreshPacks: Map<Triple<String, String, Double>, VendorPackEntity>,
+    val allOrderItems: List<OrderItemEntry>,
+    val beadMap: Map<String, BeadEntity>,
+    val checkResult: PriceCheckResult,
+    val currentFmgTotalUnits: Int,
+    val fmgPacksByBead: Map<String, List<VendorPackEntity>>,
+)
+
+/**
+ * Orchestrates order finalization in two phases:
  *
- * A [Mutex] prevents concurrent finalize calls.
+ * Phase 1 — [analyze]: scrapes live prices, runs vendor selection respecting the
+ * configured vendor priority order, applies FMG quantity-break tier pricing, and
+ * detects whether a buy-up would reduce total cost. Does NOT write to Firestore.
+ *
+ * Phase 2 — [commit]: takes the [OrderAnalysis] from phase 1 and the user's buy-up
+ * decision, writes vendor assignments and ORDERED transition in a single Firestore call.
+ *
+ * A [Mutex] prevents concurrent calls to both phases.
  */
 @Singleton
 class FinalizeOrderUseCase @Inject constructor(
     @ApplicationContext private val context: Context,
     private val orderRepository: OrderRepository,
     private val catalogRepository: CatalogRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) {
     private val mutex = Mutex()
 
-    suspend fun execute(orderId: String): FinalizeResult = mutex.withLock {
+    /**
+     * Phase 1: scrapes prices, selects vendors per the configured priority order, applies
+     * FMG tier pricing, and detects buy-up opportunities. Does NOT write to Firestore.
+     *
+     * Throws [UnavailablePacksException] when one or more beads have no available vendor.
+     * Throws [NoConnectivityException] when the device has no validated internet.
+     */
+    suspend fun analyze(orderId: String): OrderAnalysis = mutex.withLock {
         assertConnectivity()
+
+        val vendorPriority = preferencesRepository.vendorPriorityOrder.first()
+        val buyUpEnabled = preferencesRepository.buyUpEnabled.first()
 
         val order = orderRepository.orderStream(orderId).first()
             ?: error("Order $orderId not found")
@@ -84,38 +135,42 @@ class FinalizeOrderUseCase @Inject constructor(
         }
         if (pendingItems.isEmpty()) {
             orderRepository.finalizeOrder(orderId, order.items, assignedItems = emptyList())
-            return@withLock FinalizeResult(items = emptyList())
+            return@withLock OrderAnalysis(
+                orderId = orderId,
+                items = emptyList(),
+                buyUpSuggestion = null,
+                unassignedItems = emptyList(),
+                assignedItems = emptyList(),
+                selectionMap = emptyMap(),
+                fallbackSelections = emptyMap(),
+                allFreshPacks = emptyMap(),
+                allOrderItems = order.items,
+                beadMap = emptyMap(),
+                checkResult = PriceCheckResult(failedPackIds = emptySet()),
+                currentFmgTotalUnits = 0,
+                fmgPacksByBead = emptyMap(),
+            )
         }
 
         val (assignedItems, unassignedItems) = pendingItems.partition { it.vendorKey.isNotBlank() }
         val nowSeconds = System.currentTimeMillis() / 1000
         val beadMap = catalogRepository.allBeadsAsMap()
 
-        // Load all packs for each unassigned bead. We'll check all of them so that after
-        // the scrape we can re-run selection with fresh prices.
         val unassignedBeadCodes = unassignedItems.map { it.beadCode }.distinct()
         val packsByBead: Map<String, List<VendorPackEntity>> =
             unassignedBeadCodes.associateWith { catalogRepository.packsForBead(it) }
 
-        // Resolve Room entities for pre-assigned packs.
         val assignedPacks = assignedItems.mapNotNull { item ->
             catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
         }
 
-        // All packs that need a freshness check: pre-assigned + every candidate for unassigned.
         val allCandidatePacks = assignedPacks + packsByBead.values.flatten().distinctBy { it.id }
         val checkResult = catalogRepository.checkAndUpdatePacks(allCandidatePacks, nowSeconds)
 
-        // Re-read freshened state from Room for all candidate packs.
         val freshPacksByBead: Map<String, List<VendorPackEntity>> =
             unassignedBeadCodes.associateWith { catalogRepository.packsForBead(it) }
 
-        // Run vendor selection using fresh prices. Only packs with priceCents are eligible.
-        // Each unassigned bead code must be unique — if the same bead code appears twice in
-        // unassignedItems (e.g. two vendor-less entries), both would share the same selection
-        // (keyed by beadCode) and both would produce the same combination. This is a data
-        // inconsistency that shouldn't occur in practice, but we assert defensively.
-        val selectionMap = mutableMapOf<String, com.techyshishy.beadmanager.data.repository.VendorSelection>()
+        val selectionMap = mutableMapOf<String, VendorSelection>()
         val noVendorBeadCodes = mutableListOf<String>()
         for (item in unassignedItems) {
             check(item.beadCode !in selectionMap) {
@@ -123,8 +178,7 @@ class FinalizeOrderUseCase @Inject constructor(
                     "each bead may appear at most once in unassigned PENDING items"
             }
             val packs = freshPacksByBead[item.beadCode] ?: emptyList()
-            val available = packs.filter { it.available != false }
-            val selection = selectCheapestVendor(item.beadCode, item.targetGrams, available)
+            val selection = selectPreferredVendor(item.beadCode, item.targetGrams, packs, vendorPriority)
             if (selection == null) {
                 noVendorBeadCodes.add(item.beadCode)
             } else {
@@ -132,16 +186,13 @@ class FinalizeOrderUseCase @Inject constructor(
             }
         }
 
-        // Pre-assigned items: re-read fresh packs and check their availability.
         val freshAssignedPacks = assignedItems.mapNotNull { item ->
             catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
         }
         val unavailableAssigned = freshAssignedPacks.filter { it.available == false }
 
-        // For confirmed OOS assigned items, attempt fallback to the cheapest available vendor.
         val assignedFallbackFailures = mutableListOf<String>()
-        val fallbackSelections = mutableMapOf<String, com.techyshishy.beadmanager.data.repository.VendorSelection>()
-        // Accumulate pack entities for all fallback vendors so allFreshPacks lookup succeeds.
+        val fallbackSelections = mutableMapOf<String, VendorSelection>()
         val fallbackPacksByBead = mutableMapOf<String, List<VendorPackEntity>>()
         for (pack in unavailableAssigned) {
             val originalItem = assignedItems.first {
@@ -149,10 +200,11 @@ class FinalizeOrderUseCase @Inject constructor(
             }
             val allPacksForBead = catalogRepository.packsForBead(pack.beadCode)
             fallbackPacksByBead[pack.beadCode] = allPacksForBead
-            val availablePacks = allPacksForBead.filter {
-                it.available != false && it.priceCents != null && it.vendorKey != pack.vendorKey
-            }
-            val selection = selectCheapestVendor(pack.beadCode, originalItem.targetGrams, availablePacks)
+            val fallbackPriority = vendorPriority.filter { it != pack.vendorKey }
+            val availablePacks = allPacksForBead.filter { it.available != false && it.priceCents != null }
+            val selection = selectPreferredVendor(
+                pack.beadCode, originalItem.targetGrams, availablePacks, fallbackPriority,
+            )
             if (selection == null) {
                 assignedFallbackFailures.add(pack.beadCode)
             } else {
@@ -163,61 +215,105 @@ class FinalizeOrderUseCase @Inject constructor(
         val allBlockedBeadCodes = noVendorBeadCodes + assignedFallbackFailures
         if (allBlockedBeadCodes.isNotEmpty()) throw UnavailablePacksException(allBlockedBeadCodes.distinct())
 
-        // Build the resolved item list for the Firestore write.
-        // Pre-assigned items get their original values unless a fallback was selected.
-        // Unassigned items get their auto-selected vendor+combination.
-        val assignmentMap: Map<String, com.techyshishy.beadmanager.data.repository.VendorSelection> =
-            selectionMap + fallbackSelections
-
-        // Collect all definitive packs for the finalized items list, including fallback-vendor
-        // packs so that URL/price lookups succeed for the OOS-fallback path.
         val allFreshPacks = (freshAssignedPacks + freshPacksByBead.values.flatten() +
             fallbackPacksByBead.values.flatten())
             .associateBy { Triple(it.beadCode, it.vendorKey, it.grams) }
+
+        // Build a FMG selection map for tier calculations (includes pre-assigned FMG items).
+        val fmgSelectionsByBead: Map<String, VendorSelection> = buildMap {
+            for ((beadCode, sel) in selectionMap) {
+                if (sel.vendorKey == "fmg") put(beadCode, sel)
+            }
+            for ((beadCode, sel) in fallbackSelections) {
+                if (sel.vendorKey == "fmg") put(beadCode, sel)
+            }
+            // Pre-assigned FMG items not replaced by fallback, grouped by bead code.
+            val preAssignedByBead = assignedItems
+                .filter { it.vendorKey == "fmg" && it.beadCode !in fallbackSelections }
+                .groupBy { it.beadCode }
+            for ((beadCode, items) in preAssignedByBead) {
+                if (beadCode !in this) {
+                    val combos = items.mapNotNull { item ->
+                        val pack = allFreshPacks[Triple(beadCode, "fmg", item.packGrams)]
+                            ?: return@mapNotNull null
+                        PackCombination(pack.grams, item.quantityUnits)
+                    }
+                    val totalCents = items.sumOf { item ->
+                        val pack = allFreshPacks[Triple(beadCode, "fmg", item.packGrams)]
+                        (pack?.priceCents ?: 0) * item.quantityUnits
+                    }
+                    if (combos.isNotEmpty()) put(beadCode, VendorSelection("fmg", combos, totalCents))
+                }
+            }
+        }
+
+        val currentFmgTotalUnits = fmgSelectionsByBead.values.sumOf { sel ->
+            sel.combination.sumOf { it.quantity }
+        }
+
+        val fmgPacksByBead: Map<String, List<VendorPackEntity>> = buildMap {
+            for (beadCode in fmgSelectionsByBead.keys) {
+                val packs = allFreshPacks.values.filter {
+                    it.beadCode == beadCode && it.vendorKey == "fmg"
+                }
+                if (packs.isNotEmpty()) put(beadCode, packs)
+            }
+        }
+
+        // Rebuild FMG selections with tier-adjusted totalCents.
+        val tieredFmgSelectionsByBead = fmgSelectionsByBead.mapValues { (beadCode, sel) ->
+            val beadPacks = fmgPacksByBead[beadCode] ?: return@mapValues sel
+            applyFmgTier(sel, beadPacks, currentFmgTotalUnits)
+        }
+
+        // Effective unit price for one pack in the finalized order.
+        fun effectivePrice(pack: VendorPackEntity?): Int? {
+            if (pack == null) return null
+            return if (pack.vendorKey == "fmg") {
+                fmgEffectivePriceCents(pack, currentFmgTotalUnits)
+            } else {
+                pack.priceCents
+            }
+        }
 
         val finalizedItems = mutableListOf<FinalizedItem>()
 
         for (item in assignedItems) {
             val fallback = fallbackSelections[item.beadCode]
             if (fallback != null) {
-                // Replaced by fallback vendor — build items from fallback combination.
                 for (combo in fallback.combination) {
                     val key = Triple(item.beadCode, fallback.vendorKey, combo.packGrams)
                     val pack = allFreshPacks[key]
                     val bead = beadMap[item.beadCode]
-                    finalizedItems.add(
-                        FinalizedItem(
-                            beadCode = item.beadCode,
-                            vendorKey = fallback.vendorKey,
-                            packGrams = combo.packGrams,
-                            quantityUnits = combo.quantity,
-                            url = pack?.url ?: "",
-                            priceCents = pack?.priceCents,
-                            available = pack?.available,
-                            fetchFailed = false,
-                            imageUrl = bead?.imageUrl ?: "",
-                            hex = bead?.hex ?: "",
-                        )
-                    )
+                    finalizedItems.add(FinalizedItem(
+                        beadCode = item.beadCode,
+                        vendorKey = fallback.vendorKey,
+                        packGrams = combo.packGrams,
+                        quantityUnits = combo.quantity,
+                        url = pack?.url ?: "",
+                        priceCents = effectivePrice(pack),
+                        available = pack?.available,
+                        fetchFailed = false,
+                        imageUrl = bead?.imageUrl ?: "",
+                        hex = bead?.hex ?: "",
+                    ))
                 }
             } else {
                 val key = Triple(item.beadCode, item.vendorKey, item.packGrams)
                 val pack = allFreshPacks[key]
                 val bead = beadMap[item.beadCode]
-                finalizedItems.add(
-                    FinalizedItem(
-                        beadCode = item.beadCode,
-                        vendorKey = item.vendorKey,
-                        packGrams = item.packGrams,
-                        quantityUnits = item.quantityUnits,
-                        url = pack?.url ?: "",
-                        priceCents = pack?.priceCents,
-                        available = pack?.available,
-                        fetchFailed = pack?.id in checkResult.failedPackIds,
-                        imageUrl = bead?.imageUrl ?: "",
-                        hex = bead?.hex ?: "",
-                    )
-                )
+                finalizedItems.add(FinalizedItem(
+                    beadCode = item.beadCode,
+                    vendorKey = item.vendorKey,
+                    packGrams = item.packGrams,
+                    quantityUnits = item.quantityUnits,
+                    url = pack?.url ?: "",
+                    priceCents = effectivePrice(pack),
+                    available = pack?.available,
+                    fetchFailed = pack?.id in checkResult.failedPackIds,
+                    imageUrl = bead?.imageUrl ?: "",
+                    hex = bead?.hex ?: "",
+                ))
             }
         }
 
@@ -227,35 +323,154 @@ class FinalizeOrderUseCase @Inject constructor(
                 val key = Triple(item.beadCode, selection.vendorKey, combo.packGrams)
                 val pack = allFreshPacks[key]
                 val bead = beadMap[item.beadCode]
-                finalizedItems.add(
-                    FinalizedItem(
-                        beadCode = item.beadCode,
-                        vendorKey = selection.vendorKey,
-                        packGrams = combo.packGrams,
-                        quantityUnits = combo.quantity,
-                        url = pack?.url ?: "",
-                        priceCents = pack?.priceCents,
-                        available = pack?.available,
-                        fetchFailed = false,
-                        imageUrl = bead?.imageUrl ?: "",
-                        hex = bead?.hex ?: "",
-                    )
-                )
+                finalizedItems.add(FinalizedItem(
+                    beadCode = item.beadCode,
+                    vendorKey = selection.vendorKey,
+                    packGrams = combo.packGrams,
+                    quantityUnits = combo.quantity,
+                    url = pack?.url ?: "",
+                    priceCents = effectivePrice(pack),
+                    available = pack?.available,
+                    fetchFailed = false,
+                    imageUrl = bead?.imageUrl ?: "",
+                    hex = bead?.hex ?: "",
+                ))
             }
         }
 
-        // Build the assignment list for the Firestore write. Each unassigned item needs its
-        // bead code mapped to resolved OrderItemEntry values. Assigned items without fallback
-        // stay as-is; fallback items need their vendorKey/pack updated.
-        val resolvedAssignments: List<OrderItemEntry> = buildResolvedItems(
+        val buyUpSuggestion: BuyUpSuggestion? = if (buyUpEnabled) {
+            val allFmgPacks = catalogRepository.allPacksByVendor("fmg")
+            analyzeBuyUp(
+                fmgSelectionsByBead = tieredFmgSelectionsByBead,
+                fmgPacksByBead = fmgPacksByBead,
+                currentTotalFmgUnits = currentFmgTotalUnits,
+                allAvailableFmgPacks = allFmgPacks,
+            )
+        } else null
+
+        OrderAnalysis(
+            orderId = orderId,
+            items = finalizedItems,
+            buyUpSuggestion = buyUpSuggestion,
             unassignedItems = unassignedItems,
             assignedItems = assignedItems,
             selectionMap = selectionMap,
             fallbackSelections = fallbackSelections,
+            allFreshPacks = allFreshPacks,
+            allOrderItems = order.items,
+            beadMap = beadMap,
+            checkResult = checkResult,
+            currentFmgTotalUnits = currentFmgTotalUnits,
+            fmgPacksByBead = fmgPacksByBead,
         )
-        orderRepository.finalizeOrder(orderId, order.items, resolvedAssignments)
+    }
 
-        FinalizeResult(items = finalizedItems)
+    /**
+     * Phase 2: writes the finalized order to Firestore.
+     *
+     * [buyUpBeadCode] — when non-null, adds [analysis.buyUpSuggestion.unitsToAdd] units of
+     * the smallest available FMG pack for that bead. If the chosen bead has no available FMG
+     * packs, [InvalidBuyUpBeadException] is thrown and nothing is written to Firestore.
+     *
+     * When [buyUpBeadCode] shares a (beadCode, packGrams) triple with an existing pre-assigned
+     * item in the order, the extra units are merged into that item rather than creating a
+     * duplicate entry.
+     *
+     * Returns [FinalizeResult] with items priced at the final effective tier (accounting for
+     * the buy-up units if applicable).
+     */
+    suspend fun commit(analysis: OrderAnalysis, buyUpBeadCode: String?): FinalizeResult = mutex.withLock {
+        val resolvedAssignments = buildResolvedItems(
+            unassignedItems = analysis.unassignedItems,
+            assignedItems = analysis.assignedItems,
+            selectionMap = analysis.selectionMap,
+            fallbackSelections = analysis.fallbackSelections,
+        ).toMutableList()
+
+        // (beadCode, packGrams, extraUnits) — set when buy-up is merged into an existing row.
+        var buyUpMerged: Triple<String, Double, Int>? = null
+        var buyUpFinalizedItem: FinalizedItem? = null
+
+        if (buyUpBeadCode != null && analysis.buyUpSuggestion != null) {
+            val suggestion = analysis.buyUpSuggestion
+            val fmgPacks = catalogRepository.packsForBead(buyUpBeadCode)
+                .filter { it.vendorKey == "fmg" && it.available != false && it.priceCents != null }
+                .sortedBy { it.grams }
+            val buyUpPack = fmgPacks.firstOrNull()
+                ?: throw InvalidBuyUpBeadException(buyUpBeadCode)
+
+            val finalUnits = analysis.currentFmgTotalUnits + suggestion.unitsToAdd
+
+            // Detect identity collision: does resolvedAssignments already contain an entry
+            // with the same (beadCode, "fmg", packGrams) triple?
+            val existingIdx = resolvedAssignments.indexOfFirst {
+                it.beadCode == buyUpBeadCode && it.vendorKey == "fmg" && it.packGrams == buyUpPack.grams
+            }
+
+            if (existingIdx >= 0) {
+                // Merge: fold buy-up units into the existing assignment to avoid duplicates.
+                resolvedAssignments[existingIdx] = resolvedAssignments[existingIdx].copy(
+                    quantityUnits = resolvedAssignments[existingIdx].quantityUnits + suggestion.unitsToAdd,
+                )
+                buyUpMerged = Triple(buyUpBeadCode, buyUpPack.grams, suggestion.unitsToAdd)
+            } else {
+                // New item: add a dedicated buy-up entry.
+                resolvedAssignments.add(
+                    OrderItemEntry(
+                        beadCode = buyUpBeadCode,
+                        vendorKey = "fmg",
+                        targetGrams = 0.0,
+                        packGrams = buyUpPack.grams,
+                        quantityUnits = suggestion.unitsToAdd,
+                        status = OrderItemStatus.PENDING.firestoreValue,
+                        buyUp = true,
+                    )
+                )
+                val bead = analysis.beadMap[buyUpBeadCode]
+                    ?: catalogRepository.allBeadsAsMap()[buyUpBeadCode]
+                buyUpFinalizedItem = FinalizedItem(
+                    beadCode = buyUpBeadCode,
+                    vendorKey = "fmg",
+                    packGrams = buyUpPack.grams,
+                    quantityUnits = suggestion.unitsToAdd,
+                    url = buyUpPack.url,
+                    priceCents = fmgEffectivePriceCents(buyUpPack, finalUnits),
+                    available = buyUpPack.available,
+                    fetchFailed = false,
+                    imageUrl = bead?.imageUrl ?: "",
+                    hex = bead?.hex ?: "",
+                    isBuyUp = true,
+                )
+            }
+        }
+
+        orderRepository.finalizeOrder(analysis.orderId, analysis.allOrderItems, resolvedAssignments)
+
+        // Build the FinalizeResult, repricing FMG items and reflecting any merged/new buy-up.
+        val finalItems = if ((buyUpFinalizedItem != null || buyUpMerged != null) && analysis.buyUpSuggestion != null) {
+            val finalUnits = analysis.currentFmgTotalUnits + analysis.buyUpSuggestion.unitsToAdd
+            var repricedItems = analysis.items.map { item ->
+                if (item.vendorKey == "fmg") {
+                    val pack = analysis.allFreshPacks[Triple(item.beadCode, "fmg", item.packGrams)]
+                    if (pack != null) item.copy(priceCents = fmgEffectivePriceCents(pack, finalUnits))
+                    else item
+                } else item
+            }
+            // Merged case: update the existing FinalizedItem's quantityUnits too.
+            if (buyUpMerged != null) {
+                val (mergedCode, mergedPackGrams, extraUnits) = buyUpMerged
+                repricedItems = repricedItems.map { item ->
+                    if (item.beadCode == mergedCode && item.vendorKey == "fmg" && item.packGrams == mergedPackGrams) {
+                        item.copy(quantityUnits = item.quantityUnits + extraUnits)
+                    } else item
+                }
+            }
+            if (buyUpFinalizedItem != null) repricedItems + buyUpFinalizedItem else repricedItems
+        } else {
+            analysis.items
+        }
+
+        FinalizeResult(items = finalItems)
     }
 
     /**
@@ -268,24 +483,34 @@ class FinalizeOrderUseCase @Inject constructor(
         val order = orderRepository.orderStream(orderId).first()
             ?: error("Order $orderId not found")
         val beadMap = catalogRepository.allBeadsAsMap()
-        val finalizedItems = order.items
+        val firestoreFinalizedItems = order.items
             .filter { OrderItemStatus.fromFirestore(it.status) == OrderItemStatus.FINALIZED }
-            .map { item ->
-                val pack = catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
-                val bead = beadMap[item.beadCode]
-                FinalizedItem(
-                    beadCode = item.beadCode,
-                    vendorKey = item.vendorKey,
-                    packGrams = item.packGrams,
-                    quantityUnits = item.quantityUnits,
-                    url = pack?.url ?: "",
-                    priceCents = pack?.priceCents,
-                    available = pack?.available,
-                    fetchFailed = false,
-                    imageUrl = bead?.imageUrl ?: "",
-                    hex = bead?.hex ?: "",
-                )
+        // Count FMG units across all finalized items so tier pricing reflects the actual order.
+        val totalFmgUnits = firestoreFinalizedItems
+            .filter { it.vendorKey == "fmg" }
+            .sumOf { it.quantityUnits }
+        val finalizedItems = firestoreFinalizedItems.map { item ->
+            val pack = catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
+            val bead = beadMap[item.beadCode]
+            val displayPrice = if (item.vendorKey == "fmg" && pack != null) {
+                fmgEffectivePriceCents(pack, totalFmgUnits)
+            } else {
+                pack?.priceCents
             }
+            FinalizedItem(
+                beadCode = item.beadCode,
+                vendorKey = item.vendorKey,
+                packGrams = item.packGrams,
+                quantityUnits = item.quantityUnits,
+                url = pack?.url ?: "",
+                priceCents = displayPrice,
+                available = pack?.available,
+                fetchFailed = false,
+                imageUrl = bead?.imageUrl ?: "",
+                hex = bead?.hex ?: "",
+                isBuyUp = item.buyUp,
+            )
+        }
         return FinalizeResult(items = finalizedItems)
     }
 
@@ -299,8 +524,8 @@ class FinalizeOrderUseCase @Inject constructor(
     private fun buildResolvedItems(
         unassignedItems: List<OrderItemEntry>,
         assignedItems: List<OrderItemEntry>,
-        selectionMap: Map<String, com.techyshishy.beadmanager.data.repository.VendorSelection>,
-        fallbackSelections: Map<String, com.techyshishy.beadmanager.data.repository.VendorSelection>,
+        selectionMap: Map<String, VendorSelection>,
+        fallbackSelections: Map<String, VendorSelection>,
     ): List<OrderItemEntry> {
         val result = mutableListOf<OrderItemEntry>()
 

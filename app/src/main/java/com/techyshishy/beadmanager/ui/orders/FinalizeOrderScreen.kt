@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,13 +27,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +56,7 @@ import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import com.techyshishy.beadmanager.domain.FinalizedItem
+import com.techyshishy.beadmanager.domain.OrderAnalysis
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +103,16 @@ fun FinalizeOrderScreen(
                 onReopen = { viewModel.reopen() },
                 modifier = Modifier.padding(innerPadding),
             )
+
+            is FinalizeOrderViewModel.UiState.BuyUpPrompt -> {
+                CheckingContent(modifier = Modifier.padding(innerPadding))
+                BuyUpPromptDialog(
+                    analysis = state.analysis,
+                    invalidBeadCode = state.invalidBeadCode,
+                    onAccept = { beadCode -> viewModel.acceptBuyUp(beadCode) },
+                    onSkip = { viewModel.skipBuyUp() },
+                )
+            }
 
             is FinalizeOrderViewModel.UiState.UnavailableError -> UnavailableContent(
                 beadCodes = state.beadCodes,
@@ -429,4 +441,60 @@ private fun FinalizedItemRow(item: FinalizedItem) {
             }
         }
     }
+}
+
+@Composable
+private fun BuyUpPromptDialog(
+    analysis: OrderAnalysis,
+    invalidBeadCode: String?,
+    onAccept: (beadCode: String) -> Unit,
+    onSkip: () -> Unit,
+) {
+    val suggestion = analysis.buyUpSuggestion ?: return
+    // If a prior attempt failed, pre-populate with the failed code so the error is visible.
+    var beadCodeInput by remember(invalidBeadCode) {
+        mutableStateOf(invalidBeadCode ?: suggestion.suggestedBeadCode)
+    }
+    val isError = invalidBeadCode != null && beadCodeInput == invalidBeadCode
+
+    val savingsDollars = suggestion.savingsCents / 100
+    val savingsCentsRemainder = suggestion.savingsCents % 100
+    val savingsFormatted = "\$${savingsDollars}.${savingsCentsRemainder.toString().padStart(2, '0')}"
+
+    AlertDialog(
+        onDismissRequest = onSkip,
+        title = { Text(stringResource(R.string.buy_up_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = stringResource(R.string.buy_up_body, suggestion.unitsToAdd, savingsFormatted),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = beadCodeInput,
+                    onValueChange = { beadCodeInput = it.uppercase().trim() },
+                    label = { Text(stringResource(R.string.buy_up_choose_bead)) },
+                    isError = isError,
+                    supportingText = if (isError) {
+                        { Text("No FMG packs found for \"$invalidBeadCode\" — try a different code.") }
+                    } else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onAccept(beadCodeInput) },
+                enabled = beadCodeInput.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.buy_up_accept))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onSkip) {
+                Text(stringResource(R.string.buy_up_skip))
+            }
+        },
+    )
 }

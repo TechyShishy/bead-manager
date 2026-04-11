@@ -43,7 +43,7 @@ class CatalogSeeder @Inject constructor(
 ) {
 
     companion object {
-        private const val CATALOG_VERSION = 4
+        private const val CATALOG_VERSION = 5
         private const val CATALOG_ASSET = "delica-beads.json"
 
         private val KEY_CATALOG_VERSION = intPreferencesKey("catalog_version")
@@ -130,6 +130,9 @@ class CatalogSeeder @Inject constructor(
                         grams = grams,
                         url = option.url,
                         priceCents = option.priceCents,
+                        tier2PriceCents = option.tiers?.firstOrNull { it.minQty == 15 }?.priceCents,
+                        tier3PriceCents = option.tiers?.firstOrNull { it.minQty == 50 }?.priceCents,
+                        tier4PriceCents = option.tiers?.firstOrNull { it.minQty == 100 }?.priceCents,
                         available = option.available,
                     )
                 }
@@ -169,5 +172,13 @@ class CatalogSeeder @Inject constructor(
         val url: String,
         @SerialName("price_cents") val priceCents: Int? = null,
         val available: Boolean? = null,
+        val tiers: List<TierJson>? = null,
+    )
+
+    @Serializable
+    private data class TierJson(
+        @SerialName("min_qty") val minQty: Int,
+        @SerialName("max_qty") val maxQty: Int? = null,
+        @SerialName("price_cents") val priceCents: Int,
     )
 }
