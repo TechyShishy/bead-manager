@@ -7,7 +7,6 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +23,6 @@ class OrderRepository @Inject constructor(
 
     fun orderStream(orderId: String): Flow<OrderEntry?> =
         source.orderStream(orderId)
-            .map { order -> order?.copy(items = order.items.distinctBy { Triple(it.beadCode, it.vendorKey, it.packGrams) }) }
 
     /** Used by MigrationViewModel to backfill projectIds from legacy projectId field. */
     suspend fun getAllOrdersSnapshot(): List<OrderEntry> =
