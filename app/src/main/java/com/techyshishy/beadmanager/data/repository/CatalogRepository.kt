@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Canonical key for [CatalogRepository.vendorNamesForBeads]: `(beadCode, vendorKey)`. */
+typealias BeadVendorKey = Pair<String, String>
+
 @Singleton
 class CatalogRepository @Inject constructor(
     private val beadDao: BeadDao,
@@ -87,12 +90,10 @@ class CatalogRepository @Inject constructor(
      * Returns an empty map immediately when [beadCodes] is empty (avoids an SQLite
      * "zero-argument IN" error on some API levels).
      *
-     * The key is `(beadCode to vendorKey)` — not the reverse. Both fields are String so an
-     * inverted lookup compiles silently.
-     * TODO: introduce a typealias (e.g. `BeadVendorKey = Pair<String, String>`) to make the
-     *       intended key order discoverable from the type signature.
+     * The key is [BeadVendorKey] = `(beadCode to vendorKey)` — not the reverse. Both fields
+     * are String so an inverted lookup compiles silently; the typealias makes the order explicit.
      */
-    suspend fun vendorNamesForBeads(beadCodes: List<String>): Map<Pair<String, String>, String> {
+    suspend fun vendorNamesForBeads(beadCodes: List<String>): Map<BeadVendorKey, String> {
         if (beadCodes.isEmpty()) return emptyMap()
         return vendorLinkDao.linksForBeads(beadCodes)
             .mapNotNull { link ->
