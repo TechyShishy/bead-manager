@@ -15,6 +15,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -27,6 +29,11 @@ private val Context.appDataStore: DataStore<Preferences> by preferencesDataStore
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+
+    @Provides
+    @Singleton
+    @AppScope
+    fun provideAppScope(): CoroutineScope = CoroutineScope(SupervisorJob())
 
     @Provides
     @Singleton
