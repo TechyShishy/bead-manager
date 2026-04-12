@@ -8,12 +8,17 @@ import com.techyshishy.beadmanager.data.db.VendorPackDao
 import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.scraper.ScrapingFailedException
 import com.techyshishy.beadmanager.data.scraper.VendorPackPriceFetcher
+import com.techyshishy.beadmanager.di.AppScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,24 +28,34 @@ class CatalogRepository @Inject constructor(
     private val vendorLinkDao: VendorLinkDao,
     private val vendorPackDao: VendorPackDao,
     private val vendorPackPriceFetcher: VendorPackPriceFetcher,
+    @AppScope private val appScope: CoroutineScope,
 ) {
+    // Single shared observer for the full bead catalog. The catalog is read-only
+    // post-seeding so this map is safe to hold for the lifetime of the process.
+    // Lazily: start on first subscriber, never restart — catalog data never changes.
+    private val beadsLookupFlow: StateFlow<Map<String, BeadEntity>> =
+        beadDao.allBeads()
+            .map { list -> list.associateBy { it.code } }
+            .stateIn(appScope, SharingStarted.Lazily, emptyMap())
+
+    // One-shot cache for suspend callers (FinalizeOrderUseCase, ImportRgpProjectUseCase).
+    // Safe to cache forever: catalog is immutable after CatalogSeeder.seedIfNeeded() completes.
+    @Volatile private var beadsMapCache: Map<String, BeadEntity>? = null
     fun getAllBeadsWithVendors(): Flow<List<BeadWithVendors>> =
         beadDao.getAllBeadsWithVendors()
 
     fun getBeadWithVendors(code: String): Flow<BeadWithVendors?> =
         beadDao.getBeadWithVendors(code)
 
-    fun allColorGroupJsonValues(): Flow<List<String>> =
-        beadDao.allColorGroupJsonValues()
-
     fun distinctGlassGroups(): Flow<List<String>> =
         beadDao.distinctGlassGroups()
 
-    fun allBeadsLookup(): Flow<Map<String, BeadEntity>> =
-        beadDao.allBeads().map { list -> list.associateBy { it.code } }
+    fun allBeadsLookup(): Flow<Map<String, BeadEntity>> = beadsLookupFlow
 
-    suspend fun allBeadsAsMap(): Map<String, BeadEntity> =
-        beadDao.allBeads().first().associateBy { it.code }
+    suspend fun allBeadsAsMap(): Map<String, BeadEntity> {
+        beadsMapCache?.let { return it }
+        return beadDao.allBeads().first().associateBy { it.code }.also { beadsMapCache = it }
+    }
 
     /** Vendor keys that carry the given bead, alphabetically ordered. */
     fun vendorKeysForBead(beadCode: String): Flow<List<String>> =

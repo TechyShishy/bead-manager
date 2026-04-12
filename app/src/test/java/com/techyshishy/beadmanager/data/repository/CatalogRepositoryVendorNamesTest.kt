@@ -5,6 +5,8 @@ import com.techyshishy.beadmanager.data.db.VendorLinkEntity
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,6 +20,7 @@ class CatalogRepositoryVendorNamesTest {
         vendorLinkDao = vendorLinkDao,
         vendorPackDao = mockk(relaxed = true),
         vendorPackPriceFetcher = mockk(relaxed = true),
+        appScope = CoroutineScope(SupervisorJob()),
     )
 
     @Test

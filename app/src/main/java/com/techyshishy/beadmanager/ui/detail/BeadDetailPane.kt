@@ -82,12 +82,6 @@ import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
 import java.math.BigDecimal
 import java.text.NumberFormat
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-
-// Consistent with all other decode sites: ignoreUnknownKeys guards against future
-// catalog schema additions silently causing failures.
-private val catalogJson = Json { ignoreUnknownKeys = true }
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BeadDetailPane(
@@ -117,9 +111,7 @@ fun BeadDetailPane(
     val hexColor = remember(bead.hex) {
         runCatching { Color(bead.hex.toColorInt()) }.getOrDefault(Color.Gray)
     }
-    val colorGroupList = remember(bead.colorGroup) {
-        runCatching { catalogJson.decodeFromString<List<String>>(bead.colorGroup) }.getOrDefault(emptyList())
-    }
+    val colorGroupList = bead.colorGroup
 
     Column(
         modifier = Modifier

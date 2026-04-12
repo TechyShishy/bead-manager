@@ -1,9 +1,14 @@
 package com.techyshishy.beadmanager.data.db
 
+import android.util.Log
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverter
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * Local Room database for the immutable Miyuki Delica catalog.
@@ -27,10 +32,25 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     version = 5,
     exportSchema = true,
 )
+@TypeConverters(BeadDatabase.Converters::class)
 abstract class BeadDatabase : RoomDatabase() {
     abstract fun beadDao(): BeadDao
     abstract fun vendorLinkDao(): VendorLinkDao
     abstract fun vendorPackDao(): VendorPackDao
+
+    class Converters {
+        private val json = Json { ignoreUnknownKeys = true }
+
+        @TypeConverter
+        fun fromStringList(value: List<String>): String = json.encodeToString(value)
+
+        @TypeConverter
+        fun toStringList(value: String): List<String> =
+            runCatching { json.decodeFromString<List<String>>(value) }.getOrElse { e ->
+                Log.e("BeadDatabase", "Failed to decode string list: $value", e)
+                emptyList()
+            }
+    }
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {

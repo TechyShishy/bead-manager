@@ -13,8 +13,6 @@ import com.techyshishy.beadmanager.di.AppDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -93,9 +91,9 @@ class CatalogSeeder @Inject constructor(
                 hex = bead.hex,
                 imageUrl = bead.image,
                 officialUrl = bead.url,
-                colorGroup = json.encodeToString(ListSerializer(String.serializer()), bead.colorGroup),
+                colorGroup = bead.colorGroup,
                 glassGroup = bead.glassGroup,
-                finishes = json.encodeToString(ListSerializer(String.serializer()), bead.finish),
+                finishes = bead.finish,
                 dyed = bead.dyed,
                 galvanized = bead.galvanized,
                 plating = bead.plating,

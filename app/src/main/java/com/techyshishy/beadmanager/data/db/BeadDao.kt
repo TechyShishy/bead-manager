@@ -24,12 +24,6 @@ interface BeadDao {
     @Query("SELECT COUNT(*) FROM beads")
     suspend fun count(): Int
 
-    // colorGroup is a JSON array but json_each() is not available on all Android
-    // builds (JSON1 is an OEM compile-time option). Raw values are returned here
-    // and decoded + flattened in CatalogViewModel.
-    @Query("SELECT colorGroup FROM beads")
-    fun allColorGroupJsonValues(): Flow<List<String>>
-
     @Query("SELECT DISTINCT glassGroup FROM beads ORDER BY glassGroup ASC")
     fun distinctGlassGroups(): Flow<List<String>>
 

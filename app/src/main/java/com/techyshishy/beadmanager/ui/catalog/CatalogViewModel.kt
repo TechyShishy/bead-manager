@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,14 +25,10 @@ class CatalogViewModel @Inject constructor(
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
 
-    private val json = Json { ignoreUnknownKeys = true }
-
-    val colorGroups: StateFlow<List<String>> = catalogRepository.allColorGroupJsonValues()
-        .map { jsonValues ->
-            jsonValues
-                .flatMap { encoded ->
-                    runCatching { json.decodeFromString<List<String>>(encoded) }.getOrDefault(emptyList())
-                }
+    val colorGroups: StateFlow<List<String>> = catalogRepository.allBeadsLookup()
+        .map { beadMap ->
+            beadMap.values
+                .flatMap { it.colorGroup }
                 .distinct()
                 .sorted()
         }
@@ -41,9 +36,6 @@ class CatalogViewModel @Inject constructor(
 
     val glassGroups: StateFlow<List<String>> = catalogRepository.distinctGlassGroups()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    // json declared first (above) so it is available to the colorGroups lambda
-    // regardless of SharingStarted variant chosen in the future.
 
     val beads: StateFlow<List<BeadWithInventory>> = combine(
         catalogRepository.getAllBeadsWithVendors(),
@@ -65,12 +57,8 @@ class CatalogViewModel @Inject constructor(
             }
             .filter { item ->
                 val bead = item.catalogEntry.bead
-                val finishesInBead = runCatching {
-                    json.decodeFromString<List<String>>(bead.finishes)
-                }.getOrDefault(emptyList())
-                val colorGroupsInBead = runCatching {
-                    json.decodeFromString<List<String>>(bead.colorGroup)
-                }.getOrDefault(emptyList())
+                val finishesInBead = bead.finishes
+                val colorGroupsInBead = bead.colorGroup
 
                 val matchesQuery = query.isBlank() ||
                     bead.code.contains(query, ignoreCase = true)
@@ -102,14 +90,12 @@ class CatalogViewModel @Inject constructor(
                         if (asc) compareBy(numericKey) else compareByDescending(numericKey),
                     )
                     SortBy.COLOR_GROUP -> filtered.sortedWith(
-                        // Sort by primary color group (first listed in the JSON array).
+                        // Sort by primary color group (first listed in the decoded list).
                         // Multi-group beads tie-break by DB number.
                         (if (asc) compareBy<BeadWithInventory> {
-                            runCatching { json.decodeFromString<List<String>>(it.catalogEntry.bead.colorGroup) }
-                                .getOrDefault(emptyList()).firstOrNull() ?: ""
+                            it.catalogEntry.bead.colorGroup.firstOrNull() ?: ""
                         } else compareByDescending {
-                            runCatching { json.decodeFromString<List<String>>(it.catalogEntry.bead.colorGroup) }
-                                .getOrDefault(emptyList()).firstOrNull() ?: ""
+                            it.catalogEntry.bead.colorGroup.firstOrNull() ?: ""
                         })
                             .thenBy(numericKey),
                     )
