@@ -87,6 +87,7 @@
     <string name="confirm_remove_bead">Remove %1$s from this project?</string>
     <string name="bead_progress">%1$s g / %2$s g received</string>
     <string name="bead_target_met">✓ Target met</string>
+    <string name="bead_restocking_only">↺ For restocking</string>
     <string name="bead_order_status_pending">⏳ Pending order</string>
     <string name="bead_order_status_ordered">✓ Ordered</string>
     <string name="bead_in_stock_deficit">%1$s g in stock · %2$s g needed</string>

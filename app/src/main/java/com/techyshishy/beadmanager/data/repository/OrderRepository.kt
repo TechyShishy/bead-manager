@@ -1,6 +1,7 @@
 package com.techyshishy.beadmanager.data.repository
 
 import com.techyshishy.beadmanager.data.firestore.FirestoreOrderSource
+import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
@@ -50,17 +51,20 @@ class OrderRepository @Inject constructor(
      * Each bead produces one [OrderItemEntry] with [vendorKey] = "" and [packGrams] = 0.0.
      * The user assigns a vendor (and the DP combination runs) on the Order Detail screen.
      *
-     * [targetGrams] per item is set to:
-     *  - the full project target, if [activeOrderStatus] contains an active order for that bead
-     *    (the user is explicitly creating a backup/repeat order, so the full amount is correct)
-     *  - the deficit (project target − inventory), otherwise
+     * [targetGrams] per item is the effective deficit:
+     *   max(0, projectTarget + effectiveThreshold - inventoryGrams)
+     * where effectiveThreshold = per-bead override when > 0, else [globalThresholdGrams].
+     *
+     * When [activeOrderStatus] already has an active order for the bead the full project
+     * target is used (the user is explicitly creating a backup/repeat order).
      *
      * Returns the new order document ID.
      */
     suspend fun createOrderFromBeads(
         projectId: String,
         selectedBeads: List<ProjectBeadEntry>,
-        inventoryGrams: Map<String, Double>,
+        inventoryEntries: Map<String, InventoryEntry>,
+        globalThresholdGrams: Double,
         activeOrderStatus: Map<String, OrderItemStatus>,
     ): String {
         require(selectedBeads.isNotEmpty()) { "Cannot create an order with no beads selected." }
@@ -68,8 +72,11 @@ class OrderRepository @Inject constructor(
             val targetGrams = if (activeOrderStatus.containsKey(bead.beadCode)) {
                 bead.targetGrams
             } else {
-                val inStock = inventoryGrams[bead.beadCode] ?: 0.0
-                (bead.targetGrams - inStock).coerceAtLeast(0.0)
+                val inv = inventoryEntries[bead.beadCode]
+                val inStock = inv?.quantityGrams ?: 0.0
+                val threshold = if ((inv?.lowStockThresholdGrams ?: 0.0) > 0.0) inv!!.lowStockThresholdGrams
+                                else globalThresholdGrams
+                (bead.targetGrams + threshold - inStock).coerceAtLeast(0.0)
             }
             OrderItemEntry(
                 beadCode = bead.beadCode,
@@ -445,7 +452,8 @@ class OrderRepository @Inject constructor(
         orderId: String,
         projectId: String,
         selectedBeads: List<ProjectBeadEntry>,
-        inventoryGrams: Map<String, Double>,
+        inventoryEntries: Map<String, InventoryEntry>,
+        globalThresholdGrams: Double,
         activeOrderStatus: Map<String, OrderItemStatus>,
     ) {
         require(selectedBeads.isNotEmpty()) { "Cannot import with no beads selected." }
@@ -456,8 +464,11 @@ class OrderRepository @Inject constructor(
             val targetGrams = if (activeOrderStatus.containsKey(bead.beadCode)) {
                 bead.targetGrams
             } else {
-                val inStock = inventoryGrams[bead.beadCode] ?: 0.0
-                (bead.targetGrams - inStock).coerceAtLeast(0.0)
+                val inv = inventoryEntries[bead.beadCode]
+                val inStock = inv?.quantityGrams ?: 0.0
+                val threshold = if ((inv?.lowStockThresholdGrams ?: 0.0) > 0.0) inv!!.lowStockThresholdGrams
+                                else globalThresholdGrams
+                (bead.targetGrams + threshold - inStock).coerceAtLeast(0.0)
             }
             if (targetGrams == 0.0) return@mapNotNull null  // nothing to contribute; skip
             OrderItemEntry(

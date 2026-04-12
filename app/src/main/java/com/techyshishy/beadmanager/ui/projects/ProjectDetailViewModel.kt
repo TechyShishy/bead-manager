@@ -2,13 +2,15 @@ package com.techyshishy.beadmanager.ui.projects
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.db.BeadEntity
-import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
+import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.math.max
 
 /**
  * Drives the Project Detail screen (bead list).
@@ -32,6 +35,7 @@ class ProjectDetailViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val inventoryRepository: InventoryRepository,
     private val catalogRepository: CatalogRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     private val _projectId = MutableStateFlow("")
@@ -88,15 +92,20 @@ class ProjectDetailViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
-     * Current inventory quantity per bead code, in grams.
+     * Full inventory entries per bead code.
      *
-     * Used alongside [ProjectBeadEntry.targetGrams] to compute how much still needs to be
-     * acquired. Deficit = max(0, targetGrams - inventoryGrams[beadCode]).
+     * Exposes [InventoryEntry.quantityGrams] and [InventoryEntry.lowStockThresholdGrams] so
+     * the screen can compute the effective deficit including the per-bead or global minimum
+     * stock threshold replenishment amount.
      */
-    val inventoryGrams: StateFlow<Map<String, Double>> = inventoryRepository
+    val inventoryEntries: StateFlow<Map<String, InventoryEntry>> = inventoryRepository
         .inventoryStream()
-        .map { inv -> inv.mapValues { (_, entry) -> entry.quantityGrams } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** App-wide low-stock threshold (grams). Fallback when a bead has no per-bead override. */
+    val globalThreshold: StateFlow<Double> = preferencesRepository
+        .globalLowStockThreshold
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5.0)
 
     val beadLookup: StateFlow<Map<String, BeadEntity>> = catalogRepository
         .allBeadsLookup()
@@ -130,7 +139,13 @@ class ProjectDetailViewModel @Inject constructor(
         val beads = project.value?.beads ?: return null
         val selected = beads.filter { it.beadCode in selectedBeadCodes }
         if (selected.isEmpty()) return null
-        return orderRepository.createOrderFromBeads(projectId, selected, inventoryGrams.value, activeOrderStatus.value)
+        return orderRepository.createOrderFromBeads(
+            projectId,
+            selected,
+            inventoryEntries.value,
+            globalThreshold.value,
+            activeOrderStatus.value,
+        )
     }
 
     /**
@@ -167,7 +182,8 @@ class ProjectDetailViewModel @Inject constructor(
             orderId = orderId,
             projectId = projectId,
             selectedBeads = selected,
-            inventoryGrams = inventoryGrams.value,
+            inventoryEntries = inventoryEntries.value,
+            globalThresholdGrams = globalThreshold.value,
             activeOrderStatus = activeOrderStatus.value,
         )
     }

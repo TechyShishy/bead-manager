@@ -55,11 +55,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
+import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import java.math.BigDecimal
 import java.text.DateFormat
+import kotlin.math.max
 
 /**
  * Inventory quantities below this many grams are treated as zero-deficit for display and
@@ -67,6 +69,28 @@ import java.text.DateFormat
  * ordering" state.
  */
 private const val SUFFICIENT_THRESHOLD_GRAMS = 0.001
+
+/** Resolves the effective minimum-stock threshold for a bead. */
+private fun effectiveThresholdFor(entry: InventoryEntry?, globalThreshold: Double): Double =
+    if ((entry?.lowStockThresholdGrams ?: 0.0) > 0.0) entry!!.lowStockThresholdGrams
+    else globalThreshold
+
+/**
+ * Effective deficit including the minimum-stock replenishment amount.
+ *
+ * Returns max(0, targetGrams + effectiveThreshold - inventoryGrams), floored to 0 when
+ * the result is below [SUFFICIENT_THRESHOLD_GRAMS] to suppress floating-point noise.
+ */
+private fun effectiveDeficitFor(
+    bead: ProjectBeadEntry,
+    entry: InventoryEntry?,
+    globalThreshold: Double,
+): Double {
+    val inStock = entry?.quantityGrams ?: 0.0
+    val threshold = effectiveThresholdFor(entry, globalThreshold)
+    val raw = max(0.0, bead.targetGrams + threshold - inStock)
+    return if (raw < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else raw
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,7 +104,8 @@ fun ProjectDetailScreen(
 
     val project by viewModel.project.collectAsState()
     val activeOrders by viewModel.activeOrders.collectAsState()
-    val inventoryGrams by viewModel.inventoryGrams.collectAsState()
+    val inventoryEntries by viewModel.inventoryEntries.collectAsState()
+    val globalThreshold by viewModel.globalThreshold.collectAsState()
     val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
 
@@ -96,14 +121,11 @@ fun ProjectDetailScreen(
         checkedCodes = checkedCodes.intersect(validCodes)
     }
 
-    // Drop checked codes whose inventory now covers the target — no order needed.
-    LaunchedEffect(inventoryGrams, beads) {
+    // Drop checked codes whose inventory now covers the target including the stock threshold.
+    LaunchedEffect(inventoryEntries, globalThreshold, beads) {
         val sufficientCodes = beads
             .filter { bead ->
-                val deficit = (bead.targetGrams - (inventoryGrams[bead.beadCode] ?: 0.0))
-                    .coerceAtLeast(0.0)
-                    .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
-                deficit == 0.0
+                effectiveDeficitFor(bead, inventoryEntries[bead.beadCode], globalThreshold) == 0.0
             }
             .map { it.beadCode }
             .toSet()
@@ -182,10 +204,11 @@ fun ProjectDetailScreen(
                 item(key = "select_all_beads") {
                     val eligibleCodes = beads
                         .filter { bead ->
-                            val deficit = (bead.targetGrams - (inventoryGrams[bead.beadCode] ?: 0.0))
-                                .coerceAtLeast(0.0)
-                                .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
-                            deficit > 0.0
+                            effectiveDeficitFor(
+                                bead,
+                                inventoryEntries[bead.beadCode],
+                                globalThreshold,
+                            ) > 0.0
                         }
                         .map { it.beadCode }
                         .toSet()
@@ -222,11 +245,18 @@ fun ProjectDetailScreen(
                 }
                 items(beads, key = { it.beadCode }) { bead ->
                     val catalogBead = beadLookup[bead.beadCode]
+                    val entry = inventoryEntries[bead.beadCode]
+                    val effectiveDeficit = effectiveDeficitFor(bead, entry, globalThreshold)
+                    val isThresholdOnly = activeOrderStatus[bead.beadCode] == null &&
+                        effectiveDeficit > 0.0 &&
+                        (entry?.quantityGrams ?: 0.0) >= bead.targetGrams
                     ProjectBeadRow(
                         bead = bead,
                         imageUrl = catalogBead?.imageUrl ?: "",
                         hex = catalogBead?.hex ?: "",
-                        inventoryGrams = inventoryGrams[bead.beadCode] ?: 0.0,
+                        inventoryGrams = entry?.quantityGrams ?: 0.0,
+                        effectiveDeficit = effectiveDeficit,
+                        isThresholdOnly = isThresholdOnly,
                         activeOrderStatus = activeOrderStatus[bead.beadCode],
                         checked = bead.beadCode in checkedCodes,
                         onCheckedChange = { checked ->
@@ -334,21 +364,20 @@ private fun ProjectBeadRow(
     imageUrl: String,
     hex: String,
     inventoryGrams: Double,
+    effectiveDeficit: Double,
+    isThresholdOnly: Boolean,
     activeOrderStatus: OrderItemStatus?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
-    // Sufficient means inventory already covers the target — no order needed.
     val progress = if (bead.targetGrams > 0.0) {
         (inventoryGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
     } else 0f
 
-    val deficit = (bead.targetGrams - inventoryGrams).coerceAtLeast(0.0)
-        .let { if (it < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else it }
-    val inventorySufficient = deficit == 0.0
+    val inventorySufficient = effectiveDeficit == 0.0
     val invStr = BigDecimal.valueOf(inventoryGrams).stripTrailingZeros().toPlainString()
-    val deficitStr = BigDecimal.valueOf(deficit).stripTrailingZeros().toPlainString()
+    val deficitStr = BigDecimal.valueOf(effectiveDeficit).stripTrailingZeros().toPlainString()
     val hexColor = remember(hex) {
         runCatching { Color(hex.toColorInt()) }.getOrDefault(Color.Gray)
     }
@@ -397,16 +426,22 @@ private fun ProjectBeadRow(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.tertiary,
                         )
+                    } else if (isThresholdOnly) {
+                        Text(
+                            text = stringResource(R.string.bead_restocking_only),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
                     }
                 }
                 Text(
-                    text = if (deficit > 0.0) {
+                    text = if (effectiveDeficit > 0.0) {
                         stringResource(R.string.bead_in_stock_deficit, invStr, deficitStr)
                     } else {
                         stringResource(R.string.bead_in_stock_sufficient, invStr)
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (deficit > 0.0) MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (effectiveDeficit > 0.0) MaterialTheme.colorScheme.onSurfaceVariant
                             else MaterialTheme.colorScheme.tertiary,
                 )
             }
