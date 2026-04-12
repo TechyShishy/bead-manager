@@ -16,6 +16,7 @@ applyTo: "**"
 - **DI**: Hilt (`@HiltAndroidApp`, `@HiltViewModel`, `@InstallIn(SingletonComponent::class)`)
 - **Images**: Coil 3.x with CDN URLs + hex color placeholder/fallback
 - **Serialization**: `kotlinx.serialization`
+- **HTTP scraping**: OkHttp 4.x + Jsoup 1.x — live vendor price fetching
 - **Java/JVM**: 17, compileSdk 36, targetSdk 36, minSdk 28
 
 ## Package Structure
@@ -24,17 +25,22 @@ Root package: `com.techyshishy.beadmanager`
 
 ```
 data/
-  db/          — Room entities, DAOs, BeadDatabase
-  firestore/   — Firestore data sources and entry models
-  model/       — UI-ready data classes
-  repository/  — Repository abstractions
+  db/          — Room entities (BeadEntity, VendorLinkEntity, VendorPackEntity), DAOs, BeadDatabase (v5)
+  firestore/   — Firestore entry models and sources: inventory, orders, projects
+  model/       — UI-ready data classes (BeadWithInventory, AllOrderItem)
+  repository/  — CatalogRepository, InventoryRepository, OrderRepository, ProjectRepository, PreferencesRepository, PackOptimizer
+  scraper/     — Live price fetching: PackPriceFetcher (interface), AcPackPriceFetcher, FmgPackPriceFetcher, VendorPackPriceFetcher
+  rgp/         — RGP project import: RgpParser, RgpProject (gzip-compressed JSON from Bead Directory)
   seed/        — CatalogSeeder (seeds Room from delica-beads.json)
-di/            — Hilt modules (FirebaseModule, DatabaseModule, AppModule)
+di/            — Hilt modules (FirebaseModule, DatabaseModule, AppModule); qualifiers @AppScope, @AppDataStore
+domain/        — Use cases: FinalizeOrderUseCase, ImportRgpProjectUseCase
 ui/
-  adaptive/    — ListDetailPaneScaffold scaffold wiring
+  adaptive/    — AdaptiveScaffold (NavigationSuiteScaffold + ListDetailPaneScaffold wiring for all tabs)
   auth/        — Sign-in screen
-  catalog/     — Bead catalog browse
+  catalog/     — Bead catalog browse with filter/sort
   detail/      — Bead detail pane
+  orders/      — Order management: AllOrdersScreen, OrderDetailScreen, FinalizeOrderScreen, AddToOrderScreen
+  projects/    — Project management: ProjectsScreen, ProjectDetailScreen
   settings/    — Settings screen
   migration/   — One-time data migration logic
   theme/       — BeadManagerTheme() / Material3 theming
@@ -52,35 +58,54 @@ ui/
 | Room entities     | `{Entity}Entity`                    | `BeadEntity`, `VendorLinkEntity`                                     |
 | Room DAOs         | `{Entity}Dao`                       | `BeadDao`, `VendorLinkDao`                                           |
 | Constants         | `UPPER_SNAKE_CASE`                  | `DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD`                                 |
-| DataStore keys    | `KEY_` prefix + snake_case          | `KEY_GLOBAL_LOW_STOCK_THRESHOLD`                                     |
-| Enum classes      | PascalCase, values UPPER_SNAKE_CASE | `enum class AppTab { CATALOG, SETTINGS }`                            |
+| DataStore keys    | `KEY_` prefix + snake_case          | `KEY_GLOBAL_LOW_STOCK_THRESHOLD`, `KEY_VENDOR_PRIORITY_ORDER`, `KEY_BUY_UP_ENABLED` |
+| Enum classes      | PascalCase, values UPPER_SNAKE_CASE | `enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }`          |
 | Functions         | verb-first camelCase                | `inventoryStream()`, `adjustQuantity()`, `migrateLegacyThresholds()` |
+| Use cases         | `{Action}UseCase`                   | `FinalizeOrderUseCase`, `ImportRgpProjectUseCase`                    |
+| Firestore entries | `{Entity}Entry`                     | `InventoryEntry`, `OrderEntry`, `ProjectEntry`                       |
 
 ## Compose UI Patterns
 
 - Screens accept a ViewModel and callbacks: `fun CatalogScreen(viewModel: CatalogViewModel, onBeadSelected: (String) -> Unit)`
 - Inject ViewModels in Compose via `hiltViewModel()` from `androidx.hilt.navigation.compose`
 - Expose state as `StateFlow<T>` using `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), default)`
-- Navigation is managed in `MainActivity`/the adaptive scaffold using `rememberListDetailPaneScaffoldNavigator<String>()` (navigates by bead code string)
-- Tab selection via `enum class AppTab { CATALOG, SETTINGS }`
+- Navigation is managed in `AdaptiveScaffold` (`ui/adaptive/`); the CATALOG tab uses `rememberListDetailPaneScaffoldNavigator<String>()` (navigates by bead code); PROJECTS and ORDERS tabs use state-machine navigation (`remember`/`mutableStateOf`) to support multi-level detail flows and cross-tab linking
+- Tab selection via `enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }`
 - Theme via `BeadManagerTheme()` — dynamic color on API 31+, M3 baseline fallback on 28–30
 
 ## Room (Catalog Layer)
 
 - The catalog is **read-only** — never write to Room from user actions
+- Three entities: `BeadEntity`, `VendorLinkEntity`, `VendorPackEntity` — current schema version 5
 - Schema versioned and exported: KSP arg `room.schemaLocation = "$projectDir/schemas"` — always write a migration when bumping schema version
 - Use `@Transaction` for queries returning `BeadWithVendors`
 - Use `Flow`-returning queries for reactive subscriptions
 
-## Firestore (Inventory Layer)
+## Firestore (User Data Layer)
 
-- Collection path: `users/{uid}/inventory` (debug builds: `users_debug/{uid}/inventory`)
-- `InventoryEntry` maps to a Firestore document: `@DocumentId` on `beadCode`, `@ServerTimestamp` on `lastUpdated`
+Three top-level collections under `users/{uid}/` (debug builds use `users_debug/{uid}/`):
+
+| Collection | Entry type | Key fields |
+|---|---|---|
+| `inventory/{beadCode}` | `InventoryEntry` | `@DocumentId beadCode`, `quantityGrams`, `lowStockThresholdGrams`, `notes`, `@ServerTimestamp lastUpdated` |
+| `orders/{orderId}` | `OrderEntry` | `@DocumentId orderId`, `projectIds: List<String>`, `items: List<OrderItemEntry>`, `@ServerTimestamp createdAt/lastUpdated` |
+| `projects/{projectId}` | `ProjectEntry` | `@DocumentId projectId`, `name`, `beads: List<ProjectBeadEntry>`, `@ServerTimestamp createdAt` |
+
 - Always use `SetOptions.merge()` for writes — never overwrite whole documents
-- Delta mutations: `adjustQuantity(beadCode, deltaGrams, current)` — not set-absolute unless necessary
+- Delta mutations for inventory: `adjustQuantity(beadCode, deltaGrams)` — not set-absolute unless necessary
+- `OrderItemEntry.status` uses `OrderItemStatus` enum: `PENDING → FINALIZED → ORDERED → RECEIVED` (or `SKIPPED`)
 - Batch writes capped at 500 operations (Firestore limit)
 - Use `callbackFlow` with snapshot listeners; retain last good cached value on error
 - **Quantity unit is grams only** — never introduce other units
+
+## Scraper (Live Vendor Prices)
+
+- Sub-package `data/scraper/` — fetches live prices from vendor product pages via OkHttp + Jsoup
+- `PackPriceFetcher` interface; `VendorPackPriceFetcher` dispatches to vendor implementations
+- Supported vendor keys: `"ac"` (Aura Crystals), `"fmg"` (Fire Mountain Gems — 4-tier quantity pricing)
+- Results cached in `VendorPackEntity.priceCents/tierNPriceCents` and `available` flag
+- Exceptions: `NoConnectivityException`, `ScrapingFailedException`
+- `PackOptimizer.selectCheapestVendor()` runs DP knapsack over available packs; used by `FinalizeOrderUseCase`
 
 ## Hilt DI
 
@@ -88,6 +113,13 @@ ui/
 - Repositories are `@Singleton`, scoped with `@Inject constructor`
 - Use `@HiltViewModel` for all ViewModels — never instantiate ViewModels manually
 - Custom qualifier `@AppDataStore` disambiguates the `DataStore<Preferences>` binding
+- Custom qualifier `@AppScope` disambiguates the app-level `CoroutineScope` binding
+
+## Domain (Use Cases)
+
+- Package `domain/` — pure Kotlin use cases, injected with `@Inject constructor`
+- `FinalizeOrderUseCase` — validates pending items, checks live prices via scraper, runs `PackOptimizer`, writes finalized `OrderEntry` to Firestore
+- `ImportRgpProjectUseCase` — parses a `.rgp` gzip file via `RgpParser`, maps Bead Directory color codes to `beadCode`s, creates a `ProjectEntry` in Firestore
 
 ## Gradle & Build
 
