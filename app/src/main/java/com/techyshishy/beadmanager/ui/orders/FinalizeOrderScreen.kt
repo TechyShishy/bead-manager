@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,6 +60,54 @@ import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import com.techyshishy.beadmanager.domain.FinalizedItem
 import com.techyshishy.beadmanager.domain.OrderAnalysis
+
+/** Aggregated totals for a single vendor section on the Finalize Order screen. */
+internal data class VendorSubtotal(
+    val packCount: Int,
+    val knownCostCents: Int,
+    val hasUnknownPrice: Boolean,
+)
+
+/** Aggregated totals across all vendor sections on the Finalize Order screen. */
+internal data class OrderTotals(
+    val byVendor: Map<String, VendorSubtotal>,
+    val grandPackCount: Int,
+    val grandKnownCostCents: Int,
+    val hasUnknownPrice: Boolean,
+)
+
+/**
+ * Computes per-vendor and grand-total pack counts and costs from finalized items.
+ *
+ * A price is considered known when [FinalizedItem.priceCents] is non-null and
+ * [FinalizedItem.fetchFailed] is false. Items failing either condition contribute to
+ * [VendorSubtotal.hasUnknownPrice]/[OrderTotals.hasUnknownPrice] and are excluded from
+ * the cost sums.
+ */
+internal fun computeOrderTotals(items: List<FinalizedItem>): OrderTotals {
+    val byVendor = items.groupBy { it.vendorKey }.mapValues { (_, vendorItems) ->
+        VendorSubtotal(
+            packCount = vendorItems.sumOf { it.quantityUnits },
+            knownCostCents = vendorItems
+                .filter { it.priceCents != null && !it.fetchFailed }
+                .sumOf { it.quantityUnits * it.priceCents!! },
+            hasUnknownPrice = vendorItems.any { it.priceCents == null || it.fetchFailed },
+        )
+    }
+    return OrderTotals(
+        byVendor = byVendor,
+        grandPackCount = byVendor.values.sumOf { it.packCount },
+        grandKnownCostCents = byVendor.values.sumOf { it.knownCostCents },
+        hasUnknownPrice = byVendor.values.any { it.hasUnknownPrice },
+    )
+}
+
+internal fun formatSubtotalCost(knownCostCents: Int, hasUnknownPrice: Boolean): String {
+    val dollars = knownCostCents / 100
+    val cents = knownCostCents % 100
+    val base = "$${dollars}.${cents.toString().padStart(2, '0')}"
+    return if (hasUnknownPrice) "$base + ?" else base
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,6 +223,7 @@ private fun FinalizedViewContent(
     modifier: Modifier = Modifier,
 ) {
     var showReopenDialog by remember { mutableStateOf(false) }
+    val totals = remember(items) { computeOrderTotals(items) }
 
     if (items.isEmpty()) {
         Column(
@@ -196,6 +246,8 @@ private fun FinalizedViewContent(
         return
     }
 
+    // byVendor and totals.byVendor are both derived from the same items; their key sets
+    // are guaranteed identical, making the totals.byVendor.getValue(vendorKey) calls safe.
     val byVendor = items.groupBy { it.vendorKey }
     LazyColumn(
         modifier = modifier
@@ -206,6 +258,7 @@ private fun FinalizedViewContent(
             stickyHeader(key = "header_$vendorKey") {
                 VendorFinalizeHeader(
                     vendorKey = vendorKey,
+                    subtotal = totals.byVendor.getValue(vendorKey),
                     onMarkOrdered = { onMarkVendorOrdered(vendorKey) },
                 )
             }
@@ -213,6 +266,9 @@ private fun FinalizedViewContent(
                 FinalizedItemRow(item)
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
             }
+        }
+        item(key = "grand_total") {
+            GrandTotalFooter(totals)
         }
         item(key = "reopen_button") {
             OutlinedButton(
@@ -324,7 +380,11 @@ private fun ErrorContent(
 }
 
 @Composable
-private fun VendorFinalizeHeader(vendorKey: String, onMarkOrdered: () -> Unit) {
+private fun VendorFinalizeHeader(
+    vendorKey: String,
+    subtotal: VendorSubtotal,
+    onMarkOrdered: () -> Unit,
+) {
     val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Row(
@@ -334,16 +394,49 @@ private fun VendorFinalizeHeader(vendorKey: String, onMarkOrdered: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = displayName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Column {
+                Text(
+                    text = displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.finalize_subtotal,
+                        subtotal.packCount,
+                        subtotal.packCount,
+                        formatSubtotalCost(subtotal.knownCostCents, subtotal.hasUnknownPrice),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Button(onClick = onMarkOrdered) {
                 Text(stringResource(R.string.finalize_mark_vendor_ordered))
             }
         }
         HorizontalDivider()
+    }
+}
+
+@Composable
+private fun GrandTotalFooter(totals: OrderTotals) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = pluralStringResource(
+                R.plurals.finalize_grand_total,
+                totals.grandPackCount,
+                totals.grandPackCount,
+                formatSubtotalCost(totals.grandKnownCostCents, totals.hasUnknownPrice),
+            ),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

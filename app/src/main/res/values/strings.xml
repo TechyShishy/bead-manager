@@ -140,6 +140,16 @@
     <string name="finalize_pack_label">%1$d × %2$s g</string>
     <string name="finalize_open_vendor">Open in vendor</string>
     <string name="finalize_price_unavailable">Price check failed</string>
+    <!-- %1$d = pack count, %2$s = formatted cost e.g. "$8.97" or "$8.97 + ?" -->
+    <plurals name="finalize_subtotal">
+        <item quantity="one">%1$d pack · %2$s</item>
+        <item quantity="other">%1$d packs · %2$s</item>
+    </plurals>
+    <!-- %1$d = grand total pack count, %2$s = formatted grand total cost -->
+    <plurals name="finalize_grand_total">
+        <item quantity="one">Total: %1$d pack · %2$s</item>
+        <item quantity="other">Total: %1$d packs · %2$s</item>
+    </plurals>
     <string name="buy_up_title">Discount Opportunity</string>
     <!-- %1$d = number of packs, %2$s = formatted savings e.g. "$1.50" -->
     <string name="buy_up_body">Adding %1$d more FMG pack(s) crosses the next tier and saves %2$s on your existing items.</string>
