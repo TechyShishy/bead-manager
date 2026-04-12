@@ -5,6 +5,11 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import coil3.ImageLoader
+import coil3.disk.DiskCache
+import coil3.disk.directory
+import coil3.memory.MemoryCache
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -45,5 +50,27 @@ object AppModule {
         .readTimeout(15, TimeUnit.SECONDS)
         .callTimeout(30, TimeUnit.SECONDS)
         .cache(Cache(context.cacheDir.resolve("okhttp_scraper"), maxSize = 10L * 1024 * 1024))
+        .build()
+
+    @Provides
+    @Singleton
+    fun provideImageLoader(
+        @ApplicationContext context: Context,
+        okHttpClient: OkHttpClient,
+    ): ImageLoader = ImageLoader.Builder(context)
+        .components {
+            add(OkHttpNetworkFetcherFactory(callFactory = okHttpClient))
+        }
+        .memoryCache {
+            MemoryCache.Builder()
+                .maxSizePercent(context, 0.20)
+                .build()
+        }
+        .diskCache {
+            DiskCache.Builder()
+                .directory(context.cacheDir.resolve("bead_image_cache"))
+                .maxSizeBytes(64L * 1024 * 1024)
+                .build()
+        }
         .build()
 }
