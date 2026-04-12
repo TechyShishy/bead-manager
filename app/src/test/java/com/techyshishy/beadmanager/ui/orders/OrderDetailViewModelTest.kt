@@ -62,7 +62,6 @@ class OrderDetailViewModelTest {
         )
         val catalogRepository = mockk<CatalogRepository> {
             every { getAllBeadsWithVendors() } returns flowOf(listOf(beadWithVendors))
-            every { allBeadsLookup() } returns flowOf(emptyMap())
         }
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
@@ -90,7 +89,6 @@ class OrderDetailViewModelTest {
         )
         val catalogRepository = mockk<CatalogRepository> {
             every { getAllBeadsWithVendors() } returns flowOf(listOf(beadWithVendors))
-            every { allBeadsLookup() } returns flowOf(emptyMap())
         }
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
@@ -117,7 +115,6 @@ class OrderDetailViewModelTest {
         )
         val catalogRepository = mockk<CatalogRepository> {
             every { getAllBeadsWithVendors() } returns flowOf(listOf(beadWithVendors))
-            every { allBeadsLookup() } returns flowOf(emptyMap())
         }
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
@@ -137,7 +134,6 @@ class OrderDetailViewModelTest {
     fun `beadColorNames emits empty map when no beads exist`() = runTest {
         val catalogRepository = mockk<CatalogRepository> {
             every { getAllBeadsWithVendors() } returns flowOf(emptyList())
-            every { allBeadsLookup() } returns flowOf(emptyMap())
         }
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
@@ -151,5 +147,29 @@ class OrderDetailViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.beadColorNames.value.isEmpty())
+    }
+
+    @Test
+    fun `beadLookup is populated from getAllBeadsWithVendors upstream`() = runTest {
+        val entity = bead("DB0001")
+        val beadWithVendors = BeadWithVendors(
+            bead = entity,
+            vendorLinks = emptyList(),
+        )
+        val catalogRepository = mockk<CatalogRepository> {
+            every { getAllBeadsWithVendors() } returns flowOf(listOf(beadWithVendors))
+        }
+        val preferencesRepository = mockk<PreferencesRepository> {
+            every { vendorPriorityOrder } returns flowOf(emptyList())
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true)
+
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.beadLookup.collect {}
+        }
+        advanceUntilIdle()
+
+        assertEquals(entity, viewModel.beadLookup.value["DB0001"])
     }
 }

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -43,8 +44,12 @@ class OrderDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val beadLookup: StateFlow<Map<String, BeadEntity>> = catalogRepository
-        .allBeadsLookup()
+    private val allBeadsWithVendors = catalogRepository
+        .getAllBeadsWithVendors()
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    val beadLookup: StateFlow<Map<String, BeadEntity>> = allBeadsWithVendors
+        .map { list -> list.associate { it.bead.code to it.bead } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
@@ -54,11 +59,11 @@ class OrderDetailViewModel @Inject constructor(
      */
     val beadColorNames: StateFlow<Map<String, String>> =
         combine(
-            catalogRepository.getAllBeadsWithVendors(),
+            allBeadsWithVendors,
             preferencesRepository.vendorPriorityOrder,
-        ) { beadsWithVendors, priorityOrder ->
+        ) { beads, priorityOrder ->
             buildMap {
-                for (beadWithVendors in beadsWithVendors) {
+                for (beadWithVendors in beads) {
                     val name = priorityOrder
                         .firstNotNullOfOrNull { vendorKey ->
                             beadWithVendors.vendorLinks
