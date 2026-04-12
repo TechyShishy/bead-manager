@@ -6,7 +6,11 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
+import com.techyshishy.beadmanager.di.AppScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.shareIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,12 +18,17 @@ import javax.inject.Singleton
 class OrderRepository @Inject constructor(
     private val source: FirestoreOrderSource,
     private val inventoryRepository: InventoryRepository,
+    @AppScope private val appScope: CoroutineScope,
 ) {
     fun ordersStream(projectId: String): Flow<List<OrderEntry>> =
         source.ordersStream(projectId)
 
-    fun allOrdersStream(): Flow<List<OrderEntry>> =
+    // Single shared listener for the full orders collection.
+    private val sharedAllOrders =
         source.allOrdersStream()
+            .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    fun allOrdersStream(): Flow<List<OrderEntry>> = sharedAllOrders
 
     fun orderStream(orderId: String): Flow<OrderEntry?> =
         source.orderStream(orderId)
