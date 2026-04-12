@@ -2,6 +2,8 @@ package com.techyshishy.beadmanager.ui.orders
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -163,6 +165,7 @@ private fun CheckingContent(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FinalizedViewContent(
     items: List<FinalizedItem>,
@@ -200,7 +203,7 @@ private fun FinalizedViewContent(
             .navigationBarsPadding(),
     ) {
         byVendor.forEach { (vendorKey, vendorItems) ->
-            item(key = "header_$vendorKey") {
+            stickyHeader(key = "header_$vendorKey") {
                 VendorFinalizeHeader(
                     vendorKey = vendorKey,
                     onMarkOrdered = { onMarkVendorOrdered(vendorKey) },
@@ -323,23 +326,25 @@ private fun ErrorContent(
 @Composable
 private fun VendorFinalizeHeader(vendorKey: String, onMarkOrdered: () -> Unit) {
     val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = displayName,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Button(onClick = onMarkOrdered) {
-            Text(stringResource(R.string.finalize_mark_vendor_ordered))
+    Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Button(onClick = onMarkOrdered) {
+                Text(stringResource(R.string.finalize_mark_vendor_ordered))
+            }
         }
+        HorizontalDivider()
     }
-    HorizontalDivider()
 }
 
 @Composable
