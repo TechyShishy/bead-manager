@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -223,6 +224,7 @@ private fun FinalizedViewContent(
     modifier: Modifier = Modifier,
 ) {
     var showReopenDialog by remember { mutableStateOf(false) }
+    var visitedKeys by remember { mutableStateOf(emptySet<String>()) }
     val totals = remember(items) { computeOrderTotals(items) }
 
     if (items.isEmpty()) {
@@ -263,7 +265,12 @@ private fun FinalizedViewContent(
                 )
             }
             items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
-                FinalizedItemRow(item)
+                val itemKey = "${item.beadCode}_${item.vendorKey}_${item.packGrams}"
+                FinalizedItemRow(
+                    item = item,
+                    isVisited = itemKey in visitedKeys,
+                    onVisited = { visitedKeys = visitedKeys + itemKey },
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
             }
         }
@@ -441,7 +448,11 @@ private fun GrandTotalFooter(totals: OrderTotals) {
 }
 
 @Composable
-private fun FinalizedItemRow(item: FinalizedItem) {
+private fun FinalizedItemRow(
+    item: FinalizedItem,
+    isVisited: Boolean,
+    onVisited: () -> Unit,
+) {
     val context = LocalContext.current
     val hexColor = remember(item.hex) {
         runCatching { Color(item.hex.toColorInt()) }.getOrDefault(Color.Gray)
@@ -528,20 +539,38 @@ private fun FinalizedItemRow(item: FinalizedItem) {
             if (item.url.isNotBlank()) {
                 SuggestionChip(
                     onClick = {
+                        onVisited()
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
                         )
                     },
+                    icon = if (isVisited) ({
+                        Icon(
+                            Icons.Filled.Done,
+                            contentDescription = null,
+                        )
+                    }) else null,
                     label = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.finalize_open_vendor))
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                Icons.Filled.OpenInBrowser,
-                                contentDescription = null,
+                            Text(
+                                stringResource(
+                                    if (isVisited) R.string.finalize_vendor_visited
+                                    else R.string.finalize_open_vendor
+                                )
                             )
+                            if (!isVisited) {
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Filled.OpenInBrowser,
+                                    contentDescription = null,
+                                )
+                            }
                         }
                     },
+                    colors = if (isVisited) SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ) else SuggestionChipDefaults.suggestionChipColors(),
                 )
             }
         }

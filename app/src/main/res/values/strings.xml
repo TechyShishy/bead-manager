@@ -139,6 +139,7 @@
     <string name="finalize_unknown_error">Something went wrong. Please try again.</string>
     <string name="finalize_pack_label">%1$d × %2$s g</string>
     <string name="finalize_open_vendor">Open in vendor</string>
+    <string name="finalize_vendor_visited">Visited</string>
     <string name="finalize_price_unavailable">Price check failed</string>
     <!-- %1$d = pack count, %2$s = formatted cost e.g. "$8.97" or "$8.97 + ?" -->
     <plurals name="finalize_subtotal">
