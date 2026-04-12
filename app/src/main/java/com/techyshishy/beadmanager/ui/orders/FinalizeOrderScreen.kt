@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
@@ -26,6 +29,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,9 +45,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +67,7 @@ import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import com.techyshishy.beadmanager.domain.FinalizedItem
 import com.techyshishy.beadmanager.domain.OrderAnalysis
+import kotlinx.coroutines.launch
 
 /** Aggregated totals for a single vendor section on the Finalize Order screen. */
 internal data class VendorSubtotal(
@@ -250,41 +257,81 @@ private fun FinalizedViewContent(
 
     // byVendor and totals.byVendor are both derived from the same items; their key sets
     // are guaranteed identical, making the totals.byVendor.getValue(vendorKey) calls safe.
-    val byVendor = items.groupBy { it.vendorKey }
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
-    ) {
-        byVendor.forEach { (vendorKey, vendorItems) ->
-            stickyHeader(key = "header_$vendorKey") {
-                VendorFinalizeHeader(
-                    vendorKey = vendorKey,
-                    subtotal = totals.byVendor.getValue(vendorKey),
-                    onMarkOrdered = { onMarkVendorOrdered(vendorKey) },
-                )
-            }
-            items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
-                val itemKey = "${item.beadCode}_${item.vendorKey}_${item.packGrams}"
-                FinalizedItemRow(
-                    item = item,
-                    isVisited = itemKey in visitedKeys,
-                    onVisited = { visitedKeys = visitedKeys + itemKey },
-                )
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-            }
+    val byVendor = remember(items) { items.groupBy { it.vendorKey } }
+    val vendorKeys = remember(byVendor) { byVendor.keys.toList() }
+
+    // Pre-compute the absolute LazyColumn index for each vendor's sticky header.
+    // Layout: [header_v0, items_v0..., header_v1, items_v1..., ..., grand_total, reopen_button]
+    val headerIndices = remember(byVendor) {
+        val indices = mutableMapOf<String, Int>()
+        var cursor = 0
+        byVendor.forEach { (key, vendorItems) ->
+            indices[key] = cursor
+            cursor += 1 + vendorItems.size // header + body rows
         }
-        item(key = "grand_total") {
-            GrandTotalFooter(totals)
+        indices
+    }
+
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Track which vendor section is active by finding the highest vendor whose header index
+    // is at or before the first visible item. Falls back to the first vendor at the top.
+    val activeVendorKey by remember(vendorKeys, headerIndices) {
+        derivedStateOf {
+            vendorKeys.lastOrNull { key ->
+                (headerIndices[key] ?: Int.MAX_VALUE) <= listState.firstVisibleItemIndex
+            } ?: vendorKeys.firstOrNull() ?: ""
         }
-        item(key = "reopen_button") {
-            OutlinedButton(
-                onClick = { showReopenDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text(stringResource(R.string.finalize_reopen_order))
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        if (vendorKeys.size > 1) {
+            VendorChipBar(
+                vendorKeys = vendorKeys,
+                activeVendorKey = activeVendorKey,
+                onChipClick = { key ->
+                    val index = headerIndices[key] ?: return@VendorChipBar
+                    coroutineScope.launch { listState.animateScrollToItem(index) }
+                },
+            )
+        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .navigationBarsPadding(),
+        ) {
+            byVendor.forEach { (vendorKey, vendorItems) ->
+                stickyHeader(key = "header_$vendorKey") {
+                    VendorFinalizeHeader(
+                        vendorKey = vendorKey,
+                        subtotal = totals.byVendor.getValue(vendorKey),
+                        onMarkOrdered = { onMarkVendorOrdered(vendorKey) },
+                    )
+                }
+                items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
+                    val itemKey = "${item.beadCode}_${item.vendorKey}_${item.packGrams}"
+                    FinalizedItemRow(
+                        item = item,
+                        isVisited = itemKey in visitedKeys,
+                        onVisited = { visitedKeys = visitedKeys + itemKey },
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            item(key = "grand_total") {
+                GrandTotalFooter(totals)
+            }
+            item(key = "reopen_button") {
+                OutlinedButton(
+                    onClick = { showReopenDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(stringResource(R.string.finalize_reopen_order))
+                }
             }
         }
     }
@@ -295,6 +342,31 @@ private fun FinalizedViewContent(
             onDismiss = { showReopenDialog = false },
         )
     }
+}
+
+@Composable
+private fun VendorChipBar(
+    vendorKeys: List<String>,
+    activeVendorKey: String,
+    onChipClick: (vendorKey: String) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(vendorKeys) { key ->
+            val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[key] ?: key
+            FilterChip(
+                selected = key == activeVendorKey,
+                onClick = { onChipClick(key) },
+                label = { Text(displayName) },
+            )
+        }
+    }
+    HorizontalDivider()
 }
 
 @Composable
