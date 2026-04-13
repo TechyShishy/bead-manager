@@ -104,6 +104,8 @@ class ImportRgpProjectUseCase @Inject constructor(
 
         // 6. Create the project; return success with the assigned ID.
         if (rgpProject.name.isBlank()) return ImportResult.Failure.InvalidJson
+        // TODO(#12): populate rows, colorMapping, position, markedSteps, markedRows from
+        //  rgpProject so the full grid survives in Firestore for round-trip RGP export.
         val projectId = projectRepository.createProject(
             ProjectEntry(name = rgpProject.name, beads = beads),
         )
