@@ -1,24 +1,30 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
-import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.model.computeBeadRequirements
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.ExportResult
+import com.techyshishy.beadmanager.domain.ExportRgpProjectUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -38,6 +44,7 @@ class ProjectDetailViewModel @Inject constructor(
     private val inventoryRepository: InventoryRepository,
     private val catalogRepository: CatalogRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val exportRgpProjectUseCase: ExportRgpProjectUseCase,
 ) : ViewModel() {
 
     private val _projectId = MutableStateFlow("")
@@ -132,6 +139,27 @@ class ProjectDetailViewModel @Inject constructor(
     val beadLookup: StateFlow<Map<String, BeadEntity>> = catalogRepository
         .allBeadsLookup()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    // ── RGP export ───────────────────────────────────────────────────────────
+
+    private val _exportEvents = MutableSharedFlow<ExportResult>(extraBufferCapacity = 1)
+
+    /**
+     * One-shot events emitted after each [exportToRgp] call. The screen collects this to
+     * show a snackbar on success or an error dialog on failure.
+     */
+    val exportEvents: SharedFlow<ExportResult> = _exportEvents.asSharedFlow()
+
+    /**
+     * Exports this project to [uri] via [ExportRgpProjectUseCase] and emits the result on
+     * [exportEvents]. The caller owns the URI; this function does not validate it.
+     */
+    fun exportToRgp(uri: Uri) {
+        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch {
+            _exportEvents.emit(exportRgpProjectUseCase.export(projectId, uri))
+        }
+    }
 
     // ── Bead list mutations ──────────────────────────────────────────────────
 

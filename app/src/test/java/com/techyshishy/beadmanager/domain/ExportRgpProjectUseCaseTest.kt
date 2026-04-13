@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.domain
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.OpenableColumns
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
@@ -43,6 +44,8 @@ class ExportRgpProjectUseCaseTest {
         }
         val contentResolver: ContentResolver = mockk {
             every { openOutputStream(uri) } returns outputStream
+            // query() returns null → use case falls back to "${project.name}.rgp"
+            every { query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null) } returns null
         }
         return ExportRgpProjectUseCase(
             contentResolver = contentResolver,

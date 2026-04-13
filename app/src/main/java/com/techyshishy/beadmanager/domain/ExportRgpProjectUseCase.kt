@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.domain
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.OpenableColumns
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.rgp.writeRgp
 import kotlinx.coroutines.Dispatchers
@@ -48,8 +49,13 @@ class ExportRgpProjectUseCase @Inject constructor(
                 val stream = contentResolver.openOutputStream(uri)
                     ?: throw IOException("Content resolver returned null stream for $uri")
                 stream.use { writeRgp(it, project) }
+                val displayName = contentResolver
+                    .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    } ?: "${project.name}.rgp"
+                ExportResult.Success(suggestedFilename = displayName)
             }
-            ExportResult.Success(suggestedFilename = "${project.name}.rgp")
         } catch (e: IOException) {
             ExportResult.Failure.IoError
         }

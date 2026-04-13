@@ -125,6 +125,15 @@
     <string name="import_failed_no_delica_codes">This project uses custom colors and does not contain any Miyuki Delica codes.</string>
     <string name="import_failed_unrecognized_codes">The following color codes were not found in the Delica catalog: %1$s</string>
 
+    <!-- RGP export -->
+    <string name="export_rgp">Export as RGP</string>
+    <!-- %1$s = suggested filename e.g. "My Project.rgp" -->
+    <string name="export_rgp_success">Exported as %1$s</string>
+    <string name="export_rgp_error_title">Export failed</string>
+    <string name="export_rgp_error_no_grid">This project has no grid data and cannot be exported. Re-import it from pxlpxl to get a full grid.</string>
+    <string name="export_rgp_error_io">Export failed. Check available storage and try again.</string>
+    <string name="export_rgp_error_not_found">Project not found.</string>
+
     <!-- Finalize order / live price check -->
     <string name="finalize_order">Finalize Order</string>
     <string name="finalize_checking_prices">Checking prices…</string>

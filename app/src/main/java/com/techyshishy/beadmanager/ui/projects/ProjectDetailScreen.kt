@@ -1,5 +1,7 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -30,6 +33,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -59,6 +64,7 @@ import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.domain.ExportResult
 import java.math.BigDecimal
 import java.text.DateFormat
 import kotlin.math.max
@@ -115,6 +121,33 @@ fun ProjectDetailScreen(
     var checkedCodes by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
     var detachTarget by remember { mutableStateOf<OrderEntry?>(null) }
+    var exportErrorMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val exportSuccessMessage = stringResource(R.string.export_rgp_success)
+    val exportNoGridMessage = stringResource(R.string.export_rgp_error_no_grid)
+    val exportIoErrorMessage = stringResource(R.string.export_rgp_error_io)
+    val exportNotFoundMessage = stringResource(R.string.export_rgp_error_not_found)
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/x-rowguide-project")
+    ) { uri ->
+        if (uri != null) viewModel.exportToRgp(uri)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.exportEvents.collect { result ->
+            when (result) {
+                is ExportResult.Success ->
+                    snackbarHostState.showSnackbar(
+                        exportSuccessMessage.format(result.suggestedFilename)
+                    )
+                is ExportResult.Failure.NoGrid -> exportErrorMessage = exportNoGridMessage
+                is ExportResult.Failure.IoError -> exportErrorMessage = exportIoErrorMessage
+                is ExportResult.Failure.NotFound -> exportErrorMessage = exportNotFoundMessage
+            }
+        }
+    }
 
     // Drop checked codes that were removed from the bead list.
     LaunchedEffect(beads) {
@@ -145,6 +178,18 @@ fun ProjectDetailScreen(
                         )
                     }
                 },
+                actions = {
+                    if (isGridBacked) {
+                        IconButton(onClick = {
+                            exportLauncher.launch("${project?.name ?: "project"}.rgp")
+                        }) {
+                            Icon(
+                                Icons.Filled.FileDownload,
+                                contentDescription = stringResource(R.string.export_rgp),
+                            )
+                        }
+                    }
+                },
             )
         },
         floatingActionButton = {
@@ -160,6 +205,7 @@ fun ProjectDetailScreen(
                 modifier = Modifier.navigationBarsPadding(),
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         if (beads.isEmpty()) {
             Column(
@@ -312,6 +358,19 @@ fun ProjectDetailScreen(
             dismissButton = {
                 TextButton(onClick = { detachTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+
+    exportErrorMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { exportErrorMessage = null },
+            title = { Text(stringResource(R.string.export_rgp_error_title)) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { exportErrorMessage = null }) {
+                    Text(stringResource(android.R.string.ok))
                 }
             },
         )
