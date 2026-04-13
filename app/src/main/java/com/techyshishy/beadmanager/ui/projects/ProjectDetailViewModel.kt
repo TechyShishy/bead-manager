@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.db.BeadEntity
+import com.techyshishy.beadmanager.data.model.computeBeadRequirements
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
@@ -50,6 +52,26 @@ class ProjectDetailViewModel @Inject constructor(
             else projectRepository.projectStream(id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Bead requirements derived from the project's RGP grid.
+     *
+     * For projects that have a populated grid ([ProjectEntry.rows] non-empty), the list is
+     * computed on-demand via [computeBeadRequirements]. For flat-list projects imported before
+     * the grid feature existed ([rows] empty), this returns an empty list until those projects
+     * are migrated by Issue #16.
+     */
+    val beads: StateFlow<List<ProjectBeadEntry>> = project
+        .map { entry ->
+            when {
+                entry == null -> emptyList()
+                entry.rows.isNotEmpty() ->
+                    computeBeadRequirements(entry.rows, entry.colorMapping)
+                        .map { (code, grams) -> ProjectBeadEntry(beadCode = code, targetGrams = grams) }
+                else -> entry.beads  // legacy flat-list fallback until #16
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * All orders that currently list this project in their [projectIds] array.
@@ -136,8 +158,7 @@ class ProjectDetailViewModel @Inject constructor(
      */
     suspend fun createOrderFromSelection(selectedBeadCodes: Set<String>): String? {
         val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return null
-        val beads = project.value?.beads ?: return null
-        val selected = beads.filter { it.beadCode in selectedBeadCodes }
+        val selected = beads.value.filter { it.beadCode in selectedBeadCodes }
         if (selected.isEmpty()) return null
         return orderRepository.createOrderFromBeads(
             projectId,
@@ -175,8 +196,7 @@ class ProjectDetailViewModel @Inject constructor(
      */
     suspend fun importProjectItems(orderId: String, selectedBeadCodes: Set<String>) {
         val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
-        val beads = project.value?.beads ?: return
-        val selected = beads.filter { it.beadCode in selectedBeadCodes }
+        val selected = beads.value.filter { it.beadCode in selectedBeadCodes }
         if (selected.isEmpty()) return
         orderRepository.importProjectItems(
             orderId = orderId,

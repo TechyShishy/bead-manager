@@ -103,13 +103,14 @@ fun ProjectDetailScreen(
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
     val project by viewModel.project.collectAsState()
+    val beads by viewModel.beads.collectAsState()
     val activeOrders by viewModel.activeOrders.collectAsState()
     val inventoryEntries by viewModel.inventoryEntries.collectAsState()
     val globalThreshold by viewModel.globalThreshold.collectAsState()
     val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
 
-    val beads = project?.beads ?: emptyList()
+    val isGridBacked = project?.rows?.isNotEmpty() == true
 
     var checkedCodes by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
@@ -266,7 +267,7 @@ fun ProjectDetailScreen(
                                 checkedCodes - bead.beadCode
                             }
                         },
-                        onDelete = { deleteTarget = bead },
+                        onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked },
                     )
                     HorizontalDivider()
                 }
@@ -369,7 +370,7 @@ private fun ProjectBeadRow(
     activeOrderStatus: OrderItemStatus?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (() -> Unit)?,
 ) {
     val progress = if (bead.targetGrams > 0.0) {
         (inventoryGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
@@ -446,12 +447,14 @@ private fun ProjectBeadRow(
                 )
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = stringResource(R.string.remove_bead),
-                    tint = MaterialTheme.colorScheme.error,
-                )
+            onDelete?.let { onDeleteAction ->
+                IconButton(onClick = onDeleteAction) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.remove_bead),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
 

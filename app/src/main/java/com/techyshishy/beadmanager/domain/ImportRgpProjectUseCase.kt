@@ -3,18 +3,15 @@ package com.techyshishy.beadmanager.domain
 import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
-import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.rgp.RgpParseException
 import com.techyshishy.beadmanager.data.rgp.parseRgp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToLong
 import java.io.IOException
 import javax.inject.Inject
 
@@ -69,42 +66,7 @@ class ImportRgpProjectUseCase @Inject constructor(
             return ImportResult.Failure.UnrecognizedCodes(unrecognized.sorted())
         }
 
-        // 4. Count beads per palette letter across all rows.
-        val beadCountByLetter = mutableMapOf<String, Int>()
-        for (row in rgpProject.rows) {
-            for (step in row.steps) {
-                beadCountByLetter[step.description] =
-                    (beadCountByLetter[step.description] ?: 0) + step.count
-            }
-        }
-
-        // 5. Build the project bead list.
-        //    Multiple palette letters may map to the same DB code (e.g. the same color used
-        //    in two different letter slots). Sum their counts so each code appears exactly once —
-        //    the rest of the app assumes codes are unique within a project's bead list.
-        val dbCodeByLetter = rgpProject.colorMapping
-            .entries
-            .filter { it.value.startsWith("DB") }
-            .associate { (letter, code) -> letter to code }
-
-        // Accumulate integer bead counts per code, then divide once and round to 2 decimal places.
-        // Dividing per-step and summing doubles produces 15+ decimal places of IEEE 754 noise.
-        val countsByCode = mutableMapOf<String, Int>()
-        for ((letter, code) in dbCodeByLetter) {
-            val count = beadCountByLetter[letter] ?: continue
-            countsByCode[code] = (countsByCode[code] ?: 0) + count
-        }
-
-        // Guard: a colorMapping with DB codes but none referenced in any step is a degenerate file.
-        if (countsByCode.isEmpty()) return ImportResult.Failure.NoDelicaCodes
-
-        val beads = countsByCode.map { (code, count) ->
-            val scaled = count.toDouble() / BEADS_PER_GRAM * 100.0
-            val grams = scaled.roundToLong() / 100.0
-            ProjectBeadEntry(beadCode = code, targetGrams = grams)
-        }
-
-        // 6. Create the project; return success with the assigned ID.
+        // 4. Create the project; return success with the assigned ID.
         if (rgpProject.name.isBlank()) return ImportResult.Failure.InvalidJson
         val projectRows = rgpProject.rows.map { row ->
             ProjectRgpRow(
@@ -117,7 +79,6 @@ class ImportRgpProjectUseCase @Inject constructor(
         val projectId = projectRepository.createProject(
             ProjectEntry(
                 name = rgpProject.name,
-                beads = beads,
                 rows = projectRows,
                 colorMapping = rgpProject.colorMapping,
                 position = rgpProject.position ?: emptyMap(),
