@@ -5,6 +5,8 @@ import android.net.Uri
 import android.util.Log
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
@@ -104,10 +106,24 @@ class ImportRgpProjectUseCase @Inject constructor(
 
         // 6. Create the project; return success with the assigned ID.
         if (rgpProject.name.isBlank()) return ImportResult.Failure.InvalidJson
-        // TODO(#12): populate rows, colorMapping, position, markedSteps, markedRows from
-        //  rgpProject so the full grid survives in Firestore for round-trip RGP export.
+        val projectRows = rgpProject.rows.map { row ->
+            ProjectRgpRow(
+                id = row.id,
+                steps = row.steps.map { step ->
+                    ProjectRgpStep(id = step.id, count = step.count, description = step.description)
+                },
+            )
+        }
         val projectId = projectRepository.createProject(
-            ProjectEntry(name = rgpProject.name, beads = beads),
+            ProjectEntry(
+                name = rgpProject.name,
+                beads = beads,
+                rows = projectRows,
+                colorMapping = rgpProject.colorMapping,
+                position = rgpProject.position ?: emptyMap(),
+                markedSteps = rgpProject.markedSteps ?: emptyMap(),
+                markedRows = rgpProject.markedRows ?: emptyMap(),
+            ),
         )
         return ImportResult.Success(projectId = projectId, name = rgpProject.name)
     }
