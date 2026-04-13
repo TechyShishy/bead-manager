@@ -1,7 +1,70 @@
 package com.techyshishy.beadmanager.data.model
 
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+
+/**
+ * Converts a 1-based index to a bijective base-26 string using the letters A–Z.
+ *
+ * The mapping is:
+ *   1 → "A", 2 → "B", …, 26 → "Z", 27 → "AA", 28 → "AB", …, 52 → "AZ", 53 → "BA", …
+ *
+ * This is the standard bijective numeral system with digits A–Z (value 1–26). Unlike
+ * zero-indexed base-26, there is no empty-string representation ("A" is 1, not 0).
+ */
+fun bijectiveKey(n: Int): String {
+    require(n >= 1) { "bijectiveKey index must be >= 1, got $n" }
+    val sb = StringBuilder()
+    var remaining = n
+    while (remaining > 0) {
+        remaining--
+        sb.append(('A' + (remaining % 26)))
+        remaining /= 26
+    }
+    return sb.reverse().toString()
+}
+
+/**
+ * Returns the next bijective key (A, B, …, Z, AA, AB, …) that is not already a key in
+ * [existingColorMapping]. Iterates indices starting at 1 until a free slot is found.
+ *
+ * This is O(n) in the size of [existingColorMapping], which is always small in practice
+ * (at most a few hundred palette entries per project).
+ */
+fun nextBijectiveKey(existingColorMapping: Map<String, String>): String {
+    var index = 1
+    while (true) {
+        val candidate = bijectiveKey(index)
+        if (candidate !in existingColorMapping) return candidate
+        index++
+    }
+}
+
+/**
+ * Synthesizes a single-row RGP grid from a flat list of (beadCode, targetGrams) pairs.
+ *
+ * Each bead code is assigned a bijective palette key (A, B, …) and gets one step whose
+ * count is [targetGrams] × [BEADS_PER_GRAM] rounded to the nearest integer. The
+ * resulting grid and color mapping round-trip through [computeBeadRequirements] with
+ * a maximum error of ±( 0.5 / BEADS_PER_GRAM ) grams per bead, which is < 0.003g.
+ *
+ * Returns a pair of (rows, colorMapping). Returns empty lists for an empty input.
+ */
+fun synthesizeFlatListGrid(
+    beads: List<Pair<String, Double>>,
+): Pair<List<ProjectRgpRow>, Map<String, String>> {
+    if (beads.isEmpty()) return emptyList<ProjectRgpRow>() to emptyMap()
+    val colorMapping = mutableMapOf<String, String>()
+    val steps = beads.mapIndexed { i, (beadCode, targetGrams) ->
+        val key = bijectiveKey(i + 1)
+        colorMapping[key] = beadCode
+        val count = (targetGrams * BEADS_PER_GRAM).roundToInt().coerceAtLeast(0)
+        ProjectRgpStep(id = i + 1, count = count, description = key)
+    }
+    return listOf(ProjectRgpRow(id = 1, steps = steps)) to colorMapping
+}
 
 /**
  * Derives bead requirements from an RGP grid.

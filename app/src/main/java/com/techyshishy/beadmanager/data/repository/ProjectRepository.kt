@@ -2,8 +2,8 @@ package com.techyshishy.beadmanager.data.repository
 
 import com.techyshishy.beadmanager.data.firestore.FirestoreOrderSource
 import com.techyshishy.beadmanager.data.firestore.FirestoreProjectSource
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.di.AppScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -36,22 +36,23 @@ class ProjectRepository @Inject constructor(
         source.updateProject(entry)
 
     /**
-     * Replaces the bead list for a project.
-     * The caller is responsible for duplicate-code enforcement before calling this.
+     * Returns all project documents that still carry a legacy flat [beads] list but have
+     * no grid ([rows] empty). Used by the one-time flat-project-to-grid migration.
+     *
+     * Each element is (projectId, List<(beadCode, targetGrams)>).
      */
-    suspend fun updateBeads(projectId: String, beads: List<ProjectBeadEntry>) {
-        source.updateBeads(projectId, beads)
-    }
+    suspend fun getFlatProjectsForMigration(): List<Pair<String, List<Pair<String, Double>>>> =
+        source.getFlatProjectsForMigration()
 
     /**
-     * Removes a bead from the project bead list by bead code.
-     * Does not check for vendor-less order items referencing this bead; the caller is
-     * responsible for confirming with the user before calling.
+     * Writes [rows] and [colorMapping] to the given project document and atomically deletes
+     * the legacy [beads] field. Used only by the one-time flat-project-to-grid migration.
      */
-    suspend fun removeBead(projectId: String, beadCode: String, existingBeads: List<ProjectBeadEntry>) {
-        val updated = existingBeads.filter { it.beadCode != beadCode }
-        source.updateBeads(projectId, updated)
-    }
+    suspend fun migrateProjectToGrid(
+        projectId: String,
+        rows: List<ProjectRgpRow>,
+        colorMapping: Map<String, String>,
+    ) = source.migrateProjectToGrid(projectId, rows, colorMapping)
 
     /**
      * Deletes the project and all its child orders.

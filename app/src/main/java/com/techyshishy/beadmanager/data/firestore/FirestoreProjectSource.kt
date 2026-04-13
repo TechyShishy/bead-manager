@@ -88,18 +88,66 @@ class FirestoreProjectSource @Inject constructor(
     }
 
     /**
-     * Replaces the [beads] array on the project document.
-     * Uses [SetOptions.merge] so [name] and [createdAt] are not touched.
+     * Reads all project documents whose [beads] array is non-empty and whose [rows] list is
+     * absent or empty. These are legacy flat-list projects that have not yet been migrated
+     * to the RGP grid format.
+     *
+     * The raw document data is accessed directly so this method remains correct even after
+     * [ProjectEntry] no longer declares a [beads] field — Firestore deserialization would
+     * silently drop unknown fields, so POJO reads cannot be used here.
+     *
+     * Returns a list of (projectId, List<(beadCode, targetGrams)>) pairs for each flat project.
      */
-    suspend fun updateBeads(projectId: String, beads: List<ProjectBeadEntry>) {
+    suspend fun getFlatProjectsForMigration(): List<Pair<String, List<Pair<String, Double>>>> {
+        val uid = auth.currentUser?.uid ?: return emptyList()
+        val snapshot = projectsRef(uid).get().await()
+        return snapshot.documents.mapNotNull { doc ->
+            // Skip documents that already have a grid.
+            val rows = doc.get("rows") as? List<*>
+            if (!rows.isNullOrEmpty()) return@mapNotNull null
+
+            @Suppress("UNCHECKED_CAST")
+            val beadsRaw = doc.get("beads") as? List<Map<String, Any>>
+            if (beadsRaw.isNullOrEmpty()) return@mapNotNull null
+
+            val beads = beadsRaw.mapNotNull { map ->
+                val code = map["beadCode"] as? String ?: return@mapNotNull null
+                val grams = (map["targetGrams"] as? Number)?.toDouble() ?: return@mapNotNull null
+                code to grams
+            }
+            if (beads.isEmpty()) return@mapNotNull null
+            doc.id to beads
+        }
+    }
+
+    /**
+     * Writes the synthesized [rows] and [colorMapping] to the project document and atomically
+     * deletes the legacy [beads] field in the same [update] call.
+     *
+     * [rows] and [colorMapping] are written as plain Firestore-compatible primitive maps rather
+     * than POJOs so that the update map can include [FieldValue.delete] for [beads] alongside them.
+     */
+    suspend fun migrateProjectToGrid(
+        projectId: String,
+        rows: List<ProjectRgpRow>,
+        colorMapping: Map<String, String>,
+    ) {
         val uid = requireUid()
+        val serializedRows: List<Map<String, Any>> = rows.map { row ->
+            mapOf(
+                "id" to row.id,
+                "steps" to row.steps.map { step ->
+                    mapOf<String, Any>("id" to step.id, "count" to step.count, "description" to step.description)
+                },
+            )
+        }
         projectsRef(uid).document(projectId)
-            .set(
-                mapOf(
-                    "beads" to beads,
-                    "lastUpdated" to FieldValue.serverTimestamp(),
-                ),
-                SetOptions.merge(),
+            .update(
+                mapOf<String, Any>(
+                    "rows" to serializedRows,
+                    "colorMapping" to colorMapping,
+                    "beads" to FieldValue.delete(),
+                )
             )
             .await()
     }

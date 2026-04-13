@@ -111,11 +111,8 @@
     <string name="add_to_project">Add to project</string>
     <string name="no_projects_hint">Create a project first</string>
     <string name="add_to_project_title">Add %1$s to project</string>
-    <string name="already_in_project_title">Already in project</string>
-    <string name="already_in_project_message">%1$s is already in \u201c%2$s\u201d (target: %3$sg). Replace with %4$sg?</string>
+    <string name="already_in_project">Already added</string>
     <string name="bead_added_to_project">Added %1$s to %2$s</string>
-    <string name="bead_updated_in_project">Updated %1$s target in %2$s</string>
-    <string name="update_target">Update target</string>
 
     <!-- RGP import -->
     <string name="import_from_rgp">Import from RGP file</string>

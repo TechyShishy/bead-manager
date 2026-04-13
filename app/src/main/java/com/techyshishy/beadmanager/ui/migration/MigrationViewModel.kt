@@ -2,9 +2,11 @@ package com.techyshishy.beadmanager.ui.migration
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.techyshishy.beadmanager.data.model.synthesizeFlatListGrid
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
+import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -23,12 +25,14 @@ class MigrationViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val inventoryRepository: InventoryRepository,
     private val orderRepository: OrderRepository,
+    private val projectRepository: ProjectRepository,
 ) : ViewModel() {
 
     init {
         viewModelScope.launch {
             runThresholdV1Migration()
             runOrderProjectIdsV1Migration()
+            runFlatProjectToGridV1Migration()
         }
     }
 
@@ -78,6 +82,36 @@ class MigrationViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Order projectIds migration failed; will retry on next launch", e)
+        }
+    }
+
+    /**
+     * Converts legacy flat-list [ProjectEntry] documents to the RGP grid format.
+     *
+     * Each project document that has a non-empty [beads] array but an empty [rows] list is
+     * upgraded: a single-row synthetic grid is written to [rows] and [colorMapping], and the
+     * [beads] field is atomically deleted from the document. Projects that already have a grid
+     * (rows non-empty) are skipped without modification.
+     *
+     * The synthesized grid round-trips through [computeBeadRequirements] with a maximum error
+     * of < 0.003g per bead — well within the tolerance of the display and ordering logic.
+     *
+     * After all documents are migrated the completion flag is set so the migration never runs
+     * again. If a failure occurs the flag is NOT set, causing a retry on the next app launch.
+     */
+    private suspend fun runFlatProjectToGridV1Migration() {
+        try {
+            val done = preferencesRepository.migrationFlatProjectToGridV1Done.first()
+            if (!done) {
+                val flatProjects = projectRepository.getFlatProjectsForMigration()
+                for ((projectId, beads) in flatProjects) {
+                    val (rows, colorMapping) = synthesizeFlatListGrid(beads)
+                    projectRepository.migrateProjectToGrid(projectId, rows, colorMapping)
+                }
+                preferencesRepository.setMigrationFlatProjectToGridV1Done()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Flat-project-to-grid migration failed; will retry on next launch", e)
         }
     }
 

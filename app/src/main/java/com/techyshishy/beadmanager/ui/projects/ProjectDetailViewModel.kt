@@ -61,22 +61,23 @@ class ProjectDetailViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
-     * Bead requirements derived from the project's RGP grid.
+     * Bead requirements derived from the project's RGP grid and colorMapping.
      *
-     * For projects that have a populated grid ([ProjectEntry.rows] non-empty), the list is
-     * computed on-demand via [computeBeadRequirements]. For flat-list projects imported before
-     * the grid feature existed ([rows] empty), this returns an empty list until those projects
-     * are migrated by Issue #16.
+     * Beads used in grid steps are returned with their gram requirements computed by
+     * [computeBeadRequirements]. Beads registered only in [ProjectEntry.colorMapping]
+     * (e.g. added via "Add to Project" without a corresponding grid step) are included
+     * at 0 g so they are visible in the project bead list.
      */
     val beads: StateFlow<List<ProjectBeadEntry>> = project
         .map { entry ->
-            when {
-                entry == null -> emptyList()
-                entry.rows.isNotEmpty() ->
-                    computeBeadRequirements(entry.rows, entry.colorMapping)
-                        .map { (code, grams) -> ProjectBeadEntry(beadCode = code, targetGrams = grams) }
-                else -> entry.beads  // legacy flat-list fallback until #16
-            }
+            if (entry == null) return@map emptyList()
+            val fromGrid = computeBeadRequirements(entry.rows, entry.colorMapping)
+                .map { (code, grams) -> ProjectBeadEntry(beadCode = code, targetGrams = grams) }
+            val fromGridCodes = fromGrid.mapTo(mutableSetOf()) { it.beadCode }
+            val colorMappingOnly = entry.colorMapping.values
+                .filter { it.startsWith("DB") && it !in fromGridCodes }
+                .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
+            fromGrid + colorMappingOnly
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -164,13 +165,17 @@ class ProjectDetailViewModel @Inject constructor(
     // ── Bead list mutations ──────────────────────────────────────────────────
 
     /**
-     * Removes a bead from the project bead list.
+     * Removes a bead from this project by stripping all palette keys that map to
+     * [beadCode] from [ProjectEntry.colorMapping].
      */
     fun removeBead(beadCode: String) {
-        val projectId = _projectId.value.takeIf { it.isNotBlank() } ?: return
-        val currentBeads = project.value?.beads ?: return
+        val currentProject = project.value ?: return
         viewModelScope.launch {
-            projectRepository.removeBead(projectId, beadCode, currentBeads)
+            projectRepository.updateProject(
+                currentProject.copy(
+                    colorMapping = currentProject.colorMapping.filterValues { it != beadCode },
+                ),
+            )
         }
     }
 

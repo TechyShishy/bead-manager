@@ -75,7 +75,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
@@ -391,14 +390,11 @@ fun BeadDetailPane(
         AddToProjectSheet(
             beadCode = bead.code,
             projects = projects,
-            onConfirm = { projectId, targetGrams, isUpdate ->
+            onConfirm = { projectId ->
                 val projectName = projects.find { it.projectId == projectId }?.name ?: projectId
-                val message = if (isUpdate)
-                    context.getString(R.string.bead_updated_in_project, bead.code, projectName)
-                else
-                    context.getString(R.string.bead_added_to_project, bead.code, projectName)
+                val message = context.getString(R.string.bead_added_to_project, bead.code, projectName)
                 scope.launch {
-                    viewModel.addToProject(projectId, targetGrams)
+                    viewModel.addToProject(projectId)
                     showAddToProjectSheet = false
                     onShowSnackbar(message)
                 }
@@ -413,33 +409,18 @@ fun BeadDetailPane(
 private fun AddToProjectSheet(
     beadCode: String,
     projects: List<ProjectEntry>,
-    onConfirm: (projectId: String, targetGrams: Double, isUpdate: Boolean) -> Unit,
+    onConfirm: (projectId: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedProjectId by remember { mutableStateOf<String?>(null) }
-    var targetGramsInput by remember { mutableStateOf("") }
-    var showReplaceDialog by remember { mutableStateOf(false) }
-    // Captured at confirm-tap time so the AlertDialog references stable values.
-    var replaceProjectId by remember { mutableStateOf("") }
-    var replaceGrams by remember { mutableStateOf(0.0) }
 
-    val existingEntry: ProjectBeadEntry? = remember(selectedProjectId, projects) {
-        projects.find { it.projectId == selectedProjectId }
-            ?.beads?.find { it.beadCode == beadCode }
+    val isAlreadyInSelected = remember(selectedProjectId, projects) {
+        selectedProjectId?.let { id ->
+            projects.find { it.projectId == id }?.colorMapping?.containsValue(beadCode)
+        } ?: false
     }
-
-    // Pre-fill target grams when the selected project already has this bead.
-    LaunchedEffect(selectedProjectId) {
-        targetGramsInput = projects
-            .find { it.projectId == selectedProjectId }
-            ?.beads?.find { it.beadCode == beadCode }
-            ?.let { BigDecimal.valueOf(it.targetGrams).stripTrailingZeros().toPlainString() }
-            ?: ""
-    }
-
-    val parsedGrams = targetGramsInput.toDoubleOrNull()?.takeIf { it > 0.0 }
-    val canConfirm = selectedProjectId != null && parsedGrams != null
+    val canConfirm = selectedProjectId != null && !isAlreadyInSelected
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -459,7 +440,7 @@ private fun AddToProjectSheet(
             )
             LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
                 items(projects, key = { it.projectId }) { project ->
-                    val existingInThis = project.beads.find { it.beadCode == beadCode }
+                    val isAlreadyIn = project.colorMapping.containsValue(beadCode)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -477,9 +458,9 @@ private fun AddToProjectSheet(
                             onClick = null,
                         )
                         Text(project.name, modifier = Modifier.weight(1f))
-                        if (existingInThis != null) {
+                        if (isAlreadyIn) {
                             Text(
-                                text = "${BigDecimal.valueOf(existingInThis.targetGrams).stripTrailingZeros().toPlainString()}g",
+                                text = stringResource(R.string.already_in_project),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -487,75 +468,13 @@ private fun AddToProjectSheet(
                     }
                 }
             }
-            OutlinedTextField(
-                value = targetGramsInput,
-                onValueChange = { targetGramsInput = it },
-                label = { Text(stringResource(R.string.target_grams)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Done,
-                ),
-                suffix = { Text("g") },
-                modifier = Modifier.fillMaxWidth(),
-            )
             Button(
-                onClick = {
-                    if (existingEntry != null) {
-                        // Capture stable values before showing the confirmation dialog.
-                        replaceProjectId = selectedProjectId!!
-                        replaceGrams = parsedGrams!!
-                        showReplaceDialog = true
-                    } else {
-                        onConfirm(selectedProjectId!!, parsedGrams!!, false)
-                    }
-                },
+                onClick = { onConfirm(selectedProjectId!!) },
                 enabled = canConfirm,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
-                    stringResource(
-                        if (existingEntry != null) R.string.update_target else R.string.add_to_project,
-                    ),
-                )
+                Text(stringResource(R.string.add_to_project))
             }
-        }
-    }
-
-    if (showReplaceDialog) {
-        val replaceProject = projects.find { it.projectId == replaceProjectId }
-        val existingGrams = projects
-            .find { it.projectId == replaceProjectId }
-            ?.beads?.find { it.beadCode == beadCode }?.targetGrams ?: 0.0
-        if (replaceProject != null) {
-            AlertDialog(
-                onDismissRequest = { showReplaceDialog = false },
-                title = { Text(stringResource(R.string.already_in_project_title)) },
-                text = {
-                    Text(
-                        stringResource(
-                            R.string.already_in_project_message,
-                            beadCode,
-                            replaceProject.name,
-                            BigDecimal.valueOf(existingGrams).stripTrailingZeros().toPlainString(),
-                            BigDecimal.valueOf(replaceGrams).stripTrailingZeros().toPlainString(),
-                        ),
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showReplaceDialog = false
-                        onConfirm(replaceProjectId, replaceGrams, true)
-                    }) {
-                        Text(stringResource(R.string.update_target))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showReplaceDialog = false }) {
-                        Text(stringResource(android.R.string.cancel))
-                    }
-                },
-            )
         }
     }
 }

@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.model.nextBijectiveKey
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
@@ -116,17 +116,21 @@ class BeadDetailViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * Adds the current bead to [projectId] with [targetGrams] as the target quantity.
-     * If the bead is already in the project, replaces its existing target.
+     * Registers the current bead in [projectId]'s [colorMapping] by assigning it a new
+     * bijective palette key. This makes the bead visible in the project bead list at 0g
+     * target until the project's RGP grid is updated to include steps for this palette key.
+     *
+     * If the bead is already registered (its DB code appears in [colorMapping] values) this
+     * is a no-op. No grid row or step is created; grams come only from grid step counts.
+     *
      * No-ops silently if the bead code is blank (i.e. [initialize] has not been called).
      */
-    suspend fun addToProject(projectId: String, targetGrams: Double) {
+    suspend fun addToProject(projectId: String) {
         val code = beadCode.value.takeIf { it.isNotBlank() } ?: return
-        val existingBeads = projects.value
-            .find { it.projectId == projectId }?.beads ?: emptyList()
-        val updated = existingBeads.filter { it.beadCode != code } +
-            ProjectBeadEntry(code, targetGrams)
-        projectRepository.updateBeads(projectId, updated)
+        val project = projects.value.find { it.projectId == projectId } ?: return
+        if (project.colorMapping.containsValue(code)) return
+        val newKey = nextBijectiveKey(project.colorMapping)
+        projectRepository.updateProject(project.copy(colorMapping = project.colorMapping + (newKey to code)))
     }
 }
 

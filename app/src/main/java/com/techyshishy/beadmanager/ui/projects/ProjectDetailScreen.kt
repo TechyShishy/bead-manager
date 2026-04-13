@@ -313,7 +313,7 @@ fun ProjectDetailScreen(
                                 checkedCodes - bead.beadCode
                             }
                         },
-                        onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked },
+                        onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked && bead.targetGrams > 0.0 },
                     )
                     HorizontalDivider()
                 }
