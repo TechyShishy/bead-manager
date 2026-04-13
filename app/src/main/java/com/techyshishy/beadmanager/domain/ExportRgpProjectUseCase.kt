@@ -42,13 +42,14 @@ class ExportRgpProjectUseCase @Inject constructor(
         val project = projectRepository.projectStream(projectId).first()
             ?: return ExportResult.Failure.NotFound
 
-        if (project.rows.isEmpty()) return ExportResult.Failure.NoGrid
+        val rows = projectRepository.readProjectGrid(projectId)
+        if (rows.isEmpty()) return ExportResult.Failure.NoGrid
 
         return try {
             withContext(Dispatchers.IO) {
                 val stream = contentResolver.openOutputStream(uri)
                     ?: throw IOException("Content resolver returned null stream for $uri")
-                stream.use { writeRgp(it, project) }
+                stream.use { writeRgp(it, project, rows) }
                 val displayName = contentResolver
                     .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                     ?.use { cursor ->

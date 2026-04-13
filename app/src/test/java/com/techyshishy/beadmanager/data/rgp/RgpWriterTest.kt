@@ -14,20 +14,19 @@ class RgpWriterTest {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private fun writeToBytes(project: ProjectEntry): ByteArray {
+    private fun writeToBytes(project: ProjectEntry, rows: List<ProjectRgpRow> = emptyList()): ByteArray {
         val out = ByteArrayOutputStream()
-        writeRgp(out, project)
+        writeRgp(out, project, rows)
         return out.toByteArray()
     }
 
-    private fun ProjectEntry.writeThenParse(): RgpProject {
-        return parseRgp(ByteArrayInputStream(writeToBytes(this)))
+    private fun writeThenParse(project: ProjectEntry, rows: List<ProjectRgpRow> = emptyList()): RgpProject {
+        return parseRgp(ByteArrayInputStream(writeToBytes(project, rows)))
     }
 
     private fun projectEntry(
         projectId: String = "test-id",
         name: String = "Test",
-        rows: List<ProjectRgpRow> = emptyList(),
         colorMapping: Map<String, String> = emptyMap(),
         position: Map<String, Int> = emptyMap(),
         markedSteps: Map<String, Map<String, Int>> = emptyMap(),
@@ -35,7 +34,6 @@ class RgpWriterTest {
     ) = ProjectEntry(
         projectId = projectId,
         name = name,
-        rows = rows,
         colorMapping = colorMapping,
         position = position,
         markedSteps = markedSteps,
@@ -58,22 +56,22 @@ class RgpWriterTest {
     fun `round-trip preserves name`() {
         val project = projectEntry(
             name = "My Pattern",
-            rows = makeRows(1 to listOf(Triple(1, 5, "A"))),
             colorMapping = mapOf("A" to "DB0001"),
         )
-        assertEquals("My Pattern", project.writeThenParse().name)
+        val rows = makeRows(1 to listOf(Triple(1, 5, "A")))
+        assertEquals("My Pattern", writeThenParse(project, rows).name)
     }
 
     @Test
     fun `round-trip preserves rows and colorMapping`() {
         val project = projectEntry(
-            rows = makeRows(
-                1 to listOf(Triple(1, 3, "A"), Triple(2, 2, "B")),
-                2 to listOf(Triple(3, 4, "A")),
-            ),
             colorMapping = mapOf("A" to "DB0001", "B" to "DB0002"),
         )
-        val parsed = project.writeThenParse()
+        val rows = makeRows(
+            1 to listOf(Triple(1, 3, "A"), Triple(2, 2, "B")),
+            2 to listOf(Triple(3, 4, "A")),
+        )
+        val parsed = writeThenParse(project, rows)
 
         assertEquals(mapOf("A" to "DB0001", "B" to "DB0002"), parsed.colorMapping)
         assertEquals(2, parsed.rows.size)
@@ -93,13 +91,13 @@ class RgpWriterTest {
     @Test
     fun `round-trip preserves non-empty position, markedSteps, markedRows`() {
         val project = projectEntry(
-            rows = makeRows(1 to listOf(Triple(1, 1, "A"))),
             colorMapping = mapOf("A" to "DB0001"),
             position = mapOf("row" to 0, "step" to 1),
             markedSteps = mapOf("1" to mapOf("1" to 2)),
             markedRows = mapOf("1" to 3),
         )
-        val parsed = project.writeThenParse()
+        val rows = makeRows(1 to listOf(Triple(1, 1, "A")))
+        val parsed = writeThenParse(project, rows)
 
         assertEquals(mapOf("row" to 0, "step" to 1), parsed.position)
         assertEquals(mapOf("1" to mapOf("1" to 2)), parsed.markedSteps)
@@ -111,11 +109,11 @@ class RgpWriterTest {
     @Test
     fun `empty position, markedSteps, markedRows are absent from JSON output`() {
         val project = projectEntry(
-            rows = makeRows(1 to listOf(Triple(1, 1, "A"))),
             colorMapping = mapOf("A" to "DB0001"),
         // position, markedSteps, markedRows left as empty defaults
         )
-        val parsed = project.writeThenParse()
+        val rows = makeRows(1 to listOf(Triple(1, 1, "A")))
+        val parsed = writeThenParse(project, rows)
 
         // parseRgp maps absent optional fields to null
         assertTrue("position should be absent/null when empty", parsed.position == null)
@@ -142,11 +140,11 @@ class RgpWriterTest {
     fun `djb2 hash written to file is deterministic across two writes`() {
         val project = projectEntry(
             projectId = "stable-project-id",
-            rows = makeRows(1 to listOf(Triple(1, 1, "A"))),
             colorMapping = mapOf("A" to "DB0001"),
         )
-        val id1 = project.writeThenParse().id
-        val id2 = project.writeThenParse().id
+        val rows = makeRows(1 to listOf(Triple(1, 1, "A")))
+        val id1 = writeThenParse(project, rows).id
+        val id2 = writeThenParse(project, rows).id
         assertEquals(id1, id2)
     }
 }

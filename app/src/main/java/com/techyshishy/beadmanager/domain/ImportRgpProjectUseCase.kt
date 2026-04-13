@@ -2,7 +2,6 @@ package com.techyshishy.beadmanager.domain
 
 import android.content.ContentResolver
 import android.net.Uri
-import android.util.Log
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
@@ -24,6 +23,8 @@ sealed class ImportResult {
         data object NoDelicaCodes : Failure()
         /** One or more DB codes in colorMapping were not found in the local catalog. */
         data class UnrecognizedCodes(val codes: List<String>) : Failure()
+        /** Project document was created but the grid write failed. The partial project was deleted. */
+        data object WriteError : Failure()
     }
 }
 
@@ -60,9 +61,6 @@ class ImportRgpProjectUseCase @Inject constructor(
         val catalogMap = catalogRepository.allBeadsAsMap()
         val unrecognized = dbCodes.filter { it !in catalogMap }
         if (unrecognized.isNotEmpty()) {
-            unrecognized.forEach { code ->
-                Log.e("RgpImport", "Unrecognized bead code in RGP file: $code")
-            }
             return ImportResult.Failure.UnrecognizedCodes(unrecognized.sorted())
         }
 
@@ -79,13 +77,21 @@ class ImportRgpProjectUseCase @Inject constructor(
         val projectId = projectRepository.createProject(
             ProjectEntry(
                 name = rgpProject.name,
-                rows = projectRows,
                 colorMapping = rgpProject.colorMapping,
                 position = rgpProject.position ?: emptyMap(),
                 markedSteps = rgpProject.markedSteps ?: emptyMap(),
                 markedRows = rgpProject.markedRows ?: emptyMap(),
             ),
         )
+        // Write the grid to the `grid/` subcollection. Rows are chunked so each document
+        // stays well below Firestore's 1 MB limit and the local SQLite CursorWindow limit.
+        // If this write fails, clean up the orphaned project document so the user can retry.
+        try {
+            projectRepository.writeProjectGrid(projectId, projectRows)
+        } catch (e: Exception) {
+            runCatching { projectRepository.deleteProject(projectId) }
+            return ImportResult.Failure.WriteError
+        }
         return ImportResult.Success(projectId = projectId, name = rgpProject.name)
     }
 }

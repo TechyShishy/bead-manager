@@ -7,6 +7,7 @@ import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -26,21 +27,25 @@ class ExportRgpProjectUseCaseTest {
     private fun minimalProject(projectId: String = "proj-abc", name: String = "Foo") = ProjectEntry(
         projectId = projectId,
         name = name,
-        rows = listOf(
-            ProjectRgpRow(
-                id = 1,
-                steps = listOf(ProjectRgpStep(id = 1, count = 5, description = "A")),
-            )
-        ),
+        rowCount = 1,
         colorMapping = mapOf("A" to "DB0001"),
+    )
+
+    private val minimalRows = listOf(
+        ProjectRgpRow(
+            id = 1,
+            steps = listOf(ProjectRgpStep(id = 1, count = 5, description = "A")),
+        )
     )
 
     private fun buildUseCase(
         project: ProjectEntry?,
+        rows: List<ProjectRgpRow> = minimalRows,
         outputStream: java.io.OutputStream? = ByteArrayOutputStream(),
     ): ExportRgpProjectUseCase {
         val projectRepository: ProjectRepository = mockk {
             every { projectStream(project?.projectId ?: "missing-id") } returns flowOf(project)
+            coEvery { readProjectGrid(project?.projectId ?: "missing-id") } returns rows
         }
         val contentResolver: ContentResolver = mockk {
             every { openOutputStream(uri) } returns outputStream
@@ -69,10 +74,11 @@ class ExportRgpProjectUseCaseTest {
     }
 
     @Test
-    fun `returns NoGrid when project has empty rows`() = runTest {
-        val flatProject = ProjectEntry(projectId = "flat-id", name = "Flat", rows = emptyList())
+    fun `returns NoGrid when readProjectGrid returns empty list`() = runTest {
+        val flatProject = ProjectEntry(projectId = "flat-id", name = "Flat", rowCount = 0)
         val projectRepository: ProjectRepository = mockk {
             every { projectStream("flat-id") } returns flowOf(flatProject)
+            coEvery { readProjectGrid("flat-id") } returns emptyList()
         }
         val useCase = ExportRgpProjectUseCase(
             contentResolver = mockk(),
@@ -107,6 +113,7 @@ class ExportRgpProjectUseCaseTest {
         }
         val projectRepository: ProjectRepository = mockk {
             every { projectStream(project.projectId) } returns flowOf(project)
+            coEvery { readProjectGrid(project.projectId) } returns minimalRows
         }
         val useCase = ExportRgpProjectUseCase(
             contentResolver = contentResolver,

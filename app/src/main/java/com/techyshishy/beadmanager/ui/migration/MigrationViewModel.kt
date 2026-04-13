@@ -33,6 +33,7 @@ class MigrationViewModel @Inject constructor(
             runThresholdV1Migration()
             runOrderProjectIdsV1Migration()
             runFlatProjectToGridV1Migration()
+            runInlineRowsToSubcollectionV1Migration()
         }
     }
 
@@ -112,6 +113,38 @@ class MigrationViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Flat-project-to-grid migration failed; will retry on next launch", e)
+        }
+    }
+
+    /**
+     * Moves inline `rows` arrays from legacy project documents into the new `grid/`
+     * subcollection format.
+     *
+     * Old code stored the RGP grid as a `rows` array directly in the project document. For large
+     * patterns this creates a Firestore mutation overlay in the local SQLite cache that exceeds
+     * the 2 MB CursorWindow limit, causing a fatal [android.database.sqlite.SQLiteBlobTooBigException]
+     * on startup. This migration reads all project documents from the server (bypassing the broken
+     * local cache), moves any inline rows to the subcollection managed by [ProjectRepository], and
+     * removes the `rows` field from the main document.
+     *
+     * After this migration runs, [ProjectEntry] documents hold a `rowCount` field and have no
+     * `rows` array, so the local overlay for each main document is always small.
+     */
+    private suspend fun runInlineRowsToSubcollectionV1Migration() {
+        try {
+            val done = preferencesRepository.migrationInlineRowsV1Done.first()
+            if (!done) {
+                val projectsWithInlineRows = projectRepository.getProjectsWithInlineRowsFromServer()
+                for ((projectId, rows, colorMapping) in projectsWithInlineRows) {
+                    // migrateProjectToGrid writes the grid to the subcollection, sets rowCount in
+                    // the main doc, updates colorMapping, and removes the inline `rows` field,
+                    // unblocking the SQLiteBlobTooBigException crash for this project.
+                    projectRepository.migrateProjectToGrid(projectId, rows, colorMapping)
+                }
+                preferencesRepository.setMigrationInlineRowsV1Done()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Inline-rows migration failed; will retry on next launch", e)
         }
     }
 

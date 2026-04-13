@@ -9,6 +9,7 @@ import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.model.computeBeadRequirements
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
@@ -25,7 +26,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -61,6 +64,18 @@ class ProjectDetailViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
+     * Rows from the `grid/` subcollection for the current project. Loaded once per projectId
+     * change via a one-shot suspend read. Rows are the pattern definition and do not change
+     * after import, so a reactive Flow is not needed.
+     */
+    val projectRows: StateFlow<List<ProjectRgpRow>> = _projectId
+        .flatMapLatest { id ->
+            if (id.isBlank()) flowOf(emptyList())
+            else flow { emit(projectRepository.readProjectGrid(id)) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
      * Bead requirements derived from the project's RGP grid and colorMapping.
      *
      * Beads used in grid steps are returned with their gram requirements computed by
@@ -68,18 +83,16 @@ class ProjectDetailViewModel @Inject constructor(
      * (e.g. added via "Add to Project" without a corresponding grid step) are included
      * at 0 g so they are visible in the project bead list.
      */
-    val beads: StateFlow<List<ProjectBeadEntry>> = project
-        .map { entry ->
-            if (entry == null) return@map emptyList()
-            val fromGrid = computeBeadRequirements(entry.rows, entry.colorMapping)
-                .map { (code, grams) -> ProjectBeadEntry(beadCode = code, targetGrams = grams) }
-            val fromGridCodes = fromGrid.mapTo(mutableSetOf()) { it.beadCode }
-            val colorMappingOnly = entry.colorMapping.values
-                .filter { it.startsWith("DB") && it !in fromGridCodes }
-                .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
-            fromGrid + colorMappingOnly
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val beads: StateFlow<List<ProjectBeadEntry>> = combine(project, projectRows) { entry, rows ->
+        if (entry == null) return@combine emptyList()
+        val fromGrid = computeBeadRequirements(rows, entry.colorMapping)
+            .map { (code, grams) -> ProjectBeadEntry(beadCode = code, targetGrams = grams) }
+        val fromGridCodes = fromGrid.mapTo(mutableSetOf()) { it.beadCode }
+        val colorMappingOnly = entry.colorMapping.values
+            .filter { it.startsWith("DB") && it !in fromGridCodes }
+            .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
+        fromGrid + colorMappingOnly
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * All orders that currently list this project in their [projectIds] array.

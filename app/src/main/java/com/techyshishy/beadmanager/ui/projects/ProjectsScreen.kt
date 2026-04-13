@@ -187,6 +187,8 @@ private fun ImportErrorDialog(
             }
             stringResource(R.string.import_failed_unrecognized_codes, codeList)
         }
+        is ImportResult.Failure.WriteError ->
+            stringResource(R.string.import_failed_write_error)
     }
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -121,6 +121,7 @@
     <string name="import_failed_invalid_json">RGP file is corrupt or unreadable.</string>
     <string name="import_failed_no_delica_codes">This project uses custom colors and does not contain any Miyuki Delica codes.</string>
     <string name="import_failed_unrecognized_codes">The following color codes were not found in the Delica catalog: %1$s</string>
+    <string name="import_failed_write_error">Project was created but the bead grid could not be saved. Please try again.</string>
 
     <!-- RGP export -->
     <string name="export_rgp">Export as RGP</string>

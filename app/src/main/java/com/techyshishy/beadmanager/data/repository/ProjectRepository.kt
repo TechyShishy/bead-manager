@@ -36,6 +36,27 @@ class ProjectRepository @Inject constructor(
         source.updateProject(entry)
 
     /**
+     * Writes [rows] as chunked documents into the `grid/` subcollection of [projectId].
+     * Also atomically updates [ProjectEntry.rowCount] in the main project document.
+     */
+    suspend fun writeProjectGrid(projectId: String, rows: List<ProjectRgpRow>) =
+        source.writeProjectGrid(projectId, rows)
+
+    /**
+     * Returns the full row list for [projectId] by reading all grid subcollection chunks.
+     */
+    suspend fun readProjectGrid(projectId: String): List<ProjectRgpRow> =
+        source.readProjectGrid(projectId)
+
+    /**
+     * Returns all projects that still carry inline [rows] data in their main document.
+     * Uses [com.google.firebase.firestore.Source.SERVER] to bypass the local SQLite cache.
+     * Each element is `(projectId, rows, colorMapping)`.
+     */
+    suspend fun getProjectsWithInlineRowsFromServer(): List<Triple<String, List<ProjectRgpRow>, Map<String, String>>> =
+        source.getProjectsWithInlineRowsFromServer()
+
+    /**
      * Returns all project documents that still carry a legacy flat [beads] list but have
      * no grid ([rows] empty). Used by the one-time flat-project-to-grid migration.
      *

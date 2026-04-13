@@ -1,6 +1,7 @@
 package com.techyshishy.beadmanager.data.rgp
 
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import kotlinx.serialization.json.Json
 import java.io.OutputStream
 import java.util.zip.GZIPOutputStream
@@ -33,20 +34,20 @@ internal fun djb2(s: String): Int {
  * - `position`, `markedSteps`, and `markedRows` are omitted when empty (rowguide treats
  *   absent and empty identically; pxlpxl files never include them)
  *
+ * [rows] is passed separately from [project] because the grid is stored in a Firestore
+ * subcollection rather than inline in [ProjectEntry]. Passing an empty [rows] list produces
+ * a file with an empty `rows` array; guard against this at the call site via
+ * [ExportRgpProjectUseCase].
+ *
  * [stream] is wrapped in a [GZIPOutputStream] internally. The gzip trailer is written
  * via [GZIPOutputStream.finish] before this function returns, but [stream] itself is
  * **not closed** — the caller retains ownership and must close it (e.g., via `use`).
- *
- * The [ProjectEntry] must have a non-empty [ProjectEntry.rows] list — writing a flat-list
- * project without a grid produces a file with an empty `rows` array, which rowguide will
- * accept but display as a blank pattern. Guard against this at the call site via
- * [ExportRgpProjectUseCase].
  */
-fun writeRgp(stream: OutputStream, project: ProjectEntry) {
+fun writeRgp(stream: OutputStream, project: ProjectEntry, rows: List<ProjectRgpRow>) {
     val rgpProject = RgpProject(
         id = djb2(project.projectId),
         name = project.name,
-        rows = project.rows.map { row ->
+        rows = rows.map { row ->
             RgpRow(
                 id = row.id,
                 steps = row.steps.map { step ->

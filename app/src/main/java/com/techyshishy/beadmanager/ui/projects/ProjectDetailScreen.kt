@@ -116,7 +116,7 @@ fun ProjectDetailScreen(
     val activeOrderStatus by viewModel.activeOrderStatus.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
 
-    val isGridBacked = project?.rows?.isNotEmpty() == true
+    val isGridBacked = project?.rowCount?.let { it > 0 } == true
 
     var checkedCodes by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }

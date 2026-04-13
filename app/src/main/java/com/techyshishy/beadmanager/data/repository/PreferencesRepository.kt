@@ -30,6 +30,8 @@ class PreferencesRepository @Inject constructor(
             booleanPreferencesKey("buy_up_enabled")
         private val KEY_MIGRATION_FLAT_PROJECT_TO_GRID_V1 =
             booleanPreferencesKey("migration_flat_project_to_grid_v1_done")
+        private val KEY_MIGRATION_INLINE_ROWS_V1 =
+            booleanPreferencesKey("migration_inline_rows_v1_done")
         const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
         val DEFAULT_VENDOR_PRIORITY_ORDER: List<String> = listOf("fmg", "ac")
         const val DEFAULT_BUY_UP_ENABLED = true
@@ -89,5 +91,13 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setMigrationFlatProjectToGridV1Done() {
         dataStore.edit { prefs -> prefs[KEY_MIGRATION_FLAT_PROJECT_TO_GRID_V1] = true }
+    }
+
+    val migrationInlineRowsV1Done: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_MIGRATION_INLINE_ROWS_V1] ?: false
+    }
+
+    suspend fun setMigrationInlineRowsV1Done() {
+        dataStore.edit { prefs -> prefs[KEY_MIGRATION_INLINE_ROWS_V1] = true }
     }
 }
