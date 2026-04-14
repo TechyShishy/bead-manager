@@ -2,7 +2,22 @@ package com.techyshishy.beadmanager.ui.adaptive
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
@@ -211,26 +226,62 @@ fun AdaptiveScaffold() {
                         // to the correct project.
                         val projectDetailVm: ProjectDetailViewModel =
                             hiltViewModel(key = "project_detail_$ordersProjectId")
-                        // TODO: CatalogScreen has no visual indication it is in picker mode
-                        //  (no "Adding bead to: <project>" banner, no cancel button, no
-                        //  contextual TopAppBar). The user's only affordance is the system
-                        //  back gesture. If this causes UX confusion, wrap CatalogScreen in
-                        //  a composable that adds the missing context. The ViewModel
-                        //  architecture (shared VM key, addBead callback) does not need to
-                        //  change — only the presentation layer.
-                        CatalogScreen(
-                            viewModel = catalogViewModel,
-                            onBeadSelected = { code ->
-                                val swapTarget = projectsCatalogSwapTargetCode
-                                if (swapTarget != null) {
-                                    projectDetailVm.swapBead(swapTarget, code)
-                                } else {
-                                    projectDetailVm.addBead(code)
+                        val pickerProject by projectDetailVm.project.collectAsState()
+                        val projectName = pickerProject?.name.orEmpty()
+                        val isSwap = projectsCatalogSwapTargetCode != null
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .statusBarsPadding()
+                                        .padding(horizontal = 4.dp),
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            projectsCatalogPickerMode = false
+                                            projectsCatalogSwapTargetCode = null
+                                        },
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.picker_cancel),
+                                        )
+                                    }
+                                    Text(
+                                        text = if (isSwap) {
+                                            stringResource(R.string.picker_swap_bead_hint, projectName)
+                                        } else {
+                                            stringResource(R.string.picker_add_bead_hint, projectName)
+                                        },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(start = 4.dp),
+                                    )
                                 }
-                                projectsCatalogPickerMode = false
-                                projectsCatalogSwapTargetCode = null
-                            },
-                        )
+                            }
+                            Box(modifier = Modifier.consumeWindowInsets(WindowInsets.statusBars)) {
+                                CatalogScreen(
+                                    viewModel = catalogViewModel,
+                                    onBeadSelected = { code ->
+                                        val swapTarget = projectsCatalogSwapTargetCode
+                                        if (swapTarget != null) {
+                                            projectDetailVm.swapBead(swapTarget, code)
+                                        } else {
+                                            projectDetailVm.addBead(code)
+                                        }
+                                        projectsCatalogPickerMode = false
+                                        projectsCatalogSwapTargetCode = null
+                                    },
+                                )
+                            }
+                        }
                     }
                     ordersAddToOrderCodes != null && ordersProjectId != null -> {
                         // Same key as the ProjectDetailScreen branch so that both branches
