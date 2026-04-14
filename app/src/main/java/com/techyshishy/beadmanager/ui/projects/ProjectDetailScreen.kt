@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -108,6 +109,7 @@ fun ProjectDetailScreen(
     onNavigateBack: () -> Unit,
     onAddToOrder: (selectedCodes: Set<String>) -> Unit,
     onAddBeadFromCatalog: () -> Unit,
+    onReplaceBeadFromCatalog: (oldCode: String) -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
@@ -334,6 +336,7 @@ fun ProjectDetailScreen(
                         effectiveDeficit = effectiveDeficit,
                         isThresholdOnly = isThresholdOnly,
                         activeOrderStatus = activeOrderStatus[bead.beadCode],
+                        onReplace = { onReplaceBeadFromCatalog(bead.beadCode) },
                         onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked && bead.targetGrams > 0.0 },
                     )
                     HorizontalDivider()
@@ -448,6 +451,7 @@ private fun ProjectBeadRow(
     effectiveDeficit: Double,
     isThresholdOnly: Boolean,
     activeOrderStatus: OrderItemStatus?,
+    onReplace: () -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val progress = if (bead.targetGrams > 0.0) {
@@ -517,6 +521,12 @@ private fun ProjectBeadRow(
                 )
             }
 
+            IconButton(onClick = onReplace) {
+                Icon(
+                    Icons.Filled.SwapHoriz,
+                    contentDescription = stringResource(R.string.replace_bead_from_catalog),
+                )
+            }
             onDelete?.let { onDeleteAction ->
                 IconButton(onClick = onDeleteAction) {
                     Icon(

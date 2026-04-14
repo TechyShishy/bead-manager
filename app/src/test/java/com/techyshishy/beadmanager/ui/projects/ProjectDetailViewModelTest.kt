@@ -361,4 +361,221 @@ class ProjectDetailViewModelTest {
 
         coVerify(exactly = 0) { projectRepository.deleteColorMappingEntries(any(), any()) }
     }
+
+    @Test
+    fun `swapBead replaces all colorMapping entries matching old code`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0168", "B" to "DB0168", "C" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.swapBead("DB0168", "DB0123")
+        advanceUntilIdle()
+
+        coVerify {
+            projectRepository.updateProject(
+                project.copy(colorMapping = mapOf("A" to "DB0123", "B" to "DB0123", "C" to "DB0001"))
+            )
+        }
+    }
+
+    @Test
+    fun `swapBead where oldCode equals newCode does not call updateProject`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0168"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.swapBead("DB0168", "DB0168")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `swapBead with single entry replaces correctly`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("DB0001" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.swapBead("DB0001", "DB0999")
+        advanceUntilIdle()
+
+        coVerify {
+            projectRepository.updateProject(
+                project.copy(colorMapping = mapOf("DB0001" to "DB0999"))
+            )
+        }
+    }
+
+    @Test
+    fun `swapBead with oldCode absent from colorMapping does not call updateProject`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0168"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.swapBead("DB9999", "DB0001")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `swapBead before project loads is a no-op`() = runTest {
+        val projectRepository = mockk<ProjectRepository>(relaxed = true)
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        // Do not call initialize — project.value remains null.
+
+        vm.swapBead("DB0001", "DB0999")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
 }

@@ -96,6 +96,7 @@ class ProjectDetailViewModel @Inject constructor(
         val fromGridCodes = fromGrid.mapTo(mutableSetOf()) { it.beadCode }
         val colorMappingOnly = entry.colorMapping.values
             .filter { it.startsWith("DB") && it !in fromGridCodes }
+            .distinct()
             .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
         fromGrid + colorMappingOnly
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -223,6 +224,23 @@ class ProjectDetailViewModel @Inject constructor(
                     colorMapping = currentProject.colorMapping + (beadCode to beadCode),
                 ),
             )
+        }
+    }
+
+    /**
+     * Replaces all [ProjectEntry.colorMapping] entries whose value is [oldCode] with [newCode].
+     * A no-op when [oldCode] == [newCode] or when [oldCode] is not present in the mapping.
+     * Writes via [ProjectRepository.updateProject]; does not emit any event on completion.
+     */
+    fun swapBead(oldCode: String, newCode: String) {
+        if (oldCode == newCode) return
+        val currentProject = project.value ?: return
+        val updated = currentProject.colorMapping.mapValues { (_, v) ->
+            if (v == oldCode) newCode else v
+        }
+        if (updated == currentProject.colorMapping) return
+        viewModelScope.launch {
+            projectRepository.updateProject(currentProject.copy(colorMapping = updated))
         }
     }
 

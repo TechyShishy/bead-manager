@@ -80,6 +80,8 @@ fun AdaptiveScaffold() {
     var ordersAddToOrderCodes by rememberSaveable { mutableStateOf<Set<String>?>(null) }
     // True while the catalog picker is open for adding a bead to the current project.
     var projectsCatalogPickerMode by rememberSaveable { mutableStateOf(false) }
+    // Non-null while the catalog picker is open for replacing a bead; holds the old bead code.
+    var projectsCatalogSwapTargetCode by rememberSaveable { mutableStateOf<String?>(null) }
 
     // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -195,7 +197,10 @@ fun AdaptiveScaffold() {
             AppTab.PROJECTS -> {
                 BackHandler(ordersProjectId != null) {
                     when {
-                        projectsCatalogPickerMode -> projectsCatalogPickerMode = false
+                        projectsCatalogPickerMode -> {
+                            projectsCatalogPickerMode = false
+                            projectsCatalogSwapTargetCode = null
+                        }
                         ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
                         else -> ordersProjectId = null
                     }
@@ -216,8 +221,14 @@ fun AdaptiveScaffold() {
                         CatalogScreen(
                             viewModel = catalogViewModel,
                             onBeadSelected = { code ->
-                                projectDetailVm.addBead(code)
+                                val swapTarget = projectsCatalogSwapTargetCode
+                                if (swapTarget != null) {
+                                    projectDetailVm.swapBead(swapTarget, code)
+                                } else {
+                                    projectDetailVm.addBead(code)
+                                }
                                 projectsCatalogPickerMode = false
+                                projectsCatalogSwapTargetCode = null
                             },
                         )
                     }
@@ -258,6 +269,10 @@ fun AdaptiveScaffold() {
                             },
                             onAddToOrder = { codes -> ordersAddToOrderCodes = codes },
                             onAddBeadFromCatalog = { projectsCatalogPickerMode = true },
+                            onReplaceBeadFromCatalog = { oldCode ->
+                                projectsCatalogSwapTargetCode = oldCode
+                                projectsCatalogPickerMode = true
+                            },
                         )
                     }
                     else -> {
