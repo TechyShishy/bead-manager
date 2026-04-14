@@ -121,6 +121,14 @@
 
     <!-- RGP import -->
     <string name="import_from_rgp">Import from RGP file</string>
+
+    <!-- Projects sort -->
+    <string name="sort_projects">Sort projects</string>
+    <string name="sort_date_created">Date Created</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_bead_types">Bead Types</string>
+    <string name="sort_grid_size">Grid Size</string>
+
     <string name="import_failed_title">Import failed</string>
     <string name="import_failed_not_gzip">File does not appear to be a valid RGP project.</string>
     <string name="import_failed_invalid_json">RGP file is corrupt or unreadable.</string>

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.stateIn
@@ -34,8 +35,16 @@ class ProjectsViewModel @Inject constructor(
     private val importRgpProjectUseCase: ImportRgpProjectUseCase,
 ) : ViewModel() {
 
+    private val _sortOrder = MutableStateFlow(ProjectSortOrder.CREATED_AT_DESCENDING)
+    val sortOrder: StateFlow<ProjectSortOrder> = _sortOrder.asStateFlow()
+
     val projects: StateFlow<List<ProjectEntry>> =
-        projectRepository.projectsStream()
+        combine(
+            projectRepository.projectsStream(),
+            _sortOrder,
+        ) { list, order ->
+            list.sortedWith(order.comparator)
+        }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -76,8 +85,12 @@ class ProjectsViewModel @Inject constructor(
         // first load, making subsequent calls pure CPU. Always reloading (rather than guarding
         // on key presence) ensures colorMapping additions are reflected immediately — e.g.
         // when the user adds a bead from the catalog or imports an RGP into an existing project.
+        //
+        // Deliberately collects projectsStream() (the raw Firestore flow) rather than projects
+        // (the sorted display flow) so that a sort-order change does not trigger spurious bead
+        // reloads — sort order affects display only, not inventory data.
         viewModelScope.launch {
-            projects.collect { projectList ->
+            projectRepository.projectsStream().collect { projectList ->
                 projectList.forEach { project ->
                     launch { loadBeadsForProject(project) }
                 }
@@ -104,6 +117,10 @@ class ProjectsViewModel @Inject constructor(
             fromGrid + colorMappingOnly
         }
         _projectBeads.update { it + (project.projectId to beads) }
+    }
+
+    fun setSortOrder(order: ProjectSortOrder) {
+        _sortOrder.value = order
     }
 
     fun createProject(name: String) {

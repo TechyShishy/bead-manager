@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.projects
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,9 +19,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -56,7 +60,9 @@ fun ProjectsScreen(
 ) {
     val projects by viewModel.projects.collectAsState()
     val beadSatisfaction by viewModel.beadSatisfaction.collectAsState()
+    val sortOrder by viewModel.sortOrder.collectAsState()
 
+    var showSortMenu by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
     var importError by remember { mutableStateOf<ImportResult.Failure?>(null) }
@@ -86,6 +92,31 @@ fun ProjectsScreen(
                             Icons.Outlined.FileOpen,
                             contentDescription = stringResource(R.string.import_from_rgp),
                         )
+                    }
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Icon(
+                                Icons.Filled.SwapVert,
+                                contentDescription = stringResource(R.string.sort_projects),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                        ) {
+                            ProjectSortOrder.entries.forEach { order ->
+                                DropdownMenuItem(
+                                    text = { Text(order.label()) },
+                                    onClick = {
+                                        viewModel.setSortOrder(order)
+                                        showSortMenu = false
+                                    },
+                                    leadingIcon = if (sortOrder == order) {
+                                        { Icon(Icons.Filled.Check, contentDescription = null) }
+                                    } else null,
+                                )
+                            }
+                        }
                     }
                 },
             )
@@ -312,4 +343,12 @@ private fun CreateProjectDialog(
             }
         },
     )
+}
+
+@Composable
+private fun ProjectSortOrder.label(): String = when (this) {
+    ProjectSortOrder.CREATED_AT_DESCENDING -> stringResource(R.string.sort_date_created)
+    ProjectSortOrder.NAME_ASCENDING -> stringResource(R.string.sort_name)
+    ProjectSortOrder.BEAD_TYPES_DESCENDING -> stringResource(R.string.sort_bead_types)
+    ProjectSortOrder.GRID_SIZE_DESCENDING -> stringResource(R.string.sort_grid_size)
 }
