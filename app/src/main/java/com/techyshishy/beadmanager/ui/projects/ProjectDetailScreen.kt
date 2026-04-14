@@ -67,7 +67,7 @@ import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
 import com.techyshishy.beadmanager.domain.ExportResult
 import java.math.BigDecimal
 import java.text.DateFormat

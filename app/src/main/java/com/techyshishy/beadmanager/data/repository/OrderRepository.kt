@@ -5,7 +5,7 @@ import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
-import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import com.techyshishy.beadmanager.di.AppScope
 import kotlinx.coroutines.CoroutineScope

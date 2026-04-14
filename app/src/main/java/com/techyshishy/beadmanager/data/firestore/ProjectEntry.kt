@@ -39,8 +39,6 @@ data class ProjectEntry(
     val name: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     val notes: String? = null,
-    // TODO: move ProjectBeadEntry out of data/firestore/ — it is no longer a Firestore-stored type
-    //       and is retained here only as a UI DTO (see ProjectDetailViewModel.beads).
     val rowCount: Int = 0,
     val colorMapping: Map<String, String> = emptyMap(),
     val position: Map<String, Int> = emptyMap(),
