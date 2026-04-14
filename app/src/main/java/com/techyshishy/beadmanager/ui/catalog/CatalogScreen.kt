@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.catalog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,8 +39,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -273,9 +274,10 @@ private fun BeadGridItem(
 /**
  * Horizontal strip shown above the catalog grid when at least one bead is pinned.
  *
- * Each pinned bead chip navigates to the bead's detail pane when tapped; tapping the close
- * button on a chip unpins that specific bead. "In stock only" filters the catalog grid to
- * beads with non-zero inventory; "Clear all" dismisses all pins and hides the strip.
+ * Each pinned bead is shown as a large circular image; tapping it navigates to the bead's
+ * detail pane. A small close button overlaid in the top-right corner unpins that bead.
+ * "In stock only" filters the catalog grid to beads with non-zero inventory; "Clear all"
+ * dismisses all pins and hides the strip.
  */
 @Composable
 private fun PinComparisonStrip(
@@ -301,31 +303,36 @@ private fun PinComparisonStrip(
                         Color(bead.catalogEntry.bead.hex.toColorInt())
                     }.getOrDefault(Color.Gray)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SuggestionChip(
-                        onClick = { onBeadSelected(bead.code) },
-                        label = { Text(bead.code, maxLines = 1) },
-                        icon = {
-                            coil3.compose.AsyncImage(
-                                model = bead.catalogEntry.bead.imageUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape),
-                                placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
-                                error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
-                            )
-                        },
+                Box(modifier = Modifier.size(80.dp)) {
+                    AsyncImage(
+                        model = bead.catalogEntry.bead.imageUrl,
+                        contentDescription = bead.code,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .align(Alignment.Center)
+                            .clickable { onBeadSelected(bead.code) },
+                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
                     )
-                    IconButton(
-                        onClick = { onUnpin(bead.code) },
-                        modifier = Modifier.size(28.dp),
+                    CompositionLocalProvider(
+                        LocalMinimumInteractiveComponentSize provides 0.dp,
                     ) {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.unpin_from_comparison),
-                            modifier = Modifier.size(14.dp),
-                        )
+                        IconButton(
+                            onClick = { onUnpin(bead.code) },
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.TopEnd),
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(
+                                    R.string.unpin_bead_from_comparison,
+                                    bead.code,
+                                ),
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
             }
