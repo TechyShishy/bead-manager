@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -88,6 +90,8 @@ fun BeadDetailPane(
     viewModel: BeadDetailViewModel,
     onNavigateBack: (() -> Unit)? = null,
     onShowSnackbar: (String) -> Unit = {},
+    isPinned: Boolean = false,
+    onPinToggle: () -> Unit = {},
 ) {
     // LaunchedEffect ensures initialize() runs as a side effect, not during
     // composition, avoiding potential re-entrant snapshot state writes.
@@ -128,9 +132,36 @@ fun BeadDetailPane(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = onPinToggle) {
+                        Icon(
+                            if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                            contentDescription = stringResource(
+                                if (isPinned) R.string.unpin_from_comparison
+                                else R.string.pin_for_comparison
+                            ),
+                        )
+                    }
+                },
             )
         } else {
-            Spacer(Modifier.statusBarsPadding())
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(end = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onPinToggle) {
+                    Icon(
+                        if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = stringResource(
+                            if (isPinned) R.string.unpin_from_comparison
+                            else R.string.pin_for_comparison
+                        ),
+                    )
+                }
+            }
         }
         Column(
             modifier = Modifier

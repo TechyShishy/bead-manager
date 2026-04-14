@@ -79,6 +79,7 @@ fun AdaptiveScaffold() {
     val scope = rememberCoroutineScope()
 
     val catalogViewModel: CatalogViewModel = hiltViewModel()
+    val pinnedCodes by catalogViewModel.pinnedCodes.collectAsState()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val projectsViewModel: ProjectsViewModel = hiltViewModel()
     val allOrdersViewModel: AllOrdersViewModel = hiltViewModel()
@@ -197,6 +198,8 @@ fun AdaptiveScaffold() {
                                                 catalogSnackbarHostState.showSnackbar(message)
                                             }
                                         },
+                                        isPinned = code in pinnedCodes,
+                                        onPinToggle = { catalogViewModel.togglePin(code) },
                                     )
                                 }
                             }

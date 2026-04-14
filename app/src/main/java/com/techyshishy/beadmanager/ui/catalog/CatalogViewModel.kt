@@ -25,6 +25,11 @@ class CatalogViewModel @Inject constructor(
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
 
+    // Session-only comparison pin state. Cleared when the ViewModel is destroyed (tab change
+    // or process death). Never persisted.
+    val pinnedCodes: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
+    val stockOnlyFilter: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
     val colorGroups: StateFlow<List<String>> = catalogRepository.allBeadsLookup()
         .map { beadMap ->
             beadMap.values
@@ -37,24 +42,41 @@ class CatalogViewModel @Inject constructor(
     val glassGroups: StateFlow<List<String>> = catalogRepository.distinctGlassGroups()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val beads: StateFlow<List<BeadWithInventory>> = combine(
+    // Shared base: catalog + inventory + threshold merged into view-ready objects.
+    // Consumed by both `beads` (with user filters applied) and `pinnedBeads` (unfiltered).
+    private val allBeadsWithInventory: StateFlow<List<BeadWithInventory>> = combine(
         catalogRepository.getAllBeadsWithVendors(),
         inventoryRepository.inventoryStream(),
+        preferencesRepository.globalLowStockThreshold,
+    ) { catalogEntries, inventoryMap, globalThreshold ->
+        catalogEntries.map { entry ->
+            BeadWithInventory(
+                catalogEntry = entry,
+                inventory = inventoryMap[entry.bead.code],
+                globalThresholdGrams = globalThreshold,
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Ordered list of pinned BeadWithInventory objects, in pin order, with live inventory data.
+    val pinnedBeads: StateFlow<List<BeadWithInventory>> = combine(
+        allBeadsWithInventory,
+        pinnedCodes,
+    ) { allBeads, codes ->
+        val lookup = allBeads.associateBy { it.code }
+        codes.mapNotNull { lookup[it] }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val beads: StateFlow<List<BeadWithInventory>> = combine(
+        allBeadsWithInventory,
         searchQuery,
         filterState,
-        preferencesRepository.globalLowStockThreshold,
-    ) { catalogEntries, inventoryMap, query, filter, globalThreshold ->
+        stockOnlyFilter,
+    ) { allBeads, query, filter, stockOnly ->
         val numericKey: (BeadWithInventory) -> Int = { item ->
             item.code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE
         }
-        catalogEntries
-            .map { entry ->
-                BeadWithInventory(
-                    catalogEntry = entry,
-                    inventory = inventoryMap[entry.bead.code],
-                    globalThresholdGrams = globalThreshold,
-                )
-            }
+        allBeads
             .filter { item ->
                 val bead = item.catalogEntry.bead
                 val finishesInBead = bead.finishes
@@ -80,8 +102,11 @@ class CatalogViewModel @Inject constructor(
 
                 val matchesOwned = !filter.ownedOnly || item.isOwned
 
+                val matchesStockOnly = !stockOnly || item.isOwned
+
                 matchesQuery && matchesColorGroup && matchesGlassGroup &&
-                    matchesFinish && matchesDyed && matchesGalvanized && matchesPlating && matchesOwned
+                    matchesFinish && matchesDyed && matchesGalvanized && matchesPlating &&
+                    matchesOwned && matchesStockOnly
             }
             .let { filtered ->
                 val asc = filter.sortDirection == SortDirection.ASCENDING
@@ -206,4 +231,24 @@ class CatalogViewModel @Inject constructor(
     }
 
     fun clearFilters() { filterState.value = FilterState() }
+
+    // --- Comparison pin actions ---
+
+    fun togglePin(code: String) {
+        val current = pinnedCodes.value
+        pinnedCodes.value = if (code in current) current - code else current + code
+    }
+
+    fun unpinBead(code: String) {
+        pinnedCodes.value = pinnedCodes.value - code
+    }
+
+    fun clearAllPins() {
+        pinnedCodes.value = emptyList()
+        stockOnlyFilter.value = false
+    }
+
+    fun toggleStockOnly() {
+        stockOnlyFilter.value = !stockOnlyFilter.value
+    }
 }

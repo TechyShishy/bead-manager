@@ -3,9 +3,12 @@ package com.techyshishy.beadmanager.ui.catalog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,21 +19,29 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -69,6 +80,8 @@ fun CatalogScreen(
     val sortBuckets by viewModel.sortBuckets.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
     val filter by viewModel.filterState.collectAsState()
+    val pinnedBeads by viewModel.pinnedBeads.collectAsState()
+    val stockOnlyFilter by viewModel.stockOnlyFilter.collectAsState()
     var showFilter by remember { mutableStateOf(false) }
     // No remember key — LaunchedEffect handles external resets; a query key would reset
     // cursor position on every keystroke during normal typing.
@@ -109,6 +122,14 @@ fun CatalogScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        PinComparisonStrip(
+            pinnedBeads = pinnedBeads,
+            stockOnlyFilter = stockOnlyFilter,
+            onBeadSelected = onBeadSelected,
+            onUnpin = { code -> viewModel.unpinBead(code) },
+            onClearAll = { viewModel.clearAllPins() },
+            onToggleStockOnly = { viewModel.toggleStockOnly() },
+        )
         TextField(
             value = searchFieldValue,
             onValueChange = { newValue ->
@@ -246,5 +267,82 @@ private fun BeadGridItem(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp),
         )
+    }
+}
+
+/**
+ * Horizontal strip shown above the catalog grid when at least one bead is pinned.
+ *
+ * Each pinned bead chip navigates to the bead's detail pane when tapped; tapping the close
+ * button on a chip unpins that specific bead. "In stock only" filters the catalog grid to
+ * beads with non-zero inventory; "Clear all" dismisses all pins and hides the strip.
+ */
+@Composable
+private fun PinComparisonStrip(
+    pinnedBeads: List<BeadWithInventory>,
+    stockOnlyFilter: Boolean,
+    onBeadSelected: (String) -> Unit,
+    onUnpin: (String) -> Unit,
+    onClearAll: () -> Unit,
+    onToggleStockOnly: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (pinnedBeads.isEmpty()) return
+
+    Column(modifier = modifier) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items(pinnedBeads, key = { it.code }) { bead ->
+                val hexColor = remember(bead.catalogEntry.bead.hex) {
+                    runCatching {
+                        Color(bead.catalogEntry.bead.hex.toColorInt())
+                    }.getOrDefault(Color.Gray)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SuggestionChip(
+                        onClick = { onBeadSelected(bead.code) },
+                        label = { Text(bead.code, maxLines = 1) },
+                        icon = {
+                            coil3.compose.AsyncImage(
+                                model = bead.catalogEntry.bead.imageUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape),
+                                placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                                error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                            )
+                        },
+                    )
+                    IconButton(
+                        onClick = { onUnpin(bead.code) },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.unpin_from_comparison),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
+            item(key = "stock_only_toggle") {
+                Spacer(Modifier.width(4.dp))
+                FilterChip(
+                    selected = stockOnlyFilter,
+                    onClick = onToggleStockOnly,
+                    label = { Text(stringResource(R.string.comparison_strip_in_stock_only)) },
+                )
+            }
+            item(key = "clear_all") {
+                TextButton(onClick = onClearAll) {
+                    Text(stringResource(R.string.comparison_strip_clear_all))
+                }
+            }
+        }
+        HorizontalDivider()
     }
 }
