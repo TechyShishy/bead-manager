@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,16 +19,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,7 +39,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -62,8 +58,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
@@ -79,9 +73,8 @@ import java.text.DateFormat
 import kotlin.math.max
 
 /**
- * Inventory quantities below this many grams are treated as zero-deficit for display and
- * checkbox-enable purposes. Keeps floating-point noise from keeping a bead in the "needs
- * ordering" state.
+ * Inventory quantities below this many grams are treated as zero-deficit for display
+ * purposes. Keeps floating-point noise from keeping a bead in the "needs ordering" state.
  */
 private const val SUFFICIENT_THRESHOLD_GRAMS = 0.001
 
@@ -128,7 +121,12 @@ fun ProjectDetailScreen(
 
     val isGridBacked = project?.rowCount?.let { it > 0 } == true
 
-    var checkedCodes by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    val deficitCodes = remember(beads, inventoryEntries, globalThreshold) {
+        beads
+            .filter { effectiveDeficitFor(it, inventoryEntries[it.beadCode], globalThreshold) > 0.0 }
+            .mapTo(mutableSetOf()) { it.beadCode }
+    }
+
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
     var detachTarget by remember { mutableStateOf<OrderEntry?>(null) }
     var exportErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -181,23 +179,6 @@ fun ProjectDetailScreen(
                     snackbarHostState.showSnackbar(beadAlreadyInProjectMessage)
             }
         }
-    }
-
-    // Drop checked codes that were removed from the bead list.
-    LaunchedEffect(beads) {
-        val validCodes = beads.map { it.beadCode }.toSet()
-        checkedCodes = checkedCodes.intersect(validCodes)
-    }
-
-    // Drop checked codes whose inventory now covers the target including the stock threshold.
-    LaunchedEffect(inventoryEntries, globalThreshold, beads) {
-        val sufficientCodes = beads
-            .filter { bead ->
-                effectiveDeficitFor(bead, inventoryEntries[bead.beadCode], globalThreshold) == 0.0
-            }
-            .map { it.beadCode }
-            .toSet()
-        checkedCodes = checkedCodes - sufficientCodes
     }
 
     Scaffold(
@@ -267,6 +248,14 @@ fun ProjectDetailScreen(
                             )
                         }
                     } else {
+                        if (deficitCodes.isNotEmpty()) {
+                            IconButton(onClick = { onAddToOrder(deficitCodes) }) {
+                                Icon(
+                                    Icons.Filled.ShoppingCart,
+                                    contentDescription = stringResource(R.string.add_to_order),
+                                )
+                            }
+                        }
                         IconButton(onClick = onAddBeadFromCatalog) {
                             Icon(
                                 Icons.Filled.LibraryAdd,
@@ -285,19 +274,6 @@ fun ProjectDetailScreen(
                         }
                     }
                 },
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    if (checkedCodes.isNotEmpty()) {
-                        onAddToOrder(checkedCodes)
-                    }
-                },
-                expanded = checkedCodes.isNotEmpty(),
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.add_to_order)) },
-                modifier = Modifier.navigationBarsPadding(),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -343,48 +319,6 @@ fun ProjectDetailScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                 }
-                item(key = "select_all_beads") {
-                    val eligibleCodes = beads
-                        .filter { bead ->
-                            effectiveDeficitFor(
-                                bead,
-                                inventoryEntries[bead.beadCode],
-                                globalThreshold,
-                            ) > 0.0
-                        }
-                        .map { it.beadCode }
-                        .toSet()
-                    val selectedEligible = checkedCodes.intersect(eligibleCodes)
-                    val triState = when (selectedEligible.size) {
-                        0 -> ToggleableState.Off
-                        eligibleCodes.size -> ToggleableState.On
-                        else -> ToggleableState.Indeterminate
-                    }
-                    val toggle = {
-                        checkedCodes = if (triState == ToggleableState.On) emptySet()
-                        else eligibleCodes
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics(mergeDescendants = true) {}
-                            .clickable(onClick = toggle)
-                            .padding(start = 4.dp, end = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TriStateCheckbox(
-                            state = triState,
-                            onClick = null,
-                            modifier = Modifier.size(40.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.select_all),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    HorizontalDivider()
-                }
                 items(beads, key = { it.beadCode }) { bead ->
                     val catalogBead = beadLookup[bead.beadCode]
                     val entry = inventoryEntries[bead.beadCode]
@@ -400,14 +334,6 @@ fun ProjectDetailScreen(
                         effectiveDeficit = effectiveDeficit,
                         isThresholdOnly = isThresholdOnly,
                         activeOrderStatus = activeOrderStatus[bead.beadCode],
-                        checked = bead.beadCode in checkedCodes,
-                        onCheckedChange = { checked ->
-                            checkedCodes = if (checked) {
-                                checkedCodes + bead.beadCode
-                            } else {
-                                checkedCodes - bead.beadCode
-                            }
-                        },
                         onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked && bead.targetGrams > 0.0 },
                     )
                     HorizontalDivider()
@@ -522,8 +448,6 @@ private fun ProjectBeadRow(
     effectiveDeficit: Double,
     isThresholdOnly: Boolean,
     activeOrderStatus: OrderItemStatus?,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val progress = if (bead.targetGrams > 0.0) {
@@ -546,14 +470,6 @@ private fun ProjectBeadRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Checkbox(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                enabled = !inventorySufficient,
-                modifier = Modifier.size(40.dp),
-            )
-            Spacer(Modifier.width(4.dp))
-
             AsyncImage(
                 model = imageUrl.takeIf { it.isNotBlank() },
                 contentDescription = null,
@@ -614,7 +530,7 @@ private fun ProjectBeadRow(
 
         Spacer(Modifier.height(4.dp))
 
-        Box(modifier = Modifier.padding(start = 104.dp, end = 48.dp)) {
+        Box(modifier = Modifier.padding(start = 60.dp, end = 48.dp)) {
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.fillMaxWidth(),
@@ -639,7 +555,7 @@ private fun ProjectBeadRow(
                     OrderItemStatus.RECEIVED,
                     OrderItemStatus.SKIPPED   -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                modifier = Modifier.padding(start = 104.dp, top = 2.dp, end = 48.dp),
+                modifier = Modifier.padding(start = 60.dp, top = 2.dp, end = 48.dp),
             )
         }
     }

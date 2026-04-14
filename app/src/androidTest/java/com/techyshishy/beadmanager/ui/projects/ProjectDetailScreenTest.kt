@@ -7,7 +7,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.db.BeadEntity
+import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.firestore.ProjectBeadEntry
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,10 +33,12 @@ class ProjectDetailScreenTest {
             every { project } returns MutableStateFlow(
                 ProjectEntry(projectId = "p1", name = "Test Project")
             )
+            every { beads } returns MutableStateFlow(emptyList<ProjectBeadEntry>())
             every { activeOrders } returns MutableStateFlow(emptyList<OrderEntry>())
-            every { inventoryGrams } returns MutableStateFlow(emptyMap())
+            every { inventoryEntries } returns MutableStateFlow(emptyMap<String, InventoryEntry>())
             every { activeOrderStatus } returns MutableStateFlow(emptyMap<String, OrderItemStatus>())
             every { beadLookup } returns MutableStateFlow(emptyMap<String, BeadEntity>())
+            every { globalThreshold } returns MutableStateFlow(5.0)
         }
 
     @Test
@@ -46,6 +50,7 @@ class ProjectDetailScreenTest {
                 viewModel = viewModel,
                 onNavigateBack = {},
                 onAddToOrder = {},
+                onAddBeadFromCatalog = {},
             )
         }
 
