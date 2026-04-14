@@ -97,6 +97,21 @@ class FirestoreProjectSource @Inject constructor(
     }
 
     /**
+     * Deletes specific keys from the `colorMapping` field using targeted `FieldValue.delete()`
+     * paths. This is required because `set(pojo, SetOptions.merge())` builds a leaf-level field
+     * mask — absent keys are simply omitted from the mask and left untouched on the server, so
+     * the POJO merge approach cannot delete existing map entries.
+     *
+     * Requires the project document to already exist; `update()` throws `NOT_FOUND` otherwise.
+     */
+    suspend fun deleteColorMappingEntries(projectId: String, keys: Set<String>) {
+        if (keys.isEmpty()) return
+        val uid = requireUid()
+        val updates: Map<String, Any> = keys.associate { k -> "colorMapping.$k" to FieldValue.delete() }
+        projectsRef(uid).document(projectId).update(updates).await()
+    }
+
+    /**
      * Writes [rows] as chunked documents into the `projects/{id}/grid/` subcollection and
      * atomically updates [ProjectEntry.rowCount] in the main document.
      *

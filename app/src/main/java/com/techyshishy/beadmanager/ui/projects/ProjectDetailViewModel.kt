@@ -232,12 +232,10 @@ class ProjectDetailViewModel @Inject constructor(
      */
     fun removeBead(beadCode: String) {
         val currentProject = project.value ?: return
+        val keysToDelete = currentProject.colorMapping.filterValues { it == beadCode }.keys
+        if (keysToDelete.isEmpty()) return
         viewModelScope.launch {
-            projectRepository.updateProject(
-                currentProject.copy(
-                    colorMapping = currentProject.colorMapping.filterValues { it != beadCode },
-                ),
-            )
+            projectRepository.deleteColorMappingEntries(currentProject.projectId, keysToDelete)
         }
     }
 

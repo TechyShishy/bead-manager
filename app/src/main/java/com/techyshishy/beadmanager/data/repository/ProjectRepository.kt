@@ -35,6 +35,9 @@ class ProjectRepository @Inject constructor(
     suspend fun updateProject(entry: ProjectEntry) =
         source.updateProject(entry)
 
+    suspend fun deleteColorMappingEntries(projectId: String, keys: Set<String>) =
+        source.deleteColorMappingEntries(projectId, keys)
+
     /**
      * Writes [rows] as chunked documents into the `grid/` subcollection of [projectId].
      * Also atomically updates [ProjectEntry.rowCount] in the main project document.
