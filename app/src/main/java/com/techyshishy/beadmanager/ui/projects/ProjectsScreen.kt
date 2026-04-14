@@ -114,9 +114,6 @@ fun ProjectsScreen(
                                         viewModel.toggleSortKey(key)
                                         showSortMenu = false
                                     },
-                                    leadingIcon = if (isActive) {
-                                        { Icon(Icons.Filled.Check, contentDescription = null) }
-                                    } else null,
                                     trailingIcon = if (isActive) {
                                         {
                                             Icon(
