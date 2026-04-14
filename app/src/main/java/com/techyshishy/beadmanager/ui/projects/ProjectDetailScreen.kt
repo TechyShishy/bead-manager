@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LinkOff
@@ -32,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,6 +42,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TriStateCheckbox
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,6 +52,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -122,6 +130,20 @@ fun ProjectDetailScreen(
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
     var detachTarget by remember { mutableStateOf<OrderEntry?>(null) }
     var exportErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    var renameMode by rememberSaveable { mutableStateOf(false) }
+    var renameInput by rememberSaveable { mutableStateOf("") }
+    var renameError by rememberSaveable { mutableStateOf(false) }
+    val renameFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(renameMode) {
+        if (renameMode) renameFocusRequester.requestFocus()
+    }
+
+    BackHandler(enabled = renameMode) {
+        renameMode = false
+        renameError = false
+    }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val exportSuccessMessage = stringResource(R.string.export_rgp_success)
@@ -169,9 +191,47 @@ fun ProjectDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(project?.name ?: "…") },
+                title = {
+                    if (renameMode) {
+                        OutlinedTextField(
+                            value = renameInput,
+                            onValueChange = { renameInput = it; renameError = false },
+                            singleLine = true,
+                            isError = renameError,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                if (renameInput.isBlank()) {
+                                    renameError = true
+                                } else {
+                                    viewModel.rename(renameInput)
+                                    renameMode = false
+                                    renameError = false
+                                }
+                            }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(renameFocusRequester),
+                        )
+                    } else {
+                        Text(
+                            text = project?.name ?: "…",
+                            modifier = Modifier.clickable {
+                                renameInput = project?.name ?: ""
+                                renameError = false
+                                renameMode = true
+                            },
+                        )
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        if (renameMode) {
+                            renameMode = false
+                            renameError = false
+                        } else {
+                            onNavigateBack()
+                        }
+                    }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.navigate_back),
@@ -179,7 +239,22 @@ fun ProjectDetailScreen(
                     }
                 },
                 actions = {
-                    if (isGridBacked) {
+                    if (renameMode) {
+                        IconButton(onClick = {
+                            if (renameInput.isBlank()) {
+                                renameError = true
+                            } else {
+                                viewModel.rename(renameInput)
+                                renameMode = false
+                                renameError = false
+                            }
+                        }) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = stringResource(R.string.rename_confirm),
+                            )
+                        }
+                    } else if (isGridBacked) {
                         IconButton(onClick = {
                             exportLauncher.launch("${project?.name ?: "project"}.rgp")
                         }) {

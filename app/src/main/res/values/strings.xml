@@ -167,4 +167,7 @@
     <string name="buy_up_skip">Skip</string>
     <string name="retry">Retry</string>
     <string name="go_back">Go Back</string>
+    <!-- Project rename -->
+    <string name="rename_confirm">Confirm rename</string>
+    <string name="project_name_blank_error">Name cannot be blank</string>
 </resources>

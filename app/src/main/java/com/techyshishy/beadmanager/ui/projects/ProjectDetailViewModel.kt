@@ -175,6 +175,21 @@ class ProjectDetailViewModel @Inject constructor(
         }
     }
 
+    // ── Project mutations ────────────────────────────────────────────────────
+
+    /**
+     * Renames this project. [name] is trimmed; a blank result is a no-op. Writes via
+     * [ProjectRepository.updateProject] with [SetOptions.merge] semantics via the source.
+     */
+    fun rename(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val currentProject = project.value ?: return
+        viewModelScope.launch {
+            projectRepository.updateProject(currentProject.copy(name = trimmed))
+        }
+    }
+
     // ── Bead list mutations ──────────────────────────────────────────────────
 
     /**
