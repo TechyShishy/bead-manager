@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SwapVert
@@ -104,15 +106,24 @@ fun ProjectsScreen(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
                         ) {
-                            ProjectSortOrder.entries.forEach { order ->
+                            ProjectSortKey.entries.forEach { key ->
+                                val isActive = sortOrder.key == key
                                 DropdownMenuItem(
-                                    text = { Text(order.label()) },
+                                    text = { Text(key.label()) },
                                     onClick = {
-                                        viewModel.setSortOrder(order)
+                                        viewModel.toggleSortKey(key)
                                         showSortMenu = false
                                     },
-                                    leadingIcon = if (sortOrder == order) {
+                                    leadingIcon = if (isActive) {
                                         { Icon(Icons.Filled.Check, contentDescription = null) }
+                                    } else null,
+                                    trailingIcon = if (isActive) {
+                                        {
+                                            Icon(
+                                                if (sortOrder.direction == SortDirection.ASCENDING) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                                                contentDescription = null,
+                                            )
+                                        }
                                     } else null,
                                 )
                             }
@@ -346,9 +357,9 @@ private fun CreateProjectDialog(
 }
 
 @Composable
-private fun ProjectSortOrder.label(): String = when (this) {
-    ProjectSortOrder.CREATED_AT_DESCENDING -> stringResource(R.string.sort_date_created)
-    ProjectSortOrder.NAME_ASCENDING -> stringResource(R.string.sort_name)
-    ProjectSortOrder.BEAD_TYPES_DESCENDING -> stringResource(R.string.sort_bead_types)
-    ProjectSortOrder.GRID_SIZE_DESCENDING -> stringResource(R.string.sort_grid_size)
+private fun ProjectSortKey.label(): String = when (this) {
+    ProjectSortKey.CREATED_AT -> stringResource(R.string.sort_date_created)
+    ProjectSortKey.NAME -> stringResource(R.string.sort_name)
+    ProjectSortKey.BEAD_TYPES -> stringResource(R.string.sort_bead_types)
+    ProjectSortKey.GRID_SIZE -> stringResource(R.string.sort_grid_size)
 }

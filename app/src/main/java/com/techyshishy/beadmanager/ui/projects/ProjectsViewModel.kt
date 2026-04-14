@@ -35,7 +35,7 @@ class ProjectsViewModel @Inject constructor(
     private val importRgpProjectUseCase: ImportRgpProjectUseCase,
 ) : ViewModel() {
 
-    private val _sortOrder = MutableStateFlow(ProjectSortOrder.CREATED_AT_DESCENDING)
+    private val _sortOrder = MutableStateFlow(ProjectSortOrder.DEFAULT)
     val sortOrder: StateFlow<ProjectSortOrder> = _sortOrder.asStateFlow()
 
     val projects: StateFlow<List<ProjectEntry>> =
@@ -43,7 +43,7 @@ class ProjectsViewModel @Inject constructor(
             projectRepository.projectsStream(),
             _sortOrder,
         ) { list, order ->
-            list.sortedWith(order.comparator)
+            list.sortedWith(order.comparator())
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -119,8 +119,16 @@ class ProjectsViewModel @Inject constructor(
         _projectBeads.update { it + (project.projectId to beads) }
     }
 
-    fun setSortOrder(order: ProjectSortOrder) {
-        _sortOrder.value = order
+    fun toggleSortKey(key: ProjectSortKey) {
+        _sortOrder.update { current ->
+            if (current.key == key) {
+                current.copy(
+                    direction = if (current.direction == SortDirection.ASCENDING) SortDirection.DESCENDING else SortDirection.ASCENDING,
+                )
+            } else {
+                ProjectSortOrder(key, key.defaultDirection)
+            }
+        }
     }
 
     fun createProject(name: String) {

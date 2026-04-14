@@ -21,102 +21,153 @@ class ProjectSortOrderTest {
         rowCount = rowCount,
     )
 
-    // ── CREATED_AT_DESCENDING ────────────────────────────────────────────────
+    private fun sort(key: ProjectSortKey, direction: SortDirection) =
+        ProjectSortOrder(key, direction).comparator()
+
+    // ── CREATED_AT ───────────────────────────────────────────────────────────
 
     @Test
-    fun `CREATED_AT_DESCENDING places newer project first`() {
+    fun `CREATED_AT DESCENDING places newer project first`() {
         val older = project("a", createdAt = Timestamp(1_000, 0))
         val newer = project("b", createdAt = Timestamp(2_000, 0))
-        val sorted = listOf(older, newer).sortedWith(ProjectSortOrder.CREATED_AT_DESCENDING.comparator)
+        val sorted = listOf(older, newer).sortedWith(sort(ProjectSortKey.CREATED_AT, SortDirection.DESCENDING))
         assertEquals(listOf(newer, older), sorted)
     }
 
     @Test
-    fun `CREATED_AT_DESCENDING places null createdAt after real timestamp`() {
+    fun `CREATED_AT ASCENDING places older project first`() {
+        val older = project("a", createdAt = Timestamp(1_000, 0))
+        val newer = project("b", createdAt = Timestamp(2_000, 0))
+        val sorted = listOf(newer, older).sortedWith(sort(ProjectSortKey.CREATED_AT, SortDirection.ASCENDING))
+        assertEquals(listOf(older, newer), sorted)
+    }
+
+    @Test
+    fun `CREATED_AT DESCENDING places null createdAt after real timestamp`() {
         val withDate = project("a", createdAt = Timestamp(1_000, 0))
         val nullDate = project("b", createdAt = null)
-        val sorted = listOf(nullDate, withDate).sortedWith(ProjectSortOrder.CREATED_AT_DESCENDING.comparator)
+        val sorted = listOf(nullDate, withDate).sortedWith(sort(ProjectSortKey.CREATED_AT, SortDirection.DESCENDING))
         assertEquals(listOf(withDate, nullDate), sorted)
     }
 
     @Test
-    fun `CREATED_AT_DESCENDING treats two null createdAt entries as equal`() {
-        val p1 = project("a", createdAt = null)
-        val p2 = project("b", createdAt = null)
-        val result = ProjectSortOrder.CREATED_AT_DESCENDING.comparator.compare(p1, p2)
-        assertEquals(0, result)
+    fun `CREATED_AT ASCENDING still places null createdAt after real timestamp`() {
+        val withDate = project("a", createdAt = Timestamp(1_000, 0))
+        val nullDate = project("b", createdAt = null)
+        val sorted = listOf(nullDate, withDate).sortedWith(sort(ProjectSortKey.CREATED_AT, SortDirection.ASCENDING))
+        assertEquals(listOf(withDate, nullDate), sorted)
     }
 
-    // ── NAME_ASCENDING ───────────────────────────────────────────────────────
+    @Test
+    fun `CREATED_AT treats two null createdAt entries as equal`() {
+        val p1 = project("a", createdAt = null)
+        val p2 = project("b", createdAt = null)
+        assertEquals(0, sort(ProjectSortKey.CREATED_AT, SortDirection.DESCENDING).compare(p1, p2))
+    }
+
+    // ── NAME ─────────────────────────────────────────────────────────────────
 
     @Test
-    fun `NAME_ASCENDING sorts alphabetically`() {
+    fun `NAME ASCENDING sorts alphabetically`() {
         val alpha = project("a", name = "Alpha")
         val beta = project("b", name = "Beta")
         val gamma = project("c", name = "Gamma")
-        val sorted = listOf(gamma, alpha, beta).sortedWith(ProjectSortOrder.NAME_ASCENDING.comparator)
+        val sorted = listOf(gamma, alpha, beta).sortedWith(sort(ProjectSortKey.NAME, SortDirection.ASCENDING))
         assertEquals(listOf(alpha, beta, gamma), sorted)
     }
 
     @Test
-    fun `NAME_ASCENDING is case-insensitive`() {
+    fun `NAME DESCENDING sorts reverse-alphabetically`() {
+        val alpha = project("a", name = "Alpha")
+        val beta = project("b", name = "Beta")
+        val gamma = project("c", name = "Gamma")
+        val sorted = listOf(alpha, gamma, beta).sortedWith(sort(ProjectSortKey.NAME, SortDirection.DESCENDING))
+        assertEquals(listOf(gamma, beta, alpha), sorted)
+    }
+
+    @Test
+    fun `NAME ASCENDING is case-insensitive`() {
         val lower = project("a", name = "alpha")
         val upper = project("b", name = "Beta")
-        val sorted = listOf(upper, lower).sortedWith(ProjectSortOrder.NAME_ASCENDING.comparator)
+        val sorted = listOf(upper, lower).sortedWith(sort(ProjectSortKey.NAME, SortDirection.ASCENDING))
         assertEquals(listOf(lower, upper), sorted)
     }
 
-    // ── BEAD_TYPES_DESCENDING ────────────────────────────────────────────────
+    // ── BEAD_TYPES ───────────────────────────────────────────────────────────
 
     @Test
-    fun `BEAD_TYPES_DESCENDING places project with more palette entries first`() {
+    fun `BEAD_TYPES DESCENDING places project with more palette entries first`() {
         val few = project("a", colorMappingSize = 2)
         val many = project("b", colorMappingSize = 8)
-        val sorted = listOf(few, many).sortedWith(ProjectSortOrder.BEAD_TYPES_DESCENDING.comparator)
+        val sorted = listOf(few, many).sortedWith(sort(ProjectSortKey.BEAD_TYPES, SortDirection.DESCENDING))
         assertEquals(listOf(many, few), sorted)
     }
 
     @Test
-    fun `BEAD_TYPES_DESCENDING treats equal palette sizes as equal`() {
-        val p1 = project("a", colorMappingSize = 3)
-        val p2 = project("b", colorMappingSize = 3)
-        val result = ProjectSortOrder.BEAD_TYPES_DESCENDING.comparator.compare(p1, p2)
-        assertEquals(0, result)
+    fun `BEAD_TYPES ASCENDING places project with fewer palette entries first`() {
+        val few = project("a", colorMappingSize = 2)
+        val many = project("b", colorMappingSize = 8)
+        val sorted = listOf(many, few).sortedWith(sort(ProjectSortKey.BEAD_TYPES, SortDirection.ASCENDING))
+        assertEquals(listOf(few, many), sorted)
     }
 
-    // ── GRID_SIZE_DESCENDING ─────────────────────────────────────────────────
+    @Test
+    fun `BEAD_TYPES treats equal palette sizes as equal`() {
+        val p1 = project("a", colorMappingSize = 3)
+        val p2 = project("b", colorMappingSize = 3)
+        assertEquals(0, sort(ProjectSortKey.BEAD_TYPES, SortDirection.DESCENDING).compare(p1, p2))
+    }
+
+    // ── GRID_SIZE ─────────────────────────────────────────────────────────────
 
     @Test
-    fun `GRID_SIZE_DESCENDING places larger grid first`() {
+    fun `GRID_SIZE DESCENDING places larger grid first`() {
         val small = project("a", rowCount = 10)
         val large = project("b", rowCount = 100)
-        val sorted = listOf(small, large).sortedWith(ProjectSortOrder.GRID_SIZE_DESCENDING.comparator)
+        val sorted = listOf(small, large).sortedWith(sort(ProjectSortKey.GRID_SIZE, SortDirection.DESCENDING))
         assertEquals(listOf(large, small), sorted)
     }
 
     @Test
-    fun `GRID_SIZE_DESCENDING places zero-row projects after grid projects`() {
+    fun `GRID_SIZE ASCENDING places smaller grid first`() {
+        val small = project("a", rowCount = 10)
+        val large = project("b", rowCount = 100)
+        val sorted = listOf(large, small).sortedWith(sort(ProjectSortKey.GRID_SIZE, SortDirection.ASCENDING))
+        assertEquals(listOf(small, large), sorted)
+    }
+
+    @Test
+    fun `GRID_SIZE DESCENDING places zero-row projects after grid projects`() {
         val noGrid = project("a", rowCount = 0)
         val withGrid = project("b", rowCount = 20)
-        val sorted = listOf(noGrid, withGrid).sortedWith(ProjectSortOrder.GRID_SIZE_DESCENDING.comparator)
+        val sorted = listOf(noGrid, withGrid).sortedWith(sort(ProjectSortKey.GRID_SIZE, SortDirection.DESCENDING))
         assertEquals(listOf(withGrid, noGrid), sorted)
     }
 
     @Test
-    fun `GRID_SIZE_DESCENDING treats two zero-row projects as equal`() {
+    fun `GRID_SIZE ASCENDING still places zero-row projects after grid projects`() {
+        val noGrid = project("a", rowCount = 0)
+        val withGrid = project("b", rowCount = 20)
+        val sorted = listOf(noGrid, withGrid).sortedWith(sort(ProjectSortKey.GRID_SIZE, SortDirection.ASCENDING))
+        assertEquals(listOf(withGrid, noGrid), sorted)
+    }
+
+    @Test
+    fun `GRID_SIZE treats two zero-row projects as equal`() {
         val p1 = project("a", rowCount = 0)
         val p2 = project("b", rowCount = 0)
-        val result = ProjectSortOrder.GRID_SIZE_DESCENDING.comparator.compare(p1, p2)
-        assertEquals(0, result)
+        assertEquals(0, sort(ProjectSortKey.GRID_SIZE, SortDirection.DESCENDING).compare(p1, p2))
     }
 
     // ── Edge cases ───────────────────────────────────────────────────────────
 
     @Test
-    fun `all sort orders handle an empty list`() {
+    fun `all keys and directions handle empty list`() {
         val empty = emptyList<ProjectEntry>()
-        for (order in ProjectSortOrder.entries) {
-            assertEquals(emptyList<ProjectEntry>(), empty.sortedWith(order.comparator))
+        for (key in ProjectSortKey.entries) {
+            for (direction in SortDirection.entries) {
+                assertEquals(emptyList<ProjectEntry>(), empty.sortedWith(sort(key, direction)))
+            }
         }
     }
 }
