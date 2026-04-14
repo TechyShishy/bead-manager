@@ -31,11 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
-import androidx.compose.material3.adaptive.layout.AnimatedPane
-import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
-import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
-import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -72,7 +67,6 @@ import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
 enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun AdaptiveScaffold() {
     var currentTab by rememberSaveable { mutableStateOf(AppTab.CATALOG) }
@@ -86,8 +80,8 @@ fun AdaptiveScaffold() {
     // Triggers one-time data migrations immediately on first composition post-auth.
     hiltViewModel<MigrationViewModel>()
 
-    // Separate list-detail navigators keep scaffold state independent per tab.
-    val catalogNavigator = rememberListDetailPaneScaffoldNavigator<String>()
+    // Catalog tab: nav state (grid → bead detail).
+    var catalogDetailCode by rememberSaveable { mutableStateOf<String?>(null) }
     val catalogSnackbarHostState = remember { SnackbarHostState() }
 
     // Projects tab: nav state (projects → project detail → add-to-order).
@@ -161,50 +155,33 @@ fun AdaptiveScaffold() {
     ) {
         when (currentTab) {
             AppTab.CATALOG -> {
-                BackHandler(catalogNavigator.canNavigateBack()) {
-                    scope.launch { catalogNavigator.navigateBack() }
+                BackHandler(catalogDetailCode != null) {
+                    catalogDetailCode = null
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
-                    ListDetailPaneScaffold(
-                        directive = catalogNavigator.scaffoldDirective.copy(maxHorizontalPartitions = 1),
-                        value = catalogNavigator.scaffoldValue,
-                        listPane = {
-                            AnimatedPane {
-                                CatalogScreen(
-                                    viewModel = catalogViewModel,
-                                    onBeadSelected = { code ->
-                                        catalogNavigator.navigateTo(
-                                            ListDetailPaneScaffoldRole.Detail,
-                                            code,
-                                        )
-                                    },
-                                )
-                            }
-                        },
-                        detailPane = {
-                            AnimatedPane {
-                                catalogNavigator.currentDestination?.content?.let { code ->
-                                    val detailVm: BeadDetailViewModel = hiltViewModel(
-                                        key = "catalog_detail_$code",
-                                    )
-                                    BeadDetailPane(
-                                        beadCode = code,
-                                        viewModel = detailVm,
-                                        onNavigateBack = if (catalogNavigator.canNavigateBack()) {
-                                            { scope.launch { catalogNavigator.navigateBack() } }
-                                        } else null,
-                                        onShowSnackbar = { message ->
-                                            scope.launch {
-                                                catalogSnackbarHostState.showSnackbar(message)
-                                            }
-                                        },
-                                        isPinned = code in pinnedCodes,
-                                        onPinToggle = { catalogViewModel.togglePin(code) },
-                                    )
+                    val code = catalogDetailCode
+                    if (code != null) {
+                        val detailVm: BeadDetailViewModel = hiltViewModel(
+                            key = "catalog_detail_$code",
+                        )
+                        BeadDetailPane(
+                            beadCode = code,
+                            viewModel = detailVm,
+                            onNavigateBack = { catalogDetailCode = null },
+                            onShowSnackbar = { message ->
+                                scope.launch {
+                                    catalogSnackbarHostState.showSnackbar(message)
                                 }
-                            }
-                        },
-                    )
+                            },
+                            isPinned = code in pinnedCodes,
+                            onPinToggle = { catalogViewModel.togglePin(code) },
+                        )
+                    } else {
+                        CatalogScreen(
+                            viewModel = catalogViewModel,
+                            onBeadSelected = { selected -> catalogDetailCode = selected },
+                        )
+                    }
                     SnackbarHost(
                         hostState = catalogSnackbarHostState,
                         modifier = Modifier.align(Alignment.BottomCenter),

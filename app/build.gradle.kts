@@ -116,11 +116,6 @@ dependencies {
     implementation(libs.androidx.material3.adaptive.navigation.suite)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
-    // Adaptive layout
-    implementation(libs.androidx.material3.adaptive)
-    implementation(libs.androidx.material3.adaptive.layout)
-    implementation(libs.androidx.material3.adaptive.navigation)
-
     // Navigation
     implementation(libs.androidx.navigation.compose)
 

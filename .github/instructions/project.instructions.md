@@ -69,7 +69,7 @@ ui/
 - Screens accept a ViewModel and callbacks: `fun CatalogScreen(viewModel: CatalogViewModel, onBeadSelected: (String) -> Unit)`
 - Inject ViewModels in Compose via `hiltViewModel()` from `androidx.hilt.navigation.compose`
 - Expose state as `StateFlow<T>` using `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), default)`
-- Navigation is managed in `AdaptiveScaffold` (`ui/adaptive/`); the CATALOG tab uses `rememberListDetailPaneScaffoldNavigator<String>()` (navigates by bead code); PROJECTS and ORDERS tabs use state-machine navigation (`remember`/`mutableStateOf`) to support multi-level detail flows and cross-tab linking
+- Navigation is managed in `AdaptiveScaffold` (`ui/adaptive/`); all tabs use state-machine navigation (`rememberSaveable`/`mutableStateOf`): CATALOG uses `var catalogDetailCode: String?` (navigates by bead code); PROJECTS and ORDERS support multi-level detail flows and cross-tab linking
 - Tab selection via `enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }`
 - Theme via `BeadManagerTheme()` — dynamic color on API 31+, M3 baseline fallback on 28–30
 
