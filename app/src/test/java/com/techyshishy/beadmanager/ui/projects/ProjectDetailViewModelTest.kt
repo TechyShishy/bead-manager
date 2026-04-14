@@ -145,4 +145,129 @@ class ProjectDetailViewModelTest {
 
         coVerify { projectRepository.updateProject(project.copy(name = "Trimmed Name")) }
     }
+
+    @Test
+    fun `addBead with new code calls updateProject with identity-key entry`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project", colorMapping = emptyMap())
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.addBead("DB0001")
+        advanceUntilIdle()
+
+        coVerify { projectRepository.updateProject(project.copy(colorMapping = mapOf("DB0001" to "DB0001"))) }
+    }
+
+    @Test
+    fun `addBead with duplicate code does not call updateProject and emits AlreadyPresent`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        val events = mutableListOf<AddBeadEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.addBeadEvents.collect { events.add(it) }
+        }
+
+        vm.addBead("DB0001")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+        assert(events == listOf(AddBeadEvent.AlreadyPresent)) {
+            "Expected [AlreadyPresent] but got $events"
+        }
+    }
+
+    @Test
+    fun `addBead before project loads is a no-op`() = runTest {
+        val projectRepository = mockk<ProjectRepository>(relaxed = true)
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+        )
+        // Do not call initialize — project.value remains null.
+
+        vm.addBead("DB0001")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
 }

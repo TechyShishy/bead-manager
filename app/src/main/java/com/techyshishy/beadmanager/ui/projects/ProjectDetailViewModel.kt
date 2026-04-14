@@ -36,6 +36,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.math.max
 
+/** Events emitted for add-bead-from-catalog outcomes. */
+sealed class AddBeadEvent {
+    /** The selected bead code was already present in the project's colorMapping. */
+    data object AlreadyPresent : AddBeadEvent()
+}
+
 /**
  * Drives the Project Detail screen (bead list).
  */
@@ -191,6 +197,34 @@ class ProjectDetailViewModel @Inject constructor(
     }
 
     // ── Bead list mutations ──────────────────────────────────────────────────
+
+    private val _addBeadEvents = MutableSharedFlow<AddBeadEvent>(extraBufferCapacity = 1)
+
+    /**
+     * One-shot events emitted after each [addBead] call when the bead is already present.
+     * The screen collects this to show a snackbar.
+     */
+    val addBeadEvents: SharedFlow<AddBeadEvent> = _addBeadEvents.asSharedFlow()
+
+    /**
+     * Adds [beadCode] to this project's [ProjectEntry.colorMapping] using an identity key
+     * (`beadCode → beadCode`). If the bead is already present in the colorMapping values,
+     * emits [AddBeadEvent.AlreadyPresent] and does not write to Firestore.
+     */
+    fun addBead(beadCode: String) {
+        val currentProject = project.value ?: return
+        if (currentProject.colorMapping.values.any { it == beadCode }) {
+            viewModelScope.launch { _addBeadEvents.emit(AddBeadEvent.AlreadyPresent) }
+            return
+        }
+        viewModelScope.launch {
+            projectRepository.updateProject(
+                currentProject.copy(
+                    colorMapping = currentProject.colorMapping + (beadCode to beadCode),
+                ),
+            )
+        }
+    }
 
     /**
      * Removes a bead from this project by stripping all palette keys that map to

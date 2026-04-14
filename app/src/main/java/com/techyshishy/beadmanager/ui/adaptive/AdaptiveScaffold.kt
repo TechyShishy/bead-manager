@@ -78,6 +78,8 @@ fun AdaptiveScaffold() {
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     // Non-null while the AddToOrderScreen picker is open; holds the checked bead codes.
     var ordersAddToOrderCodes by rememberSaveable { mutableStateOf<Set<String>?>(null) }
+    // True while the catalog picker is open for adding a bead to the current project.
+    var projectsCatalogPickerMode by rememberSaveable { mutableStateOf(false) }
 
     // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -193,11 +195,32 @@ fun AdaptiveScaffold() {
             AppTab.PROJECTS -> {
                 BackHandler(ordersProjectId != null) {
                     when {
+                        projectsCatalogPickerMode -> projectsCatalogPickerMode = false
                         ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
                         else -> ordersProjectId = null
                     }
                 }
                 when {
+                    projectsCatalogPickerMode && ordersProjectId != null -> {
+                        // Reuse the same VM instance as the detail screen so addBead() writes
+                        // to the correct project.
+                        val projectDetailVm: ProjectDetailViewModel =
+                            hiltViewModel(key = "project_detail_$ordersProjectId")
+                        // TODO: CatalogScreen has no visual indication it is in picker mode
+                        //  (no "Adding bead to: <project>" banner, no cancel button, no
+                        //  contextual TopAppBar). The user's only affordance is the system
+                        //  back gesture. If this causes UX confusion, wrap CatalogScreen in
+                        //  a composable that adds the missing context. The ViewModel
+                        //  architecture (shared VM key, addBead callback) does not need to
+                        //  change — only the presentation layer.
+                        CatalogScreen(
+                            viewModel = catalogViewModel,
+                            onBeadSelected = { code ->
+                                projectDetailVm.addBead(code)
+                                projectsCatalogPickerMode = false
+                            },
+                        )
+                    }
                     ordersAddToOrderCodes != null && ordersProjectId != null -> {
                         // Same key as the ProjectDetailScreen branch so that both branches
                         // share the same ViewModel instance (Hilt returns the cached VM).
@@ -234,6 +257,7 @@ fun AdaptiveScaffold() {
                                 ordersProjectId = null
                             },
                             onAddToOrder = { codes -> ordersAddToOrderCodes = codes },
+                            onAddBeadFromCatalog = { projectsCatalogPickerMode = true },
                         )
                     }
                     else -> {

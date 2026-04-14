@@ -170,4 +170,8 @@
     <!-- Project rename -->
     <string name="rename_confirm">Confirm rename</string>
     <string name="project_name_blank_error">Name cannot be blank</string>
+
+    <!-- Add bead from catalog picker -->
+    <string name="add_bead_from_catalog">Add bead from catalog</string>
+    <string name="bead_already_in_project">This bead is already in the project</string>
 </resources>

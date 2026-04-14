@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -113,6 +114,7 @@ fun ProjectDetailScreen(
     viewModel: ProjectDetailViewModel,
     onNavigateBack: () -> Unit,
     onAddToOrder: (selectedCodes: Set<String>) -> Unit,
+    onAddBeadFromCatalog: () -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
@@ -167,6 +169,16 @@ fun ProjectDetailScreen(
                 is ExportResult.Failure.NoGrid -> exportErrorMessage = exportNoGridMessage
                 is ExportResult.Failure.IoError -> exportErrorMessage = exportIoErrorMessage
                 is ExportResult.Failure.NotFound -> exportErrorMessage = exportNotFoundMessage
+            }
+        }
+    }
+
+    val beadAlreadyInProjectMessage = stringResource(R.string.bead_already_in_project)
+    LaunchedEffect(Unit) {
+        viewModel.addBeadEvents.collect { event ->
+            when (event) {
+                is AddBeadEvent.AlreadyPresent ->
+                    snackbarHostState.showSnackbar(beadAlreadyInProjectMessage)
             }
         }
     }
@@ -254,14 +266,22 @@ fun ProjectDetailScreen(
                                 contentDescription = stringResource(R.string.rename_confirm),
                             )
                         }
-                    } else if (isGridBacked) {
-                        IconButton(onClick = {
-                            exportLauncher.launch("${project?.name ?: "project"}.rgp")
-                        }) {
+                    } else {
+                        IconButton(onClick = onAddBeadFromCatalog) {
                             Icon(
-                                Icons.Filled.FileDownload,
-                                contentDescription = stringResource(R.string.export_rgp),
+                                Icons.Filled.LibraryAdd,
+                                contentDescription = stringResource(R.string.add_bead_from_catalog),
                             )
+                        }
+                        if (isGridBacked) {
+                            IconButton(onClick = {
+                                exportLauncher.launch("${project?.name ?: "project"}.rgp")
+                            }) {
+                                Icon(
+                                    Icons.Filled.FileDownload,
+                                    contentDescription = stringResource(R.string.export_rgp),
+                                )
+                            }
                         }
                     }
                 },
