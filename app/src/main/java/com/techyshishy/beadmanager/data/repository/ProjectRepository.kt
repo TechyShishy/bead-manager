@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.shareIn
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +24,27 @@ class ProjectRepository @Inject constructor(
     private val sharedProjects =
         source.projectsStream()
             .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    /**
+     * In-memory cache of grid rows keyed by projectId.
+     *
+     * Grids are immutable after import so this cache never needs invalidation — it is
+     * append-only for the lifetime of the process. ConcurrentHashMap provides thread safety
+     * without a mutex for the common read path.
+     *
+     * A benign double-fetch race is possible when two coroutines simultaneously discover the
+     * same key is absent. Both reads are idempotent (Firestore offline SQLite cache makes them
+     * cheap) and the second write merely overwrites with an identical value, so the race is
+     * accepted rather than guarded with a per-key lock.
+     */
+    private val gridCache = ConcurrentHashMap<String, List<ProjectRgpRow>>()
+
+    /**
+     * Returns the grid rows for [projectId], reading from the in-memory cache when available
+     * and populating the cache from Firestore on a miss.
+     */
+    suspend fun cachedProjectGrid(projectId: String): List<ProjectRgpRow> =
+        gridCache.getOrPut(projectId) { readProjectGrid(projectId) }
 
     fun projectsStream(): Flow<List<ProjectEntry>> = sharedProjects
 

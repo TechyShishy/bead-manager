@@ -187,4 +187,8 @@
     <string name="unpin_bead_from_comparison">Remove %s from comparison</string>
     <string name="comparison_strip_in_stock_only">In stock only</string>
     <string name="comparison_strip_clear_all">Clear all</string>
+
+    <!-- Project list satisfaction badge -->
+    <string name="project_status_ready">Ready</string>
+    <string name="project_status_missing">%1$d missing</string>
 </resources>

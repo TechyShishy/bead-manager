@@ -64,42 +64,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.model.effectiveDeficitFor
 import com.techyshishy.beadmanager.domain.ExportResult
 import java.math.BigDecimal
 import java.text.DateFormat
-import kotlin.math.max
-
-/**
- * Inventory quantities below this many grams are treated as zero-deficit for display
- * purposes. Keeps floating-point noise from keeping a bead in the "needs ordering" state.
- */
-private const val SUFFICIENT_THRESHOLD_GRAMS = 0.001
-
-/** Resolves the effective minimum-stock threshold for a bead. */
-private fun effectiveThresholdFor(entry: InventoryEntry?, globalThreshold: Double): Double =
-    if ((entry?.lowStockThresholdGrams ?: 0.0) > 0.0) entry!!.lowStockThresholdGrams
-    else globalThreshold
-
-/**
- * Effective deficit including the minimum-stock replenishment amount.
- *
- * Returns max(0, targetGrams + effectiveThreshold - inventoryGrams), floored to 0 when
- * the result is below [SUFFICIENT_THRESHOLD_GRAMS] to suppress floating-point noise.
- */
-private fun effectiveDeficitFor(
-    bead: ProjectBeadEntry,
-    entry: InventoryEntry?,
-    globalThreshold: Double,
-): Double {
-    val inStock = entry?.quantityGrams ?: 0.0
-    val threshold = effectiveThresholdFor(entry, globalThreshold)
-    val raw = max(0.0, bead.targetGrams + threshold - inStock)
-    return if (raw < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else raw
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -10,12 +10,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +55,7 @@ fun ProjectsScreen(
     onProjectSelected: (projectId: String, projectName: String) -> Unit,
 ) {
     val projects by viewModel.projects.collectAsState()
+    val beadSatisfaction by viewModel.beadSatisfaction.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
@@ -117,6 +121,7 @@ fun ProjectsScreen(
                 items(projects, key = { it.projectId }) { project ->
                     ProjectRow(
                         project = project,
+                        satisfaction = beadSatisfaction[project.projectId],
                         onClick = { onProjectSelected(project.projectId, project.name) },
                         onDelete = { deleteTarget = project },
                     )
@@ -205,6 +210,7 @@ private fun ImportErrorDialog(
 @Composable
 private fun ProjectRow(
     project: ProjectEntry,
+    satisfaction: Int?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -226,6 +232,41 @@ private fun ProjectRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            when {
+                satisfaction == 0 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.project_status_ready),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                satisfaction != null && satisfaction > 0 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.project_status_missing, satisfaction),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                else -> Unit
             }
         }
         Spacer(Modifier.width(8.dp))
