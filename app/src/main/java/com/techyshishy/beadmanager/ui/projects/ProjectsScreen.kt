@@ -118,7 +118,9 @@ fun ProjectsScreen(
                                         {
                                             Icon(
                                                 if (sortOrder.direction == SortDirection.ASCENDING) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                                                contentDescription = null,
+                                                contentDescription = stringResource(
+                                                    if (sortOrder.direction == SortDirection.ASCENDING) R.string.sort_direction_ascending else R.string.sort_direction_descending,
+                                                ),
                                             )
                                         }
                                     } else null,
