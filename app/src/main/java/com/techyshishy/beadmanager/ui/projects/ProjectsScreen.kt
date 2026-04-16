@@ -246,14 +246,14 @@ private fun SatisfactionBar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             modifier = semanticsModifier
                 .fillMaxWidth()
-                .height(6.dp),
+                .height(10.dp),
         ) {
             satisfaction.beadStatuses.forEach { isSatisfied ->
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(5.dp))
                         .background(
                             if (isSatisfied) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error,
@@ -269,8 +269,8 @@ private fun SatisfactionBar(
             },
             modifier = semanticsModifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp)),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.errorContainer,
         )
