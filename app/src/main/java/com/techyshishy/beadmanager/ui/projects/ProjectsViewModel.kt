@@ -155,5 +155,15 @@ class ProjectsViewModel @Inject constructor(
             _importResult.emit(result)
         }
     }
+
+    fun addBeadToProject(beadCode: String, projectId: String) {
+        viewModelScope.launch {
+            val project = projects.value.find { it.projectId == projectId } ?: return@launch
+            if (project.colorMapping.containsValue(beadCode)) return@launch
+            projectRepository.updateProject(
+                project.copy(colorMapping = project.colorMapping + (beadCode to beadCode))
+            )
+        }
+    }
 }
 

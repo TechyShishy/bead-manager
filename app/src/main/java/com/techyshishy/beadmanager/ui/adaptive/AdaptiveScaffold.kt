@@ -28,20 +28,16 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.techyshishy.beadmanager.R
@@ -70,7 +66,6 @@ enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }
 @Composable
 fun AdaptiveScaffold() {
     var currentTab by rememberSaveable { mutableStateOf(AppTab.CATALOG) }
-    val scope = rememberCoroutineScope()
 
     val catalogViewModel: CatalogViewModel = hiltViewModel()
     val pinnedCodes by catalogViewModel.pinnedCodes.collectAsState()
@@ -82,7 +77,8 @@ fun AdaptiveScaffold() {
 
     // Catalog tab: nav state (grid → bead detail).
     var catalogDetailCode by rememberSaveable { mutableStateOf<String?>(null) }
-    val catalogSnackbarHostState = remember { SnackbarHostState() }
+    // Non-null while catalog-initiated project picker is active; holds the staged bead code.
+    var catalogProjectPickerBeadCode by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Projects tab: nav state (projects → project detail → add-to-order).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -168,10 +164,9 @@ fun AdaptiveScaffold() {
                             beadCode = code,
                             viewModel = detailVm,
                             onNavigateBack = { catalogDetailCode = null },
-                            onShowSnackbar = { message ->
-                                scope.launch {
-                                    catalogSnackbarHostState.showSnackbar(message)
-                                }
+                            onAddToProject = {
+                                catalogProjectPickerBeadCode = code
+                                currentTab = AppTab.PROJECTS
                             },
                             isPinned = code in pinnedCodes,
                             onPinToggle = { catalogViewModel.togglePin(code) },
@@ -182,10 +177,6 @@ fun AdaptiveScaffold() {
                             onBeadSelected = { selected -> catalogDetailCode = selected },
                         )
                     }
-                    SnackbarHost(
-                        hostState = catalogSnackbarHostState,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
                 }
             }
 
@@ -201,6 +192,62 @@ fun AdaptiveScaffold() {
                     }
                 }
                 when {
+                    catalogProjectPickerBeadCode != null -> {
+                        BackHandler {
+                            catalogProjectPickerBeadCode = null
+                            currentTab = AppTab.CATALOG
+                        }
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .statusBarsPadding()
+                                        .padding(horizontal = 4.dp),
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            catalogProjectPickerBeadCode = null
+                                            currentTab = AppTab.CATALOG
+                                        },
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.picker_cancel),
+                                        )
+                                    }
+                                    Text(
+                                        text = stringResource(
+                                            R.string.picker_add_bead_to_project_hint,
+                                            catalogProjectPickerBeadCode!!,
+                                        ),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(start = 4.dp),
+                                    )
+                                }
+                            }
+                            Box(modifier = Modifier.consumeWindowInsets(WindowInsets.statusBars)) {
+                                ProjectsScreen(
+                                    viewModel = projectsViewModel,
+                                    onProjectSelected = { projectId, _ ->
+                                        projectsViewModel.addBeadToProject(
+                                            catalogProjectPickerBeadCode!!,
+                                            projectId,
+                                        )
+                                        catalogProjectPickerBeadCode = null
+                                        currentTab = AppTab.CATALOG
+                                    },
+                                )
+                            }
+                        }
+                    }
                     projectsCatalogPickerMode && ordersProjectId != null -> {
                         // Reuse the same VM instance as the detail screen so addBead() writes
                         // to the correct project.

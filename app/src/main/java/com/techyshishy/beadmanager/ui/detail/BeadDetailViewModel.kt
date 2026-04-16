@@ -4,13 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
-import com.techyshishy.beadmanager.data.model.nextBijectiveKey
-import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD
-import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +34,6 @@ class BeadDetailViewModel @Inject constructor(
     private val catalogRepository: CatalogRepository,
     private val inventoryRepository: InventoryRepository,
     preferencesRepository: PreferencesRepository,
-    private val projectRepository: ProjectRepository,
 ) : ViewModel() {
 
     private val beadCode = MutableStateFlow("")
@@ -104,33 +100,5 @@ class BeadDetailViewModel @Inject constructor(
     }
 
     fun resetThresholdToGlobal() = updateThreshold(0.0)
-
-    // ── Project bead list ──────────────────────────────────────────────────────
-
-    /**
-     * All projects belonging to the current user. Drives the "Add to project"
-     * selector in the catalog detail pane.
-     */
-    val projects: StateFlow<List<ProjectEntry>> =
-        projectRepository.projectsStream()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * Registers the current bead in [projectId]'s [colorMapping] by assigning it a new
-     * bijective palette key. This makes the bead visible in the project bead list at 0g
-     * target until the project's RGP grid is updated to include steps for this palette key.
-     *
-     * If the bead is already registered (its DB code appears in [colorMapping] values) this
-     * is a no-op. No grid row or step is created; grams come only from grid step counts.
-     *
-     * No-ops silently if the bead code is blank (i.e. [initialize] has not been called).
-     */
-    suspend fun addToProject(projectId: String) {
-        val code = beadCode.value.takeIf { it.isNotBlank() } ?: return
-        val project = projects.value.find { it.projectId == projectId } ?: return
-        if (project.colorMapping.containsValue(code)) return
-        val newKey = nextBijectiveKey(project.colorMapping)
-        projectRepository.updateProject(project.copy(colorMapping = project.colorMapping + (newKey to code)))
-    }
 }
 

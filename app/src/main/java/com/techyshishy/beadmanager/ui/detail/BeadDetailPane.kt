@@ -25,10 +25,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PushPin
@@ -42,10 +38,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -58,7 +51,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +61,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -77,19 +68,17 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.model.BEADS_PER_GRAM
 import java.math.BigDecimal
 import java.text.NumberFormat
-import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BeadDetailPane(
     beadCode: String,
     viewModel: BeadDetailViewModel,
     onNavigateBack: (() -> Unit)? = null,
-    onShowSnackbar: (String) -> Unit = {},
+    onAddToProject: () -> Unit = {},
     isPinned: Boolean = false,
     onPinToggle: () -> Unit = {},
 ) {
@@ -107,9 +96,6 @@ fun BeadDetailPane(
     val inventory = item.inventory
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
-    val projects by viewModel.projects.collectAsState()
-    var showAddToProjectSheet by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     val hexColor = remember(bead.hex) {
         runCatching { Color(bead.hex.toColorInt()) }.getOrDefault(Color.Gray)
@@ -387,19 +373,10 @@ fun BeadDetailPane(
 
             // Add to project
             Button(
-                onClick = { showAddToProjectSheet = true },
-                enabled = projects.isNotEmpty(),
+                onClick = onAddToProject,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(R.string.add_to_project))
-            }
-            if (projects.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.no_projects_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
             }
             Spacer(Modifier.height(8.dp))
             Button(
@@ -414,97 +391,6 @@ fun BeadDetailPane(
             }
             if (!isPhoneLayout) {
                 Spacer(Modifier.navigationBarsPadding())
-            }
-        }
-    }
-    if (showAddToProjectSheet) {
-        AddToProjectSheet(
-            beadCode = bead.code,
-            projects = projects,
-            onConfirm = { projectId ->
-                val projectName = projects.find { it.projectId == projectId }?.name ?: projectId
-                val message = context.getString(R.string.bead_added_to_project, bead.code, projectName)
-                scope.launch {
-                    viewModel.addToProject(projectId)
-                    showAddToProjectSheet = false
-                    onShowSnackbar(message)
-                }
-            },
-            onDismiss = { showAddToProjectSheet = false },
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddToProjectSheet(
-    beadCode: String,
-    projects: List<ProjectEntry>,
-    onConfirm: (projectId: String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedProjectId by remember { mutableStateOf<String?>(null) }
-
-    val isAlreadyInSelected = remember(selectedProjectId, projects) {
-        selectedProjectId?.let { id ->
-            projects.find { it.projectId == id }?.colorMapping?.containsValue(beadCode)
-        } ?: false
-    }
-    val canConfirm = selectedProjectId != null && !isAlreadyInSelected
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 24.dp)
-                .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.add_to_project_title, beadCode),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-                items(projects, key = { it.projectId }) { project ->
-                    val isAlreadyIn = project.colorMapping.containsValue(beadCode)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = project.projectId == selectedProjectId,
-                                onClick = { selectedProjectId = project.projectId },
-                                role = Role.RadioButton,
-                            )
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        RadioButton(
-                            selected = project.projectId == selectedProjectId,
-                            onClick = null,
-                        )
-                        Text(project.name, modifier = Modifier.weight(1f))
-                        if (isAlreadyIn) {
-                            Text(
-                                text = stringResource(R.string.already_in_project),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-            Button(
-                onClick = { onConfirm(selectedProjectId!!) },
-                enabled = canConfirm,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.add_to_project))
             }
         }
     }
