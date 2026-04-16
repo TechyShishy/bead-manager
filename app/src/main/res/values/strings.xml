@@ -129,6 +129,15 @@
     <string name="sort_bead_types">Bead Types</string>
     <string name="sort_grid_size">Grid Size</string>
 
+    <!-- Satisfaction bar content descriptions (TalkBack) -->
+    <!-- %1$d = total bead types -->
+    <plurals name="sat_bar_all_satisfied">
+        <item quantity="one">All %1$d bead type stocked</item>
+        <item quantity="other">All %1$d bead types stocked</item>
+    </plurals>
+    <!-- %1$d = satisfied count, %2$d = total count -->
+    <string name="sat_bar_partial">%1$d of %2$d bead types stocked</string>
+
     <string name="import_failed_title">Import failed</string>
     <string name="import_failed_not_gzip">File does not appear to be a valid RGP project.</string>
     <string name="import_failed_invalid_json">RGP file is corrupt or unreadable.</string>

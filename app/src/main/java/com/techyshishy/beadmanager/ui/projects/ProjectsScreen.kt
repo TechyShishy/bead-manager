@@ -53,6 +53,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
@@ -224,11 +227,24 @@ private fun SatisfactionBar(
     satisfaction: ProjectSatisfaction,
     modifier: Modifier = Modifier,
 ) {
-    // TODO: add contentDescription for accessibility (deferred)
+    val desc = if (satisfaction.deficitCount == 0) {
+        pluralStringResource(
+            R.plurals.sat_bar_all_satisfied,
+            satisfaction.totalCount,
+            satisfaction.totalCount,
+        )
+    } else {
+        stringResource(
+            R.string.sat_bar_partial,
+            satisfaction.totalCount - satisfaction.deficitCount,
+            satisfaction.totalCount,
+        )
+    }
+    val semanticsModifier = modifier.clearAndSetSemantics { contentDescription = desc }
     if (satisfaction.totalCount <= SEGMENTED_BAR_MAX_BEADS) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = modifier
+            modifier = semanticsModifier
                 .fillMaxWidth()
                 .height(6.dp),
         ) {
@@ -251,7 +267,7 @@ private fun SatisfactionBar(
                 (satisfaction.totalCount - satisfaction.deficitCount).toFloat() /
                     satisfaction.totalCount
             },
-            modifier = modifier
+            modifier = semanticsModifier
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp)),
