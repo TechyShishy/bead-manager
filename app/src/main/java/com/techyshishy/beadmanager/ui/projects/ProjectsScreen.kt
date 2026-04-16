@@ -2,27 +2,30 @@ package com.techyshishy.beadmanager.ui.projects
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -32,6 +35,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -47,10 +51,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.model.ProjectSatisfaction
 import com.techyshishy.beadmanager.domain.ImportResult
 import java.text.DateFormat
 
@@ -211,6 +217,50 @@ fun ProjectsScreen(
     }
 }
 
+private const val SEGMENTED_BAR_MAX_BEADS = 20
+
+@Composable
+private fun SatisfactionBar(
+    satisfaction: ProjectSatisfaction,
+    modifier: Modifier = Modifier,
+) {
+    // TODO: add contentDescription for accessibility (deferred)
+    if (satisfaction.totalCount <= SEGMENTED_BAR_MAX_BEADS) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = modifier
+                .fillMaxWidth()
+                .height(6.dp),
+        ) {
+            satisfaction.beadStatuses.forEach { isSatisfied ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            if (isSatisfied) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
+                        ),
+                )
+            }
+        }
+    } else {
+        LinearProgressIndicator(
+            progress = {
+                (satisfaction.totalCount - satisfaction.deficitCount).toFloat() /
+                    satisfaction.totalCount
+            },
+            modifier = modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.errorContainer,
+        )
+    }
+}
+
 @Composable
 private fun ImportErrorDialog(
     error: ImportResult.Failure,
@@ -251,7 +301,7 @@ private fun ImportErrorDialog(
 @Composable
 private fun ProjectRow(
     project: ProjectEntry,
-    satisfaction: Int?,
+    satisfaction: ProjectSatisfaction?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -274,40 +324,11 @@ private fun ProjectRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            when {
-                satisfaction == 0 -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.project_status_ready),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-                satisfaction != null && satisfaction > 0 -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.project_status_missing, satisfaction),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-                else -> Unit
+            if (satisfaction != null) {
+                SatisfactionBar(
+                    satisfaction = satisfaction,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
         Spacer(Modifier.width(8.dp))

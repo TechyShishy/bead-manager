@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.model.computeBeadRequirements
+import com.techyshishy.beadmanager.data.model.ProjectSatisfaction
 import com.techyshishy.beadmanager.data.model.computeProjectSatisfaction
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
@@ -57,13 +58,13 @@ class ProjectsViewModel @Inject constructor(
     private val _projectBeads = MutableStateFlow<Map<String, List<ProjectBeadEntry>>>(emptyMap())
 
     /**
-     * Satisfaction status per project: `0` = all beads met, `N > 0` = N beads with deficit,
-     * `null` = no DB beads or grid not yet loaded.
+     * Satisfaction status per project: all-true = all beads met, any-false = deficit,
+     * `null` = no Delica beads or grid not yet loaded.
      *
      * Derived from live inventory + global threshold so it updates reactively as stock changes.
      * A 150 ms debounce absorbs inventory burst-sync events without unnecessary recomputation.
      */
-    val beadSatisfaction: StateFlow<Map<String, Int?>> =
+    val beadSatisfaction: StateFlow<Map<String, ProjectSatisfaction?>> =
         combine(
             _projectBeads,
             inventoryRepository.inventoryStream(),

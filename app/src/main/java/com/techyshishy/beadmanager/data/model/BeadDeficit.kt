@@ -31,12 +31,24 @@ fun effectiveDeficitFor(
 }
 
 /**
+ * Per-project satisfaction summary.
+ *
+ * [beadStatuses] is ordered: satisfied beads first (ascending DB code), then deficit
+ * beads (ascending DB code). This ordering makes the bar read like a progress fill.
+ */
+data class ProjectSatisfaction(val beadStatuses: List<Boolean>) {
+    val deficitCount: Int get() = beadStatuses.count { !it }
+    val totalCount: Int get() = beadStatuses.size
+}
+
+/**
  * Computes a project-level satisfaction status from its bead list.
  *
  * Returns:
- * - `null`  — no DB beads (no indicator shown)
- * - `0`     — every bead's effective deficit is zero (project is ready)
- * - `N > 0` — N beads have a positive effective deficit
+ * - `null` — no Delica beads (no indicator shown)
+ * - a [ProjectSatisfaction] whose [ProjectSatisfaction.beadStatuses] lists one boolean
+ *   per Delica bead type: `true` = deficit is zero, `false` = deficit is positive.
+ *   Beads are ordered satisfied-first (by DB code), then deficit (by DB code).
  *
  * [beads] is the list of [ProjectBeadEntry] for the project (may include 0-g entries for
  * beads registered only in colorMapping). [inventory] is the full inventory map keyed by
@@ -46,10 +58,15 @@ fun computeProjectSatisfaction(
     beads: List<ProjectBeadEntry>,
     inventory: Map<String, InventoryEntry>,
     globalThreshold: Double,
-): Int? {
+): ProjectSatisfaction? {
     val delicaBeads = beads.filter { it.beadCode.startsWith("DB") }
     if (delicaBeads.isEmpty()) return null
-    return delicaBeads.count { bead ->
-        effectiveDeficitFor(bead, inventory[bead.beadCode], globalThreshold) > 0.0
-    }
+    val statuses = delicaBeads
+        .map { bead ->
+            val satisfied = effectiveDeficitFor(bead, inventory[bead.beadCode], globalThreshold) == 0.0
+            Pair(bead.beadCode, satisfied)
+        }
+        .sortedWith(compareBy({ !it.second }, { it.first }))
+        .map { it.second }
+    return ProjectSatisfaction(statuses)
 }

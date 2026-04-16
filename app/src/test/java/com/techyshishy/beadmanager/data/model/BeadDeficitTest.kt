@@ -76,7 +76,7 @@ class BeadDeficitTest {
     }
 
     @Test
-    fun `computeProjectSatisfaction returns 0 when all beads are satisfied`() {
+    fun `computeProjectSatisfaction returns zero deficitCount when all beads are satisfied`() {
         val beads = listOf(
             ProjectBeadEntry(beadCode = "DB0001", targetGrams = 10.0),
             ProjectBeadEntry(beadCode = "DB0010", targetGrams = 8.0),
@@ -85,11 +85,13 @@ class BeadDeficitTest {
             "DB0001" to InventoryEntry(beadCode = "DB0001", quantityGrams = 20.0),
             "DB0010" to InventoryEntry(beadCode = "DB0010", quantityGrams = 20.0),
         )
-        assertEquals(0, computeProjectSatisfaction(beads, inventory, globalThreshold))
+        val result = computeProjectSatisfaction(beads, inventory, globalThreshold)
+        assertEquals(0, result?.deficitCount)
+        assertEquals(2, result?.totalCount)
     }
 
     @Test
-    fun `computeProjectSatisfaction returns 1 when one bead has a deficit`() {
+    fun `computeProjectSatisfaction returns 1 deficitCount when one bead has a deficit`() {
         val beads = listOf(
             ProjectBeadEntry(beadCode = "DB0001", targetGrams = 10.0),
             ProjectBeadEntry(beadCode = "DB0010", targetGrams = 8.0),
@@ -98,7 +100,9 @@ class BeadDeficitTest {
             "DB0001" to InventoryEntry(beadCode = "DB0001", quantityGrams = 20.0),
             // DB0010 missing - effective deficit = 8 + 5 - 0 = 13
         )
-        assertEquals(1, computeProjectSatisfaction(beads, inventory, globalThreshold))
+        val result = computeProjectSatisfaction(beads, inventory, globalThreshold)
+        assertEquals(1, result?.deficitCount)
+        assertEquals(2, result?.totalCount)
     }
 
     @Test
@@ -109,15 +113,18 @@ class BeadDeficitTest {
             ProjectBeadEntry(beadCode = "DB0020", targetGrams = 5.0),
         )
         // All missing from inventory
-        assertEquals(3, computeProjectSatisfaction(beads, emptyMap(), globalThreshold))
+        val result = computeProjectSatisfaction(beads, emptyMap(), globalThreshold)
+        assertEquals(3, result?.deficitCount)
+        assertEquals(3, result?.totalCount)
     }
 
     @Test
-    fun `computeProjectSatisfaction returns 0 for zero-target beads with no inventory threshold`() {
+    fun `computeProjectSatisfaction returns 1 deficitCount for zero-target beads with no inventory`() {
         // A bead with 0g target and no per-bead threshold: 0 + globalThreshold - 0 = 5 (deficit!)
-        // Expect: 1 (the bead has a deficit because restocking buffer is applied)
         val beads = listOf(ProjectBeadEntry(beadCode = "DB0001", targetGrams = 0.0))
-        assertEquals(1, computeProjectSatisfaction(beads, emptyMap(), globalThreshold))
+        val result = computeProjectSatisfaction(beads, emptyMap(), globalThreshold)
+        assertEquals(1, result?.deficitCount)
+        assertEquals(1, result?.totalCount)
     }
 
     @Test
@@ -131,6 +138,41 @@ class BeadDeficitTest {
             ),
         )
         // deficit = max(0, 0 + 2 - 3) = 0 — satisfied because per-bead override is lower
-        assertEquals(0, computeProjectSatisfaction(beads, inventory, globalThreshold))
+        val result = computeProjectSatisfaction(beads, inventory, globalThreshold)
+        assertEquals(0, result?.deficitCount)
+    }
+
+    @Test
+    fun `computeProjectSatisfaction orders satisfied beads before deficit beads`() {
+        // DB0001 = satisfied, DB0010 = deficit, DB0020 = satisfied, DB0030 = deficit
+        val beads = listOf(
+            ProjectBeadEntry(beadCode = "DB0030", targetGrams = 5.0),
+            ProjectBeadEntry(beadCode = "DB0001", targetGrams = 5.0),
+            ProjectBeadEntry(beadCode = "DB0020", targetGrams = 5.0),
+            ProjectBeadEntry(beadCode = "DB0010", targetGrams = 5.0),
+        )
+        val inventory = mapOf(
+            "DB0001" to InventoryEntry(beadCode = "DB0001", quantityGrams = 20.0),
+            "DB0020" to InventoryEntry(beadCode = "DB0020", quantityGrams = 20.0),
+            // DB0010 and DB0030 missing → deficit
+        )
+        val result = computeProjectSatisfaction(beads, inventory, globalThreshold)!!
+        // Expected order: DB0001 (satisfied), DB0020 (satisfied), DB0010 (deficit), DB0030 (deficit)
+        assertEquals(listOf(true, true, false, false), result.beadStatuses)
+    }
+
+    @Test
+    fun `computeProjectSatisfaction all-deficit list has correct count and all-false statuses`() {
+        // Note: within-group DB-code ordering is not observable from List<Boolean> — the sort is
+        // verified indirectly by the ordering test that mixes satisfied and deficit beads.
+        val beads = listOf(
+            ProjectBeadEntry(beadCode = "DB0030", targetGrams = 5.0),
+            ProjectBeadEntry(beadCode = "DB0010", targetGrams = 5.0),
+            ProjectBeadEntry(beadCode = "DB0020", targetGrams = 5.0),
+        )
+        val result = computeProjectSatisfaction(beads, emptyMap(), globalThreshold)!!
+        assertEquals(3, result.deficitCount)
+        assertEquals(3, result.totalCount)
+        assertEquals(listOf(false, false, false), result.beadStatuses)
     }
 }
