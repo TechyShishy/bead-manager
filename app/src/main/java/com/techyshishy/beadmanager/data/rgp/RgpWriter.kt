@@ -35,10 +35,9 @@ internal fun djb2(s: String): Int {
  *   absent and empty identically; pxlpxl files never include them)
  *
  * [rows] is passed separately from [project] because the grid is stored in a Firestore
- * subcollection rather than inline in [ProjectEntry]. An empty [rows] list is valid when
- * [project]'s [ProjectEntry.colorMapping] is non-empty — the resulting file has an empty
- * `rows` array and can be round-tripped through [parseRgp]. [ExportRgpProjectUseCase] only
- * blocks export when *both* rows and colorMapping are empty.
+ * subcollection rather than inline in [ProjectEntry]. [ExportRgpProjectUseCase] synthesizes
+ * rows for FAB-created projects so [rows] is always non-empty at this call site; an empty
+ * list is only valid in tests that exercise the serialization layer directly.
  *
  * [stream] is wrapped in a [GZIPOutputStream] internally. The gzip trailer is written
  * via [GZIPOutputStream.finish] before this function returns, but [stream] itself is

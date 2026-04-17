@@ -7,6 +7,7 @@ import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.data.rgp.parseRgp
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
@@ -113,6 +115,16 @@ class ExportRgpProjectUseCaseTest {
         assertTrue("Expected Success for FAB project with beads but got $result", result is ExportResult.Success)
         assertEquals("Hand-built.rgp", (result as ExportResult.Success).suggestedFilename)
         assertTrue("Expected non-empty output stream", out.size() > 0)
+
+        // The synthesized output must be a valid RGP with bead rows — not empty rows.
+        val parsed = parseRgp(ByteArrayInputStream(out.toByteArray()))
+        assertTrue("Expected synthesized rows in exported RGP", parsed.rows.isNotEmpty())
+        // n=2 colors → 2n=4 buffer rows, each 2 beads wide
+        assertEquals("Expected 4 synthesized rows for 2-color project", 4, parsed.rows.size)
+        parsed.rows.forEach { row ->
+            val beadsInRow = row.steps.sumOf { it.count }
+            assertEquals("Expected 2 beads per row for 2-column buffer", 2, beadsInRow)
+        }
     }
 
     @Test
