@@ -74,7 +74,7 @@ class ExportRgpProjectUseCaseTest {
     }
 
     @Test
-    fun `returns NoGrid when readProjectGrid returns empty list`() = runTest {
+    fun `returns NoGrid when project has no rows and no colorMapping`() = runTest {
         val flatProject = ProjectEntry(projectId = "flat-id", name = "Flat", rowCount = 0)
         val projectRepository: ProjectRepository = mockk {
             every { projectStream("flat-id") } returns flowOf(flatProject)
@@ -86,6 +86,33 @@ class ExportRgpProjectUseCaseTest {
         )
         val result = useCase.export("flat-id", uri)
         assertEquals(ExportResult.Failure.NoGrid, result)
+    }
+
+    @Test
+    fun `returns Success for FAB-created project with colorMapping and no grid rows`() = runTest {
+        val fabProject = ProjectEntry(
+            projectId = "fab-id",
+            name = "Hand-built",
+            rowCount = 0,
+            colorMapping = mapOf("A" to "DB0001", "B" to "DB0002"),
+        )
+        val projectRepository: ProjectRepository = mockk {
+            every { projectStream("fab-id") } returns flowOf(fabProject)
+            coEvery { readProjectGrid("fab-id") } returns emptyList()
+        }
+        val out = ByteArrayOutputStream()
+        val contentResolver: ContentResolver = mockk {
+            every { openOutputStream(uri) } returns out
+            every { query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null) } returns null
+        }
+        val useCase = ExportRgpProjectUseCase(
+            contentResolver = contentResolver,
+            projectRepository = projectRepository,
+        )
+        val result = useCase.export("fab-id", uri)
+        assertTrue("Expected Success for FAB project with beads but got $result", result is ExportResult.Success)
+        assertEquals("Hand-built.rgp", (result as ExportResult.Success).suggestedFilename)
+        assertTrue("Expected non-empty output stream", out.size() > 0)
     }
 
     @Test

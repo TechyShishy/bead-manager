@@ -16,7 +16,7 @@ sealed class ExportResult {
     sealed class Failure : ExportResult() {
         /** No project with the given ID was found in Firestore. */
         data object NotFound : Failure()
-        /** The project exists but has no RGP grid — it cannot produce a meaningful export. */
+        /** The project exists but has no grid rows and no beads — nothing to export. */
         data object NoGrid : Failure()
         /** An I/O error occurred while writing the output stream. */
         data object IoError : Failure()
@@ -30,9 +30,9 @@ sealed class ExportResult {
  * The export mirrors the import path in [ImportRgpProjectUseCase]: load from Firestore,
  * validate, then perform I/O-bound work on [Dispatchers.IO].
  *
- * Returns [ExportResult.Failure.NotFound] if the project does not exist, [ExportResult.Failure.NoGrid]
- * if the project has no grid (flat-list projects created before RGP import was implemented),
- * or [ExportResult.Failure.IoError] if writing the output stream fails.
+ * Returns [ExportResult.Failure.NotFound] if the project does not exist,
+ * [ExportResult.Failure.NoGrid] if the project has neither grid rows nor beads (completely
+ * empty), or [ExportResult.Failure.IoError] if writing the output stream fails.
  */
 class ExportRgpProjectUseCase @Inject constructor(
     private val contentResolver: ContentResolver,
@@ -43,7 +43,7 @@ class ExportRgpProjectUseCase @Inject constructor(
             ?: return ExportResult.Failure.NotFound
 
         val rows = projectRepository.readProjectGrid(projectId)
-        if (rows.isEmpty()) return ExportResult.Failure.NoGrid
+        if (rows.isEmpty() && project.colorMapping.isEmpty()) return ExportResult.Failure.NoGrid
 
         return try {
             withContext(Dispatchers.IO) {

@@ -93,6 +93,7 @@ fun ProjectDetailScreen(
     val beadLookup by viewModel.beadLookup.collectAsState()
 
     val isGridBacked = project?.rowCount?.let { it > 0 } == true
+    val hasBeads = project?.colorMapping?.isNotEmpty() == true
 
     val deficitCodes = remember(beads, inventoryEntries, globalThreshold) {
         beads
@@ -235,7 +236,7 @@ fun ProjectDetailScreen(
                                 contentDescription = stringResource(R.string.add_bead_from_catalog),
                             )
                         }
-                        if (isGridBacked) {
+                        if (hasBeads) {
                             IconButton(onClick = {
                                 exportLauncher.launch("${project?.name ?: "project"}.rgp")
                             }) {
