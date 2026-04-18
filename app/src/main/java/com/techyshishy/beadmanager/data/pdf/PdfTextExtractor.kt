@@ -17,10 +17,8 @@ import javax.inject.Inject
  * - [ContentResolver.openInputStream] returns null (permission denied, file not found, etc.)
  * - the stream is not a valid or readable PDF
  *
- * Font resource initialization (PDFBoxResourceLoader) is intentionally omitted here.
- * BeadTool 4 and XLSM exports embed their fonts, so text extraction works without it.
- * If full font resolution is ever needed, wire PDFBoxResourceLoader.init(context) in the
- * Application class before any call to this function.
+ * Font resource initialization (PDFBoxResourceLoader.init) is called in BeadManagerApp.onCreate
+ * and must happen before any call to this function.
  */
 suspend fun extractPdfText(contentResolver: ContentResolver, uri: Uri): List<String> =
     withContext(Dispatchers.IO) {
@@ -30,8 +28,6 @@ suspend fun extractPdfText(contentResolver: ContentResolver, uri: Uri): List<Str
             )
         // PDDocument.load() buffers the content internally and does not close the original
         // stream — close it explicitly via the outer use{} to avoid a file descriptor leak.
-        // PDFBoxResourceLoader.init() intentionally omitted:
-        // BeadTool 4 / XLSM exports embed all fonts; no font resolution needed.
         stream.use { s ->
             try {
                 PDDocument.load(s).use { doc ->
