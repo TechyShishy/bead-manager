@@ -1,0 +1,162 @@
+package com.techyshishy.beadmanager.data.pdf
+
+import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import javax.inject.Inject
+
+/**
+ * Extracts the color key (letter → DB code) from a BeadTool 4 PDF.
+ *
+ * The color key is embedded as a rasterized image on a dedicated page — it is
+ * not text-extractable. This class renders that page to a [Bitmap] via
+ * [PdfRenderer] and reads it with ML Kit OCR.
+ *
+ * The [BeadToolPdfParser] produces a [PdfProject] with empty
+ * [PdfProject.colorMapping]; this extractor supplies the missing map. Issue #33
+ * orchestrates combining both.
+ */
+class BeadToolColorKeyExtractor @Inject constructor() {
+
+    /**
+     * Returns the 0-based index into [pages] (as returned by [extractPdfText])
+     * of the color key page.
+     *
+     * The color key page is identified by the presence of "Color count" metadata
+     * text, which BeadTool 4 consistently places on the same page as the bead
+     * legend image. Returns -1 when no such page exists.
+     */
+    fun findColorKeyPageIndex(pages: List<String>): Int =
+        pages.indexOfFirst { "Color count" in it }
+
+    /**
+     * Parses raw OCR text from a color key page into a letter-to-DB-code map.
+     *
+     * Expects text in BeadTool 4 format, e.g.:
+     * ```
+     * Chart #:A
+     * DB-0010
+     * Black
+     * Count:9407
+     * Chart #:B
+     * DB-2368
+     * …
+     * ```
+     * Entries without a DB code (e.g. dropped by OCR noise) are silently skipped.
+     * If the last entry in [ocrText] has no DB code, the loop exits without
+     * processing it — this is intentional; there is nothing further to scan.
+     *
+     * Exposed as a pure function so it can be unit-tested without Android APIs.
+     * Production code delegates per-block through [parseTextBlocks], which calls
+     * this function once per [Text.TextBlock] to handle multi-column layouts.
+     */
+    fun parseColorKeyText(ocrText: String): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val letterRegex = Regex("""Chart #:([A-Z]{1,2})""")
+        val dbCodeRegex = Regex("""(DB-\d{4})""")
+        var searchFrom = 0
+        while (true) {
+            val letterMatch = letterRegex.find(ocrText, searchFrom) ?: break
+            val letter = letterMatch.groupValues[1]
+            val dbMatch = dbCodeRegex.find(ocrText, letterMatch.range.last + 1) ?: break
+            // Associate only if no other Chart # entry appears before the DB code.
+            val nextLetter = letterRegex.find(ocrText, letterMatch.range.last + 1)
+            if (nextLetter == null || dbMatch.range.first < nextLetter.range.first) {
+                result[letter] = dbMatch.groupValues[1]
+            }
+            searchFrom = letterMatch.range.last + 1
+        }
+        return result
+    }
+
+    /**
+     * Renders the PDF page at [pageIndex] (0-based) to a [Bitmap], runs ML Kit
+     * OCR on it, and returns the letter-to-DB-code mapping.
+     *
+     * Parses [Text.TextBlock] objects individually rather than the concatenated
+     * [Text.text] string, which ensures correct association even when ML Kit
+     * returns text from the 3-column grid in row-major order.
+     *
+     * Runs on [Dispatchers.IO]. BeadTool 4 PDFs carry `print:yes` permission,
+     * which is sufficient for [PdfRenderer] to render pages even though `copy:no`
+     * blocks text extraction. If a file carries a user password (non-standard
+     * export), [PdfRenderer] will throw [IOException] — surfaced as [PdfParseException.NotPdf].
+     *
+     * @throws [PdfParseException.NotPdf] if the URI cannot be opened or is not a
+     *   valid PDF.
+     * @throws [com.google.android.gms.tasks.ExecutionException] if ML Kit OCR fails.
+     * @throws [InterruptedException] if the coroutine is cancelled while awaiting OCR.
+     */
+    suspend fun extractColorKey(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        pageIndex: Int,
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        val pfd = contentResolver.openFileDescriptor(uri, "r")
+            ?: throw PdfParseException.NotPdf(
+                IOException("Cannot open file descriptor for URI: $uri"),
+            )
+        pfd.use { descriptor ->
+            // PdfRenderer throws IOException for non-PDF or password-protected files.
+            val renderer = try {
+                PdfRenderer(descriptor)
+            } catch (e: IOException) {
+                throw PdfParseException.NotPdf(e)
+            }
+            renderer.use {
+                renderer.openPage(pageIndex).use { page ->
+                    val scale = RENDER_DPI / POINTS_PER_INCH
+                    val width = (page.width * scale).toInt()
+                    val height = (page.height * scale).toInt()
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    try {
+                        bitmap.eraseColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                        val image = InputImage.fromBitmap(bitmap, 0)
+                        val recognizer =
+                            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                        recognizer.use {
+                            val visionText = try {
+                                Tasks.await(recognizer.process(image))
+                            } catch (e: InterruptedException) {
+                                Thread.currentThread().interrupt()
+                                throw kotlinx.coroutines.CancellationException("OCR interrupted", e)
+                            }
+                            parseTextBlocks(visionText.textBlocks)
+                        }
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Parses ML Kit [Text.TextBlock] objects individually by delegating each
+     * block's text to [parseColorKeyText].
+     *
+     * Each block on the color key page represents one bead entry. Parsing
+     * block-by-block avoids column-ordering problems that arise when processing
+     * the concatenated [Text.text] string from a multi-column layout.
+     */
+    private fun parseTextBlocks(textBlocks: List<Text.TextBlock>): Map<String, String> =
+        textBlocks
+            .map { parseColorKeyText(it.text) }
+            .fold(mutableMapOf()) { acc, m -> acc.also { it.putAll(m) } }
+
+    private companion object {
+        const val RENDER_DPI = 150f
+        const val POINTS_PER_INCH = 72f
+    }
+}

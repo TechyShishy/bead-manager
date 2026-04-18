@@ -22,6 +22,8 @@ googleServices = "4.4.2"
 # PDF text extraction — Apache PDFBox Android port (Apache 2.0; pure Java, no native code;
 # chosen over PdfiumAndroid/LGPL for license compatibility and unit-testability)
 pdfboxAndroid = "2.0.27.0"
+# ML Kit OCR — Play Services variant (model served by Play Services, zero APK size increase)
+mlkitTextRecognition = "19.0.1"
 junit4 = "4.13.2"
 mockk = "1.13.12"
 kotlinxCoroutinesTest = "1.9.0"
@@ -80,6 +82,8 @@ jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 
 # PDF text extraction
 pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfboxAndroid" }
+# ML Kit OCR (color key page recognition)
+play-services-mlkit-text-recognition = { group = "com.google.android.gms", name = "play-services-mlkit-text-recognition", version.ref = "mlkitTextRecognition" }
 
 # Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }

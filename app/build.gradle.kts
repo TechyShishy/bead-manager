@@ -151,6 +151,8 @@ dependencies {
 
     // PDF text extraction (BeadTool 4 / XLSM pattern import foundation)
     implementation(libs.pdfbox.android)
+    // ML Kit OCR — Play Services variant (color key image extraction from BeadTool 4 PDFs)
+    implementation(libs.play.services.mlkit.text.recognition)
 
     // Serialization (JSON parsing for the catalog seed)
     implementation(libs.kotlinx.serialization.json)
