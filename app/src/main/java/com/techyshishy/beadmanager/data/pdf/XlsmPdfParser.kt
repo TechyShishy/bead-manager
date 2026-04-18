@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.data.pdf
 
+import android.util.Log
 import javax.inject.Inject
 
 /**
@@ -18,6 +19,10 @@ import javax.inject.Inject
  */
 class XlsmPdfParser @Inject constructor() {
 
+    companion object {
+        private const val TAG = "PdfImport"
+    }
+
     /**
      * Parses [pages] (one string per PDF page, as returned by [extractPdfText])
      * into a [PdfProject] with a fully-populated [PdfProject.colorMapping].
@@ -34,11 +39,14 @@ class XlsmPdfParser @Inject constructor() {
         if (pages.isEmpty()) throw PdfParseException.NoPatternFound()
         val allText = pages.joinToString("\n")
         val colorMapping = extractColorMapping(allText)
+        Log.d(TAG, "XLSM color mapping: ${colorMapping.size} entries = $colorMapping")
         val rows = extractRows(allText)
+        Log.d(TAG, "XLSM extractRows: ${rows.size} rows")
         if (rows.isEmpty()) throw PdfParseException.NoPatternFound()
         val usedLetters = rows.flatMap { row -> row.steps.map { it.colorLetter } }.toSet()
         val missingLetters = (usedLetters - colorMapping.keys).sorted()
         if (missingLetters.isNotEmpty()) {
+            Log.w(TAG, "XLSM IncompleteColorMapping — missing: $missingLetters (used: $usedLetters, mapping keys: ${colorMapping.keys.sorted()})")
             throw PdfParseException.IncompleteColorMapping(missingLetters)
         }
         val name = extractName(pages, sourceName)

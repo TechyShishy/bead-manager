@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.data.pdf
 
+import android.util.Log
 import javax.inject.Inject
 
 /**
@@ -15,6 +16,10 @@ import javax.inject.Inject
  */
 class BeadToolPdfParser @Inject constructor() {
 
+    companion object {
+        private const val TAG = "PdfImport"
+    }
+
     /**
      * Parses [pages] (one string per PDF page, as returned by [extractPdfText])
      * into a [PdfProject] with empty [PdfProject.colorMapping].
@@ -28,9 +33,15 @@ class BeadToolPdfParser @Inject constructor() {
         val stripped = stripPageHeaders(allText)
         val cleaned = cleanText(stripped)
         val continued = joinContinuationLines(cleaned)
+        Log.d(TAG, "BeadTool text after cleaning (first 500 chars): ${continued.take(500)}")
         val rowBlock = extractRowBlock(continued)
-            ?: throw PdfParseException.NoPatternFound()
+        if (rowBlock == null) {
+            Log.d(TAG, "BeadTool: no row block matched")
+            throw PdfParseException.NoPatternFound()
+        }
+        Log.d(TAG, "BeadTool: row block found (${rowBlock.length} chars), first line='${rowBlock.lines().firstOrNull()}'")
         val rows = parseRows(rowBlock)
+        Log.d(TAG, "BeadTool: parsed ${rows.size} rows")
         return PdfProject(name = name, colorMapping = emptyMap(), rows = rows)
     }
 
