@@ -90,6 +90,9 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * [Text.text] string, which ensures correct association even when ML Kit
      * returns text from the 3-column grid in row-major order.
      *
+     * When [diagnostics] is provided, the raw OCR block count, block texts, and
+     * recovered color map are captured regardless of success or failure.
+     *
      * Runs on [Dispatchers.IO]. BeadTool 4 PDFs carry `print:yes` permission,
      * which is sufficient for [PdfRenderer] to render pages even though `copy:no`
      * blocks text extraction. If a file carries a user password (non-standard
@@ -104,6 +107,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         contentResolver: ContentResolver,
         uri: Uri,
         pageIndex: Int,
+        diagnostics: PdfImportDiagnosticsCollector? = null,
     ): Map<String, String> = withContext(Dispatchers.IO) {
         val pfd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw PdfParseException.NotPdf(
@@ -135,7 +139,12 @@ class BeadToolColorKeyExtractor @Inject constructor() {
                                 Thread.currentThread().interrupt()
                                 throw kotlinx.coroutines.CancellationException("OCR interrupted", e)
                             }
-                            parseTextBlocks(visionText.textBlocks)
+                            val blocks = visionText.textBlocks
+                            diagnostics?.ocrBlockCount = blocks.size
+                            diagnostics?.ocrBlockTexts?.addAll(blocks.map { it.text })
+                            val colorMap = parseTextBlocks(blocks)
+                            diagnostics?.ocrColorMap = colorMap
+                            colorMap
                         }
                     } finally {
                         bitmap.recycle()

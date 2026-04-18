@@ -24,22 +24,35 @@ class BeadToolPdfParser @Inject constructor() {
      * Parses [pages] (one string per PDF page, as returned by [extractPdfText])
      * into a [PdfProject] with empty [PdfProject.colorMapping].
      *
+     * When [diagnostics] is provided, each intermediate text transformation and
+     * the row-block extraction result are captured for post-mortem debugging.
+     *
      * @throws [PdfParseException.NoPatternFound] when no recognizable row
      *   notation is found after all cleaning steps.
      */
-    fun parse(pages: List<String>): PdfProject {
+    fun parse(
+        pages: List<String>,
+        diagnostics: PdfImportDiagnosticsCollector? = null,
+    ): PdfProject {
+        diagnostics?.beadToolAttempted = true
         val name = extractName(pages)
         val allText = pages.joinToString("\n")
         val stripped = stripPageHeaders(allText)
         val cleaned = cleanText(stripped)
         val continued = joinContinuationLines(cleaned)
+        diagnostics?.beadToolStrippedText = stripped
+        diagnostics?.beadToolCleanedText = cleaned
+        diagnostics?.beadToolContinuedText = continued
         val rowBlock = extractRowBlock(continued)
+        diagnostics?.beadToolRowBlockFound = rowBlock != null
+        diagnostics?.beadToolRowBlock = rowBlock
         if (rowBlock == null) {
             Log.d(TAG, "BeadTool: no row block matched")
             throw PdfParseException.NoPatternFound()
         }
         Log.d(TAG, "BeadTool: row block found (${rowBlock.length} chars), first line='${rowBlock.lines().firstOrNull()}'")
         val rows = parseRows(rowBlock)
+        diagnostics?.beadToolRowCount = rows.size
         Log.d(TAG, "BeadTool: parsed ${rows.size} rows")
         return PdfProject(name = name, colorMapping = emptyMap(), rows = rows)
     }

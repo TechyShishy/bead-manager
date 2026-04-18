@@ -14,6 +14,7 @@ import com.techyshishy.beadmanager.data.pdf.XlsmPdfParser
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.pdf.PdfTextExtractor
+import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsWriter
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -60,6 +61,7 @@ class ImportPdfProjectUseCaseTest {
         beadToolParser: BeadToolPdfParser = mockk(),
         xlsmParser: XlsmPdfParser = mockk(),
         colorKeyExtractor: BeadToolColorKeyExtractor = mockk(),
+        diagnosticsWriter: PdfImportDiagnosticsWriter = mockk(relaxed = true),
     ) = ImportPdfProjectUseCase(
         contentResolver = mockk(relaxed = true),
         catalogRepository = catalog,
@@ -68,6 +70,7 @@ class ImportPdfProjectUseCaseTest {
         xlsmParser = xlsmParser,
         colorKeyExtractor = colorKeyExtractor,
         textExtractor = textExtractor,
+        diagnosticsWriter = diagnosticsWriter,
     )
 
     // ── fixtures ──────────────────────────────────────────────────────────────
@@ -101,17 +104,17 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns NoPatternFound when both parsers throw NoPatternFound`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
-        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } throws PdfParseException.NoPatternFound() }
         val result = buildUseCase(beadToolParser = btParser, xlsmParser = xParser).import(uri)
         assertTrue("Expected NoPatternFound but got $result", result is ImportResult.Failure.NoPatternFound)
     }
 
     @Test
     fun `returns NoPatternFound when XLSM parser throws IncompleteColorMapping`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
         val xParser: XlsmPdfParser = mockk {
-            every { parse(any(), any()) } throws PdfParseException.IncompleteColorMapping(listOf("X"))
+            every { parse(any(), any(), any()) } throws PdfParseException.IncompleteColorMapping(listOf("X"))
         }
         val result = buildUseCase(beadToolParser = btParser, xlsmParser = xParser).import(uri)
         assertTrue("Expected NoPatternFound but got $result", result is ImportResult.Failure.NoPatternFound)
@@ -119,7 +122,7 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns NoPatternFound when BeadTool color key page is absent`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } returns twoRowPdfProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } returns twoRowPdfProject }
         val extractor: BeadToolColorKeyExtractor = mockk {
             every { findColorKeyPageIndex(any()) } returns -1
         }
@@ -129,11 +132,11 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns NoPatternFound when OCR result is missing a color letter`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } returns twoRowPdfProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } returns twoRowPdfProject }
         // OCR only returned mapping for A; B is used in rows but absent.
         val extractor: BeadToolColorKeyExtractor = mockk {
             every { findColorKeyPageIndex(any()) } returns 0
-            coEvery { extractColorKey(any(), any(), any()) } returns mapOf("A" to "DB-0001")
+            coEvery { extractColorKey(any(), any(), any(), any()) } returns mapOf("A" to "DB-0001")
         }
         val result = buildUseCase(beadToolParser = btParser, colorKeyExtractor = extractor).import(uri)
         assertTrue("Expected NoPatternFound but got $result", result is ImportResult.Failure.NoPatternFound)
@@ -141,11 +144,11 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns NoPatternFound when extractColorKey throws unexpected exception`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } returns twoRowPdfProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } returns twoRowPdfProject }
         // Simulates ML Kit ExecutionException or any other extractor failure.
         val extractor: BeadToolColorKeyExtractor = mockk {
             every { findColorKeyPageIndex(any()) } returns 0
-            coEvery { extractColorKey(any(), any(), any()) } throws RuntimeException("ML Kit failed")
+            coEvery { extractColorKey(any(), any(), any(), any()) } throws RuntimeException("ML Kit failed")
         }
         val result = buildUseCase(beadToolParser = btParser, colorKeyExtractor = extractor).import(uri)
         assertTrue("Expected NoPatternFound but got $result", result is ImportResult.Failure.NoPatternFound)
@@ -153,9 +156,9 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns UnrecognizedCodes when a DB code is not in the catalog`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
         // xlsmProject references DB-0001 and DB-0002; catalog only has DB-0001.
-        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns xlsmProject }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns xlsmProject }
         val result = buildUseCase(
             catalog = catalogWith("DB-0001"),
             xlsmParser = xParser,
@@ -168,8 +171,8 @@ class ImportPdfProjectUseCaseTest {
     @Test
     fun `returns NoPatternFound when parsed project has a blank name`() = runTest {
         val blankNameProject = xlsmProject.copy(name = "")
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
-        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns blankNameProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns blankNameProject }
         val result = buildUseCase(
             catalog = catalogWith("DB-0001", "DB-0002"),
             beadToolParser = btParser,
@@ -180,8 +183,8 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns WriteError when createProject throws`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
-        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns xlsmProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns xlsmProject }
         val repo: ProjectRepository = mockk {
             coEvery { createProject(any()) } throws RuntimeException("Firestore unavailable")
         }
@@ -196,8 +199,8 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `returns WriteError and deletes project when writeProjectGrid throws`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
-        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns xlsmProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns xlsmProject }
         val repo: ProjectRepository = mockk {
             coEvery { createProject(any()) } returns "proj-abc"
             coEvery { writeProjectGrid("proj-abc", any()) } throws RuntimeException("grid write failed")
@@ -215,10 +218,10 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `BeadTool happy path writes correct ProjectEntry and grid rows`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } returns twoRowPdfProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } returns twoRowPdfProject }
         val extractor: BeadToolColorKeyExtractor = mockk {
             every { findColorKeyPageIndex(any()) } returns 0
-            coEvery { extractColorKey(any(), any(), any()) } returns ocrColorMap
+            coEvery { extractColorKey(any(), any(), any(), any()) } returns ocrColorMap
         }
         val capturedEntry = slot<ProjectEntry>()
         val capturedRows = slot<List<ProjectRgpRow>>()
@@ -250,8 +253,8 @@ class ImportPdfProjectUseCaseTest {
 
     @Test
     fun `XLSM happy path writes correct ProjectEntry and grid rows`() = runTest {
-        val btParser: BeadToolPdfParser = mockk { every { parse(any()) } throws PdfParseException.NoPatternFound() }
-        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns xlsmProject }
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns xlsmProject }
         val capturedEntry = slot<ProjectEntry>()
         val capturedRows = slot<List<ProjectRgpRow>>()
         val repo: ProjectRepository = mockk {

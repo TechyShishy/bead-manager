@@ -30,22 +30,33 @@ class XlsmPdfParser @Inject constructor() {
      * [sourceName] is used as the project name when no title is identifiable from
      * the first page (e.g. when it is blank or contains only an image).
      *
+     * When [diagnostics] is provided, the extracted color map, row count, and any
+     * missing letters are captured before the function throws.
+     *
      * @throws [PdfParseException.NoPatternFound] when no Word Chart / Word Cart
      *   section is found or the section contains no parseable rows.
      * @throws [PdfParseException.IncompleteColorMapping] when one or more color
      *   letters referenced in pattern rows have no entry in the extracted color key.
      */
-    fun parse(pages: List<String>, sourceName: String = ""): PdfProject {
+    fun parse(
+        pages: List<String>,
+        sourceName: String = "",
+        diagnostics: PdfImportDiagnosticsCollector? = null,
+    ): PdfProject {
+        diagnostics?.xlsmAttempted = true
         if (pages.isEmpty()) throw PdfParseException.NoPatternFound()
         val allText = pages.joinToString("\n")
         val colorMapping = extractColorMapping(allText)
+        diagnostics?.xlsmColorMap = colorMapping
         Log.d(TAG, "XLSM color mapping: ${colorMapping.size} entries = $colorMapping")
         val rows = extractRows(allText)
+        diagnostics?.xlsmRowCount = rows.size
         Log.d(TAG, "XLSM extractRows: ${rows.size} rows")
         if (rows.isEmpty()) throw PdfParseException.NoPatternFound()
         val usedLetters = rows.flatMap { row -> row.steps.map { it.colorLetter } }.toSet()
         val missingLetters = (usedLetters - colorMapping.keys).sorted()
         if (missingLetters.isNotEmpty()) {
+            diagnostics?.xlsmMissingLetters = missingLetters
             Log.w(TAG, "XLSM IncompleteColorMapping — missing: $missingLetters (used: $usedLetters, mapping keys: ${colorMapping.keys.sorted()})")
             throw PdfParseException.IncompleteColorMapping(missingLetters)
         }

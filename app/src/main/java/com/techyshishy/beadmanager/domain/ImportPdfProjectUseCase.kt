@@ -8,6 +8,8 @@ import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.pdf.BeadToolColorKeyExtractor
 import com.techyshishy.beadmanager.data.pdf.BeadToolPdfParser
+import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsCollector
+import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsWriter
 import com.techyshishy.beadmanager.data.pdf.PdfParseException
 import com.techyshishy.beadmanager.data.pdf.PdfProject
 import com.techyshishy.beadmanager.data.pdf.PdfTextExtractor
@@ -24,28 +26,38 @@ class ImportPdfProjectUseCase @Inject constructor(
     private val xlsmParser: XlsmPdfParser,
     private val colorKeyExtractor: BeadToolColorKeyExtractor,
     private val textExtractor: PdfTextExtractor,
+    private val diagnosticsWriter: PdfImportDiagnosticsWriter,
 ) {
     companion object {
         private const val TAG = "PdfImport"
     }
 
     suspend fun import(uri: Uri): ImportResult {
+        val diagnostics = PdfImportDiagnosticsCollector()
+
         // 1. Extract text pages from the PDF. NotPdf covers corrupt files and wrong file types.
         val pages = try {
             textExtractor.extract(contentResolver, uri).also {
                 Log.d(TAG, "Extracted ${it.size} pages from PDF")
                 if (it.isNotEmpty()) Log.d(TAG, "Page 1 preview (first 300 chars): ${it[0].take(300)}")
+                diagnostics.pageCount = it.size
+                diagnostics.pageTexts.addAll(it)
             }
         } catch (e: PdfParseException.NotPdf) {
             Log.w(TAG, "Text extraction failed (NotPdf): ${e.message}", e)
+            diagnostics.failureReason = "NotPdf — text extraction: ${e.message}"
+            diagnosticsWriter.write(diagnostics)
             return ImportResult.Failure.NotPdf
         }
 
         // 2. Detect format and parse. BeadTool 4 is tried first; XLSM/Word Chart is the fallback.
-        val pdfProject = when (val outcome = detectAndParse(pages, uri)) {
+        val pdfProject = when (val outcome = detectAndParse(pages, uri, diagnostics)) {
             is ParseOutcome.Success -> outcome.project
             is ParseOutcome.Failure -> {
                 Log.w(TAG, "detectAndParse failed: ${outcome.result::class.simpleName}")
+                diagnostics.failureReason = diagnostics.failureReason
+                    ?: "detectAndParse: ${outcome.result::class.simpleName}"
+                diagnosticsWriter.write(diagnostics)
                 return outcome.result
             }
         }
@@ -53,8 +65,12 @@ class ImportPdfProjectUseCase @Inject constructor(
         // 3. A blank name indicates the parser could not identify document structure.
         if (pdfProject.name.isBlank()) {
             Log.w(TAG, "Parsed project has a blank name — NoPatternFound")
+            diagnostics.parsedProjectName = "(blank)"
+            diagnostics.failureReason = "Blank project name after successful parse"
+            diagnosticsWriter.write(diagnostics)
             return ImportResult.Failure.NoPatternFound
         }
+        diagnostics.parsedProjectName = pdfProject.name
         Log.d(TAG, "Parsed project: name='${pdfProject.name}', rows=${pdfProject.rows.size}, colorMapping=${pdfProject.colorMapping}")
 
         // 4. Validate all DB codes in colorMapping against the local catalog.
@@ -62,6 +78,9 @@ class ImportPdfProjectUseCase @Inject constructor(
         val unrecognized = pdfProject.colorMapping.values.filter { it !in catalogMap }.sorted()
         if (unrecognized.isNotEmpty()) {
             Log.w(TAG, "Unrecognized catalog codes: $unrecognized")
+            diagnostics.unrecognizedCatalogCodes = unrecognized
+            diagnostics.failureReason = "UnrecognizedCodes: $unrecognized"
+            diagnosticsWriter.write(diagnostics)
             return ImportResult.Failure.UnrecognizedCodes(unrecognized)
         }
 
@@ -84,12 +103,16 @@ class ImportPdfProjectUseCase @Inject constructor(
             )
         } catch (e: Exception) {
             Log.e(TAG, "createProject failed", e)
+            // WriteError is a Firestore / connectivity failure, not a parse failure.
+            // The PDF parsed successfully so no diagnostics are written.
             return ImportResult.Failure.WriteError
         }
         try {
             projectRepository.writeProjectGrid(projectId, projectRows)
         } catch (e: Exception) {
             Log.e(TAG, "writeProjectGrid failed", e)
+            // WriteError is a Firestore / connectivity failure, not a parse failure.
+            // The PDF parsed successfully so no diagnostics are written.
             runCatching { projectRepository.deleteProject(projectId) }
                 .onSuccess { Log.d(TAG, "Partial project $projectId cleaned up") }
                 .onFailure { Log.e(TAG, "Cleanup of partial project $projectId failed", it) }
@@ -111,10 +134,14 @@ class ImportPdfProjectUseCase @Inject constructor(
      * mapped to [ImportResult.Failure.NoPatternFound] — the pattern cannot be usefully
      * imported without a complete color table.
      */
-    private suspend fun detectAndParse(pages: List<String>, uri: Uri): ParseOutcome {
+    private suspend fun detectAndParse(
+        pages: List<String>,
+        uri: Uri,
+        diagnostics: PdfImportDiagnosticsCollector,
+    ): ParseOutcome {
         // --- BeadTool 4 ---
         val beadToolProject = try {
-            beadToolParser.parse(pages).also {
+            beadToolParser.parse(pages, diagnostics).also {
                 Log.d(TAG, "BeadTool parser matched: ${it.rows.size} rows")
             }
         } catch (e: PdfParseException.NoPatternFound) {
@@ -124,30 +151,38 @@ class ImportPdfProjectUseCase @Inject constructor(
 
         if (beadToolProject != null) {
             val colorKeyIndex = colorKeyExtractor.findColorKeyPageIndex(pages)
+            diagnostics.colorKeyPageIndex = colorKeyIndex
             Log.d(TAG, "Color key page index: $colorKeyIndex")
             if (colorKeyIndex == -1) {
                 Log.w(TAG, "No color key page found in BeadTool PDF")
+                diagnostics.failureReason = "BeadTool: no color key page found"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
             val colorMap = try {
-                colorKeyExtractor.extractColorKey(contentResolver, uri, colorKeyIndex).also {
+                colorKeyExtractor.extractColorKey(
+                    contentResolver, uri, colorKeyIndex, diagnostics
+                ).also {
                     Log.d(TAG, "OCR color map: ${it.size} entries = ${it.keys.sorted()}")
                 }
             } catch (e: PdfParseException.NotPdf) {
                 Log.e(TAG, "OCR: PdfRenderer failed on page $colorKeyIndex", e)
+                diagnostics.failureReason = "BeadTool OCR: PdfRenderer failure on page $colorKeyIndex"
                 return ParseOutcome.Failure(ImportResult.Failure.NotPdf)
             } catch (e: Exception) {
                 // ML Kit ExecutionException or other unexpected extractor failure — the PDF is
                 // readable but we couldn't recover a usable color key from it.
                 Log.e(TAG, "OCR: color key extraction failed on page $colorKeyIndex", e)
+                diagnostics.failureReason = "BeadTool OCR: extractor exception — ${e::class.simpleName}: ${e.message}"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
             // Validate that OCR recovered an entry for every color letter in the parsed rows.
             val usedLetters = beadToolProject.rows.flatMap { it.steps }.mapTo(mutableSetOf()) { it.colorLetter }
             val missingFromOcr = usedLetters - colorMap.keys
+            diagnostics.ocrMissingLetters = missingFromOcr
             Log.d(TAG, "Letters used by pattern: $usedLetters; OCR covered: ${colorMap.keys.sorted()}")
             if (missingFromOcr.isNotEmpty()) {
                 Log.w(TAG, "OCR missing letters needed by pattern: $missingFromOcr")
+                diagnostics.failureReason = "BeadTool OCR: missing letters $missingFromOcr"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
             return ParseOutcome.Success(beadToolProject.copy(colorMapping = colorMap))
@@ -158,15 +193,19 @@ class ImportPdfProjectUseCase @Inject constructor(
         val sourceName = uri.lastPathSegment ?: ""
         return try {
             ParseOutcome.Success(
-                xlsmParser.parse(pages, sourceName = sourceName).also {
+                xlsmParser.parse(pages, sourceName = sourceName, diagnostics = diagnostics).also {
                     Log.d(TAG, "XLSM parser matched: name='${it.name}', rows=${it.rows.size}, colorMapping=${it.colorMapping}")
                 },
             )
         } catch (e: PdfParseException.NoPatternFound) {
             Log.w(TAG, "XLSM parser: NoPatternFound — ${e.message}")
+            diagnostics.failureReason = diagnostics.failureReason
+                ?: "XLSM: NoPatternFound (both parsers exhausted)"
             ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
         } catch (e: PdfParseException.IncompleteColorMapping) {
             Log.w(TAG, "XLSM parser: IncompleteColorMapping — missing letters: ${e.missingLetters}")
+            diagnostics.failureReason = diagnostics.failureReason
+                ?: "XLSM: IncompleteColorMapping — missing ${e.missingLetters}"
             ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
         }
     }
