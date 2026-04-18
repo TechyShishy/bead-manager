@@ -1,3 +1,8 @@
+---
+name: pdf-debug
+description: 'Debug a failing PDF import in Bead Manager. Use when a PDF does not import, produces an empty project, garbled bead codes, or incorrect row data. Requires the failing PDF dropped in debug-pdfs/ and the diagnostics report pulled from the device. Walks through reading the report, classifying the failure, tracing parser logic, writing a failing test, and fixing the parser.'
+---
+
 # Skill: PDF Import Debugging
 
 ## When to Use
