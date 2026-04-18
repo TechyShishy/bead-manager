@@ -30,6 +30,7 @@ app/google-services.json
 # The root delica-beads.json is the source of truth; this copy is build output.
 app/src/main/assets/delica-beads.json
 
-# PDF debug drop zone — PDFs are ignored (potentially copyrighted material);
-# the README.md and any .txt diagnostic reports are tracked.
-debug-pdfs/*.pdf
+# PDF debug drop zone — all content ignored (copyrighted PDFs, diagnostics reports);
+# only the README.md is tracked.
+debug-pdfs/*
+!debug-pdfs/README.md
