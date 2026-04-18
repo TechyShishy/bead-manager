@@ -194,14 +194,27 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     internal fun parseBlockTexts(blockTexts: List<String>): Map<String, String> {
         val result = mutableMapOf<String, String>()
         // Colon is optional (OCR sometimes drops it). Letters may be lowercase
-        // or confusable digits (0→O, 1→I). The "Chart " prefix is optional to
-        // tolerate OCR garbling of "Chart" (e.g. "lart #:R" from "Chart #:R").
-        // MULTILINE anchors the match to line-start so that mid-sentence occurrences
-        // like "using #11 Miyuki" in a description block cannot fire and overwrite a
-        // pending chart letter. Real Chart entries always appear at the start of a
-        // block (and thus the start of a line). Note: a line break directly before a
-        // \w{3,5} #NN sequence would still match; no such OCR output has been observed.
-        val letterRegex = Regex("""^(?:\w{3,5} )?#:?([A-Za-z01]{1,2})""", RegexOption.MULTILINE)
+        // or confusable digits (0→O, 1→I).
+        //
+        // Two optional prefix groups consume same-line OCR noise before #:
+        //   Group 1 (?:\S+[ ]+)? — any leading non-space token + spaces.
+        //     Handles a single OCR-leaked char merged with or adjacent to "Chart":
+        //     "IChart #:M", "DChart #:H" (merged, 6-char token) and
+        //     "J Chart #:J", "[ Chart #:B" (prefix + space before "Chart").
+        //   Group 2 (?:\w{1,6}[ ]+)? — the "Chart" word itself (or its garbled
+        //     variant, e.g. "lart") + spaces. Allows 1–6 chars to handle both
+        //     shortened garbles ("lart", 4) and the full word ("Chart", 5).
+        //
+        // Both groups use [ ]+ (spaces only, not \s) so they cannot cross a
+        // newline. This preserves the relative-position check that detects DB
+        // codes appearing before their Chart entry in the same block — consuming
+        // a preceding "DB-XXXX\n" line as a "prefix" would break that detection.
+        //
+        // MULTILINE anchors both groups to line-start so that mid-sentence
+        // occurrences like "using #11 Miyuki" in a description block cannot fire
+        // and overwrite a pending chart letter. Real Chart entries always begin a
+        // line; description text with hash-numbers never does.
+        val letterRegex = Regex("""^(?:\S+[ ]+)?(?:\w{1,6}[ ]+)?#:?([A-Za-z01]{1,2})""", RegexOption.MULTILINE)
         // DB codes range from 1–9999; BeadTool strips leading zeros so DB0003
         // prints as "DB-3". Allow 1–4 digits on the canonical DB- arm.
         // The garbled arm (digit-dash) retains the 3-4 digit constraint because

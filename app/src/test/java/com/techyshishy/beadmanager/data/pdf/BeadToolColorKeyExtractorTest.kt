@@ -358,6 +358,31 @@ class BeadToolColorKeyExtractorTest {
     }
 
     @Test
+    fun `parseBlockTexts recovers letters when OCR leaks adjacent swatch label into Chart block prefix`() {
+        // Regression for 2198-gothicart-tapestry-peyote.pdf: ML Kit sometimes groups
+        // the neighboring color-swatch letter label with the "Chart #:X" line,
+        // producing four distinct prefix contamination patterns:
+        //   "J Chart #:J"  — single letter + space before "Chart" (too short for \w{3,5})
+        //   "IChart #:M"   — single letter merged into "Chart" (6 chars, too long for \w{3,5})
+        //   "DChart #:H"   — same merged pattern
+        //   "[ Chart #:B"  — non-word char + space before "Chart" (\w doesn't match "[")
+        // The old single optional-prefix group (?:\w{3,5} )? couldn't consume any of
+        // these, so the regex fell through without a match and all four letters were
+        // reported missing.
+        val blocks = listOf(
+            "J Chart #:J\nDB-2366\nOpaque Mist Grey Duracoat\nConteggio:1073",
+            "IChart #:M\nDB-2360\nOpaque Grape Duracoat\nConteggio:1943",
+            "DChart #:H\nDB-652\nOpaque Grey\nConteggio:729",
+            "[ Chart #:B\nDB-352\nMatte Opaque Cream\nConteggio:3304",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB2366", result["J"])
+        assertEquals("DB2360", result["M"])
+        assertEquals("DB0652", result["H"])
+        assertEquals("DB0352", result["B"])
+    }
+
+    @Test
     fun `parseBlockTexts recovers I when OCR appends lowercase l stem artifact after capital I`() {
         // Regression for AmberDragonPeyote.pdf Block 60: OCR produced "Chart #:Il"
         // (capital I followed by a lowercase-l OCR artifact of the same glyph).
