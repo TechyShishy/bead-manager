@@ -245,7 +245,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
 
     private companion object {
         const val TAG = "PdfImport"
-        const val RENDER_DPI = 150f
+        const val RENDER_DPI = 300f
         const val POINTS_PER_INCH = 72f
     }
 }
