@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
@@ -56,25 +57,27 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * If the last entry in [ocrText] has no DB code, the loop exits without
      * processing it — this is intentional; there is nothing further to scan.
      *
-     * Exposed as a pure function so it can be unit-tested without Android APIs.
-     * Production code delegates per-block through [parseTextBlocks], which calls
-     * this function once per [Text.TextBlock] to handle multi-column layouts.
+     * Exposed as a pure function for unit testing only — the runtime path uses
+     * [parseBlockTexts] instead.
      */
     fun parseColorKeyText(ocrText: String): Map<String, String> {
         val result = mutableMapOf<String, String>()
         val letterRegex = Regex("""Chart #:([A-Z]{1,2})""")
-        val dbCodeRegex = Regex("""(DB-\d{4})""")
+        // DB codes have 3 or 4 digits (e.g. DB-161, DB-0010).
+        val dbCodeRegex = Regex("""(DB-\d{3,4})""")
         var searchFrom = 0
         while (true) {
             val letterMatch = letterRegex.find(ocrText, searchFrom) ?: break
+            // Advance searchFrom before any early-exit so the next iteration never
+            // re-processes the same Chart # entry even when the DB code is absent.
+            searchFrom = letterMatch.range.last + 1
             val letter = letterMatch.groupValues[1]
-            val dbMatch = dbCodeRegex.find(ocrText, letterMatch.range.last + 1) ?: break
+            val dbMatch = dbCodeRegex.find(ocrText, letterMatch.range.last + 1) ?: continue
             // Associate only if no other Chart # entry appears before the DB code.
             val nextLetter = letterRegex.find(ocrText, letterMatch.range.last + 1)
             if (nextLetter == null || dbMatch.range.first < nextLetter.range.first) {
-                result[letter] = dbMatch.groupValues[1]
+                result[letter] = normalizeDbCode(dbMatch.groupValues[1])
             }
-            searchFrom = letterMatch.range.last + 1
         }
         return result
     }
@@ -143,19 +146,91 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     }
 
     /**
-     * Parses ML Kit [Text.TextBlock] objects individually by delegating each
-     * block's text to [parseColorKeyText].
+     * Parses ML Kit [Text.TextBlock] objects into a letter-to-DB-code map.
      *
-     * Each block on the color key page represents one bead entry. Parsing
-     * block-by-block avoids column-ordering problems that arise when processing
-     * the concatenated [Text.text] string from a multi-column layout.
+     * Delegates to [parseBlockTexts] after mapping each block to its text string.
      */
-    private fun parseTextBlocks(textBlocks: List<Text.TextBlock>): Map<String, String> =
-        textBlocks
-            .map { parseColorKeyText(it.text) }
-            .fold(mutableMapOf()) { acc, m -> acc.also { it.putAll(m) } }
+    private fun parseTextBlocks(textBlocks: List<Text.TextBlock>): Map<String, String> {
+        Log.d(TAG, "OCR: ${textBlocks.size} text blocks returned by ML Kit")
+        return parseBlockTexts(textBlocks.map { it.text })
+    }
+
+    /**
+     * Parses a list of OCR text block strings into a letter-to-DB-code map.
+     *
+     * Stateful: tracks a pending letter across consecutive blocks to handle the
+     * case where ML Kit splits a `Chart #:X` label and its DB code into
+     * separate blocks. Also normalises OCR noise via [normalizeLetter] and
+     * [normalizeDbCode].
+     *
+     * Also handles OCR noise specific to BeadTool 4 color key pages:
+     * - Missing colon (`Chart #N` instead of `Chart #:N`)
+     * - Lowercase letter (`Chart #:s` → S)
+     * - Digit–letter confusion (`0`→O, `1`→I)
+     *
+     * Exposed as `internal` for unit testing on JVM; the production entry point
+     * is [parseTextBlocks], which maps [Text.TextBlock] objects to their text
+     * strings before calling this function.
+     */
+    internal fun parseBlockTexts(blockTexts: List<String>): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        // Colon is optional (OCR sometimes drops it). Letters may be lowercase
+        // or confusable digits (0→O, 1→I).
+        val letterRegex = Regex("""Chart #:?([A-Za-z01]{1,2})""")
+        val dbCodeRegex = Regex("""(DB-\d{3,4})""")
+        var pendingLetter: String? = null
+
+        for (text in blockTexts) {
+            val letterMatch = letterRegex.find(text)
+            val dbMatch = dbCodeRegex.find(text)
+
+            when {
+                letterMatch != null && dbMatch != null
+                        && dbMatch.range.first > letterMatch.range.last -> {
+                    // Both in the same block with Chart # before DB code — associate directly.
+                    val letter = normalizeLetter(letterMatch.groupValues[1])
+                    result[letter] = normalizeDbCode(dbMatch.groupValues[1])
+                    pendingLetter = null
+                }
+                letterMatch != null -> {
+                    // Chart # present; DB code is absent or precedes the Chart #.
+                    // A DB code appearing before the Chart # closes the previous pending entry.
+                    if (dbMatch != null && dbMatch.range.first < letterMatch.range.first) {
+                        pendingLetter?.let {
+                            result[it] = normalizeDbCode(dbMatch.groupValues[1])
+                        }
+                    }
+                    pendingLetter = normalizeLetter(letterMatch.groupValues[1])
+                }
+                dbMatch != null -> {
+                    // DB code only — pair with whichever letter is pending.
+                    pendingLetter?.let {
+                        result[it] = normalizeDbCode(dbMatch.groupValues[1])
+                        pendingLetter = null
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    /** Normalizes OCR-garbled chart letters to uppercase, mapping `0`→O and `1`→I. */
+    private fun normalizeLetter(raw: String): String =
+        raw.uppercase().replace('0', 'O').replace('1', 'I')
+
+    /**
+     * Normalizes an OCR-extracted DB code to the catalog format.
+     *
+     * OCR output: `DB-161`, `DB-0010` (hyphen, variable digit count).
+     * Catalog format: `DB0161`, `DB0010` (no hyphen, zero-padded to 4 digits).
+     */
+    private fun normalizeDbCode(raw: String): String {
+        val digits = raw.removePrefix("DB-")
+        return "DB" + digits.padStart(4, '0')
+    }
 
     private companion object {
+        const val TAG = "PdfImport"
         const val RENDER_DPI = 150f
         const val POINTS_PER_INCH = 72f
     }

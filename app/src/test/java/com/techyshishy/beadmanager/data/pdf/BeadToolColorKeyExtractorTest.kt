@@ -57,8 +57,8 @@ class BeadToolColorKeyExtractorTest {
             Count:3741
         """.trimIndent()
         val result = extractor.parseColorKeyText(ocrText)
-        assertEquals("DB-0010", result["A"])
-        assertEquals("DB-2368", result["B"])
+        assertEquals("DB0010", result["A"])
+        assertEquals("DB2368", result["B"])
     }
 
     @Test
@@ -74,8 +74,8 @@ class BeadToolColorKeyExtractorTest {
             Count:1570
         """.trimIndent()
         val result = extractor.parseColorKeyText(ocrText)
-        assertEquals("DB-2143", result["AA"])
-        assertEquals("DB-1054", result["AB"])
+        assertEquals("DB2143", result["AA"])
+        assertEquals("DB1054", result["AB"])
     }
 
     @Test
@@ -92,9 +92,9 @@ class BeadToolColorKeyExtractorTest {
             Rainbow Gray
         """.trimIndent()
         val result = extractor.parseColorKeyText(ocrText)
-        assertEquals("DB-0010", result["A"])
+        assertEquals("DB0010", result["A"])
         assertFalse("B should be absent when DB code is missing", result.containsKey("B"))
-        assertEquals("DB-0168", result["C"])
+        assertEquals("DB0168", result["C"])
     }
 
     @Test
@@ -103,9 +103,58 @@ class BeadToolColorKeyExtractorTest {
     }
 
     @Test
-    fun `parseColorKeyText handles full 33-entry sample without duplicates or gaps`() {
+    fun `parseColorKeyText maps three-digit DB codes and zero-pads to four digits`() {
+        // Delica codes below 1000 have 3 digits in OCR output (DB-161, DB-310).
+        // They must be normalized to the 4-digit catalog format (DB0161, DB0310).
+        val ocrText = """
+            Chart #:B
+            DB-161
+            Opaque Orange AB
+            Count:1136
+            Chart #:D
+            DB-310
+            Matte Black
+            Count:5408
+            Chart #:L
+            DB-1134
+            Opaque Currant
+            Count:5335
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0161", result["B"])
+        assertEquals("DB0310", result["D"])
+        assertEquals("DB1134", result["L"])
+    }
+
+    @Test
+    fun `parseColorKeyText does not break early when a mid-sequence entry has no DB code`() {
+        // Previously the loop used ?: break on the DB code search, which would
+        // exit the loop at the first entry with no recognizable DB code, losing
+        // all subsequent entries. It should skip and continue.
+        val ocrText = """
+            Chart #:A
+            DB-0010
+            Black
+            Count:1000
+            Chart #:B
+            Completely garbled OCR noise
+            Count:500
+            Chart #:C
+            DB-2368
+            Opaque Charcoal Duracoat
+            Count:800
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0010", result["A"])
+        assertFalse("B should be absent (no DB code in OCR)", result.containsKey("B"))
+        assertEquals("DB2368", result["C"])
+    }
+
+    @Test
+    fun `parseColorKeyText handles full 21-entry sample without duplicates or gaps`() {
         // Exercises the real OCR text structure from the Dragons Wrath PDF sample.
         // Each entry follows: Chart #:X / DB-NNNN / Name / Count:N
+        // Expected values are catalog format (no hyphen, zero-padded to 4 digits).
         val entries = listOf(
             "A" to "DB-0010", "B" to "DB-2368", "C" to "DB-0168",
             "D" to "DB-1134", "E" to "DB-1530", "F" to "DB-0630",
@@ -119,9 +168,78 @@ class BeadToolColorKeyExtractorTest {
             "Chart #:$letter\n$code\nSome Bead Name\nCount:100"
         }
         val result = extractor.parseColorKeyText(ocrText)
-        for ((letter, code) in entries) {
-            assertEquals("Mapping for $letter", code, result[letter])
+        for ((letter, rawCode) in entries) {
+            val digits = rawCode.removePrefix("DB-").removePrefix("DB")
+            val expected = "DB" + digits.padStart(4, '0')
+            assertEquals("Mapping for $letter", expected, result[letter])
         }
         assertEquals(entries.size, result.size)
+    }
+
+    // ── parseBlockTexts ───────────────────────────────────────────────────────
+
+    @Test
+    fun `parseBlockTexts pairs Chart letter and DB code in the same block`() {
+        val blocks = listOf("Chart #:A\nDB-0010\nBlack\nCount:9407")
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0010", result["A"])
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `parseBlockTexts pairs Chart letter in one block with DB code in the next`() {
+        val blocks = listOf(
+            "Chart #:A",
+            "DB-0010",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0010", result["A"])
+    }
+
+    @Test
+    fun `parseBlockTexts does not carry an orphaned pending letter to a later unrelated DB code`() {
+        // A has no DB code; the next DB code belongs to C, not A.
+        val blocks = listOf(
+            "Chart #:A",
+            "Some noise",
+            "Chart #:C",
+            "DB-0168",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertFalse("A should be absent", result.containsKey("A"))
+        assertEquals("DB0168", result["C"])
+    }
+
+    @Test
+    fun `parseBlockTexts handles a block where DB code precedes the Chart letter`() {
+        // In some layouts OCR returns the DB code line before the Chart # line
+        // within the same block. The DB code should close the previous pending
+        // entry, not the current one.
+        val blocks = listOf(
+            "Chart #:A",
+            "DB-0010\nChart #:B",
+            "DB-2368",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0010", result["A"])
+        assertEquals("DB2368", result["B"])
+    }
+
+    @Test
+    fun `parseBlockTexts normalises OCR noise in chart letters`() {
+        val blocks = listOf(
+            "Chart #:s\nDB-0010",   // lowercase s → S
+            "Chart #:1\nDB-2368",   // digit 1 → I
+            "Chart #N\nDB-0168",    // missing colon
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0010", result["S"])
+        assertEquals("DB2368", result["I"])
+        assertEquals("DB0168", result["N"])
+    }
+
+    @Test
+    fun `parseBlockTexts returns empty map for empty block list`() {
+        assertTrue(extractor.parseBlockTexts(emptyList()).isEmpty())
     }
 }

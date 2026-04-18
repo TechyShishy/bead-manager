@@ -62,6 +62,17 @@ class BeadToolPdfParserTest {
         assertEquals(PdfStep(count = 2, colorLetter = "B"), steps[1])
     }
 
+    @Test
+    fun `parse handles double-space separator between direction and first step (paired-row)`() {
+        // BeadTool 4 PDFs use two spaces: "Row 1&2 (L)  (23)D, ..."
+        val pages = minimalPages(
+            wordChartRows = "Row 1&2 (L)  (3)A, (2)B\nRow 3 (R)  (1)C",
+        )
+        val result = parser.parse(pages)
+        assertEquals(3, result.rows.size)
+        assertEquals(PdfStep(3, "A"), result.rows[0].steps[0])
+    }
+
     // ── happy path — single rows ──────────────────────────────────────────────
 
     @Test
@@ -73,6 +84,17 @@ class BeadToolPdfParserTest {
         assertEquals(2, result.rows.size)
         assertEquals(1, result.rows[0].id)
         assertEquals(2, result.rows[1].id)
+    }
+
+    @Test
+    fun `parse handles double-space separator between direction and first step (single-row)`() {
+        // BeadTool 4 PDFs use two spaces: "Row 1 (L)  (23)D, ..."
+        val pages = minimalPages(
+            wordChartRows = "Row 1 (L)  (5)A\nRow 2 (R)  (5)B",
+        )
+        val result = parser.parse(pages)
+        assertEquals(2, result.rows.size)
+        assertEquals(PdfStep(5, "A"), result.rows[0].steps[0])
     }
 
     // ── multi-letter color codes ──────────────────────────────────────────────

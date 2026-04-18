@@ -33,7 +33,6 @@ class BeadToolPdfParser @Inject constructor() {
         val stripped = stripPageHeaders(allText)
         val cleaned = cleanText(stripped)
         val continued = joinContinuationLines(cleaned)
-        Log.d(TAG, "BeadTool text after cleaning (first 500 chars): ${continued.take(500)}")
         val rowBlock = extractRowBlock(continued)
         if (rowBlock == null) {
             Log.d(TAG, "BeadTool: no row block matched")
@@ -105,11 +104,11 @@ class BeadToolPdfParser @Inject constructor() {
      */
     private fun extractRowBlock(text: String): String? {
         val pairedPattern = Regex(
-            """((?:Row 1&2 \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
+            """((?:Row 1&2 \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
             RegexOption.DOT_MATCHES_ALL,
         )
         val singlePattern = Regex(
-            """((?:Row 1 \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
+            """((?:Row 1 \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
             RegexOption.DOT_MATCHES_ALL,
         )
         return pairedPattern.find(text)?.groupValues?.get(1)?.trim()
