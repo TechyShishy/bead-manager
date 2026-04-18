@@ -244,8 +244,7 @@ class BeadToolColorKeyExtractorTest {
     }
 
     @Test
-    fun `parseBlockTexts recovers I when OCR reads capital I as lowercase l, without clobbering genuine L`() {
-        // Regression for DragonEye-MiyukiDelica.pdf: OCR returned "Chart #:l" for
+    fun `parseBlockTexts recovers I when OCR reads capital I as lowercase l, without clobbering genuine L`() {        // Regression for DragonEye-MiyukiDelica.pdf: OCR returned "Chart #:l" for
         // the I entry. normalizeLetter previously uppercased l→L, colliding with
         // the genuine L entry and losing I. The fix maps lowercase l→I before
         // uppercasing so uppercase L is unaffected.
@@ -286,5 +285,31 @@ class BeadToolColorKeyExtractorTest {
         val result = extractor.parseBlockTexts(blocks)
         assertEquals("DB0010", result["A"])
         assertFalse("II should not appear — false match from intro text", result.containsKey("II"))
+    }
+
+    @Test
+    fun `parseBlockTexts handles single-digit DB code from BeadTool leading-zero strip`() {
+        // BeadTool strips leading zeros when printing DB codes (DB0003 → "DB-3").
+        // Regression for DragonEye-MiyukiDelica.pdf chart S: "DB-3" is DB0003
+        // (Metallic Forest Green AB), not a truncation error. The dbCodeRegex must
+        // accept 1-digit codes on the canonical DB- arm.
+        val blocks = listOf(
+            "Chart #:S",
+            "DB-3\nMetallic Forest Green AB\nCount:1427",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0003", result["S"])
+    }
+
+    @Test
+    fun `parseBlockTexts handles two-digit DB code from BeadTool leading-zero strip`() {
+        // DB0010–DB0099 print as "DB-10"–"DB-99" under BeadTool's zero-stripping.
+        // The old regex \d{3,4} rejected these; \d{1,4} accepts them.
+        val blocks = listOf(
+            "Chart #:T",
+            "DB-10\nSome Color Name\nCount:500",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0010", result["T"])
     }
 }

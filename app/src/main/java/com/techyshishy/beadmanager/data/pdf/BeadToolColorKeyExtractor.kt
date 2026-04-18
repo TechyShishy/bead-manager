@@ -63,8 +63,8 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     fun parseColorKeyText(ocrText: String): Map<String, String> {
         val result = mutableMapOf<String, String>()
         val letterRegex = Regex("""Chart #:([A-Z]{1,2})""")
-        // DB codes have 3 or 4 digits (e.g. DB-161, DB-0010).
-        val dbCodeRegex = Regex("""(DB-\d{3,4})""")
+        // DB codes range from 1–9999; BeadTool strips leading zeros (DB0003 → "DB-3").
+        val dbCodeRegex = Regex("""(DB-\d{1,4})""")
         var searchFrom = 0
         while (true) {
             val letterMatch = letterRegex.find(ocrText, searchFrom) ?: break
@@ -187,9 +187,11 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         // or confusable digits (0→O, 1→I). The "Chart " prefix is optional to
         // tolerate OCR garbling of "Chart" (e.g. "lart #:R" from "Chart #:R").
         val letterRegex = Regex("""(?:\w{3,5} )?#:?([A-Za-z01]{1,2})""")
-        // Also matches digit-dash-digits (e.g. "3-663") to handle OCR garbling
-        // of the "DB-" prefix (e.g. "DB-663" → "3-663" when D is dropped and B→3).
-        val dbCodeRegex = Regex("""(DB-\d{3,4}|\d-\d{3,4})""")
+        // DB codes range from 1–9999; BeadTool strips leading zeros so DB0003
+        // prints as "DB-3". Allow 1–4 digits on the canonical DB- arm.
+        // The garbled arm (digit-dash) retains the 3-4 digit constraint because
+        // a 1-2 digit garbled prefix is indistinguishable from noise.
+        val dbCodeRegex = Regex("""(DB-\d{1,4}|\d-\d{3,4})""")
         var pendingLetter: String? = null
 
         for (text in blockTexts) {
@@ -233,10 +235,11 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     /**
      * Normalizes an OCR-extracted DB code to the catalog format.
      *
-     * OCR output: `DB-161`, `DB-0010` (hyphen, variable digit count), or
-     * garbled variants such as `3-663` where the `DB-` prefix was corrupted
-     * (D dropped, B→3). In the garbled case the digits after the dash are used.
-     * Catalog format: `DB0161`, `DB0010` (no hyphen, zero-padded to 4 digits).
+     * OCR output: `DB-3`, `DB-161`, `DB-0010` (hyphen, 1–4 digit number after
+     * stripping leading zeros — BeadTool omits them). Also handles garbled
+     * variants such as `3-663` where the `DB-` prefix was corrupted (D dropped,
+     * B→3); in that case the digits after the dash are used.
+     * Catalog format: `DB0003`, `DB0161`, `DB0010` (no hyphen, zero-padded to 4 digits).
      */
     private fun normalizeDbCode(raw: String): String {
         val digits = if (raw.startsWith("DB-")) raw.removePrefix("DB-") else raw.substringAfter("-")
