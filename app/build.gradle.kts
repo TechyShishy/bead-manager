@@ -149,6 +149,9 @@ dependencies {
     // HTML parsing (FMG product page scraper)
     implementation(libs.jsoup)
 
+    // PDF text extraction (BeadTool 4 / XLSM pattern import foundation)
+    implementation(libs.pdfbox.android)
+
     // Serialization (JSON parsing for the catalog seed)
     implementation(libs.kotlinx.serialization.json)
 
