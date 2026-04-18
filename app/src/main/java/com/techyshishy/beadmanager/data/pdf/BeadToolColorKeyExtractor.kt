@@ -33,12 +33,22 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * Returns the 0-based index into [pages] (as returned by [extractPdfText])
      * of the color key page.
      *
-     * The color key page is identified by the presence of "Color count" metadata
-     * text, which BeadTool 4 consistently places on the same page as the bead
-     * legend image. Returns -1 when no such page exists.
+     * Two signals are tried in order:
+     * 1. `"Color count"` — English-language BeadTool exports include a metadata line
+     *    such as `"Color count - 18. Bead count - 42000."` on the color key page.
+     * 2. `"Chart #:"` + `"DB-"` — The color key entries themselves are language-independent.
+     *    Localized BeadTool exports (e.g. Italian, which uses `"Conteggio"` instead of
+     *    `"Count"`) omit the English metadata line but still emit `Chart #:A`, `DB-1910`,
+     *    etc. for every color. Both tokens must appear together to avoid false positives
+     *    from bead-graph pages (single-letter cells) or word-chart pages (`(n)A` format),
+     *    neither of which contains DB codes.
+     *
+     * Returns -1 when no such page is found.
      */
     fun findColorKeyPageIndex(pages: List<String>): Int =
-        pages.indexOfFirst { "Color count" in it }
+        // "DB-" is a substring check; in practice BeadTool page content is strictly
+        // structured bead data so no false matches against prose are expected.
+        pages.indexOfFirst { "Color count" in it || ("Chart #:" in it && "DB-" in it) }
 
     /**
      * Parses raw OCR text from a color key page into a letter-to-DB-code map.

@@ -42,6 +42,30 @@ class BeadToolColorKeyExtractorTest {
         assertEquals(0, extractor.findColorKeyPageIndex(pages))
     }
 
+    @Test
+    fun `findColorKeyPageIndex returns index when page has Chart entries and DB codes but no Color count`() {
+        // Regression for 2198-gothicart-tapestry-peyote.pdf: Italian-localized BeadTool
+        // exports use "Conteggio" (Italian for "Count") instead of "Count". The global
+        // "Color count" metadata line is absent entirely. "Chart #:" + "DB-" together
+        // identify the color key page in a language-independent way.
+        val pages = listOf(
+            "2198-gothicart-tapestry-peyote\n",
+            "Chart #:A\nDB-1910\nMatte Opaque Espresso\nConteggio:3224\nChart #:B\nDB-352\nBead Legend\n",
+            "Bead Chart\nA\nB\nC\n",
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex returns -1 when page has Chart entries but no DB codes`() {
+        // Verifies the AND condition: "Chart #:" alone is not sufficient.
+        // A page containing chart-like text without DB codes must not be selected.
+        val pages = listOf(
+            "Bead Chart\nChart #11 Miyuki Delica Beads\nA B C D E\n",
+        )
+        assertEquals(-1, extractor.findColorKeyPageIndex(pages))
+    }
+
     // ── parseColorKeyText ─────────────────────────────────────────────────────
 
     @Test
