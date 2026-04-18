@@ -226,9 +226,9 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         return result
     }
 
-    /** Normalizes OCR-garbled chart letters to uppercase, mapping `0`→O and `1`→I. */
+    /** Normalizes OCR-garbled chart letters to uppercase, mapping `l`→I, `0`→O, `1`→I. */
     private fun normalizeLetter(raw: String): String =
-        raw.uppercase().replace('0', 'O').replace('1', 'I')
+        raw.replace('l', 'I').uppercase().replace('0', 'O').replace('1', 'I')
 
     /**
      * Normalizes an OCR-extracted DB code to the catalog format.

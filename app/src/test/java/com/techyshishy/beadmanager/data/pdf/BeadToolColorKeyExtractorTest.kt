@@ -244,6 +244,23 @@ class BeadToolColorKeyExtractorTest {
     }
 
     @Test
+    fun `parseBlockTexts recovers I when OCR reads capital I as lowercase l, without clobbering genuine L`() {
+        // Regression for DragonEye-MiyukiDelica.pdf: OCR returned "Chart #:l" for
+        // the I entry. normalizeLetter previously uppercased l→L, colliding with
+        // the genuine L entry and losing I. The fix maps lowercase l→I before
+        // uppercasing so uppercase L is unaffected.
+        val blocks = listOf(
+            "Chart #:l",    // I entry, OCR garbled capital I as lowercase l
+            "DB-1492",
+            "Chart #:L",    // genuine L entry, must survive
+            "DB-384",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB1492", result["I"])
+        assertEquals("DB0384", result["L"])
+    }
+
+    @Test
     fun `parseBlockTexts recovers letter when Chart word is garbled and DB prefix is garbled to digit-dash`() {
         // Regression for DragonEye-MiyukiDelica.pdf: OCR garbled "Chart #:R" to
         // "lart #:R" (C+h merged into l) and "DB-663" to "3-663" (D dropped, B→3).
