@@ -81,6 +81,14 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            // Allow android.util.Log and other Android framework calls to
+            // return default values (rather than throw) in JVM unit tests.
+            isReturnDefaultValues = true
+        }
+    }
+
 }
 
 // KSP compiler arguments

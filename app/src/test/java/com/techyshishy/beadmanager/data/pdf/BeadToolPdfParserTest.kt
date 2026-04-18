@@ -137,6 +137,51 @@ class BeadToolPdfParserTest {
         assertTrue(result.colorMapping.isEmpty())
     }
 
+    // ── form feed page breaks ─────────────────────────────────────────────────
+
+    @Test
+    fun `parse extracts all rows across a form feed page boundary (loom single-row)`() {
+        // pdfbox inserts \u000C at every page boundary; rows after page breaks
+        // must still be found, not silently truncated.
+        val pages = listOf(
+            "Test Pattern\n",
+            "Row 1 (L) (3)A\u000C\nRow 2 (R) (2)B\nTest Pattern  Page 1 of 1\nCreated with BeadTool 4 - www.beadtool.net\n",
+        )
+        val result = parser.parse(pages)
+        assertEquals(2, result.rows.size)
+        assertEquals(1, result.rows[0].id)
+        assertEquals(2, result.rows[1].id)
+    }
+
+    @Test
+    fun `parse extracts all rows across a form feed page boundary (peyote paired-row)`() {
+        val pages = listOf(
+            "Test Pattern\n",
+            "Row 1&2 (L) (3)A\u000C\nRow 3 (R) (2)B\nTest Pattern  Page 1 of 1\nCreated with BeadTool 4 - www.beadtool.net\n",
+        )
+        val result = parser.parse(pages)
+        // Row 1&2 emits two PdfRows (id 1 and id 2), then Row 3
+        assertEquals(3, result.rows.size)
+        assertEquals(1, result.rows[0].id)
+        assertEquals(2, result.rows[1].id)
+        assertEquals(3, result.rows[2].id)
+    }
+
+    @Test
+    fun `parse extracts rows separated by a bare form-feed line (double newline after strip)`() {
+        // Models pdfbox placing \u000C as a standalone page-separator: after
+        // pages.joinToString("\n") and \u000C removal, two bare newlines remain
+        // between rows. This is the case that specifically requires \n* not \n?.
+        val pages = listOf(
+            "Test Pattern\n",
+            "Row 1 (L) (3)A\n\u000C\nRow 2 (R) (2)B\nTest Pattern  Page 1 of 1\nCreated with BeadTool 4 - www.beadtool.net\n",
+        )
+        val result = parser.parse(pages)
+        assertEquals(2, result.rows.size)
+        assertEquals(1, result.rows[0].id)
+        assertEquals(2, result.rows[1].id)
+    }
+
     // ── error cases ───────────────────────────────────────────────────────────
 
     @Test

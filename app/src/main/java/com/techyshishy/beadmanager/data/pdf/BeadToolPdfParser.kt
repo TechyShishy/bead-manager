@@ -59,9 +59,13 @@ class BeadToolPdfParser @Inject constructor() {
     /**
      * Removes per-page "Created with BeadTool 4" headers and "Page N of M"
      * footers injected into the text stream by BeadTool 4's PDF writer.
+     *
+     * Also strips form feed bytes (\u000C) that pdfbox inserts at page
+     * boundaries; leaving them in breaks the row-block regex continuity.
      */
     private fun stripPageHeaders(text: String): String =
         text
+            .replace("\u000C", "")
             .replace(
                 Regex("""[^\n]*\n?\n?Created with BeadTool 4 - www\.beadtool\.net\n?\n?"""),
                 "",
@@ -101,11 +105,11 @@ class BeadToolPdfParser @Inject constructor() {
      */
     private fun extractRowBlock(text: String): String? {
         val pairedPattern = Regex(
-            """((?:Row 1&2 \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n?)(?:Row \d+ \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n?)+)""",
+            """((?:Row 1&2 \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
             RegexOption.DOT_MATCHES_ALL,
         )
         val singlePattern = Regex(
-            """((?:Row 1 \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n?)(?:Row \d+ \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n?)+)""",
+            """((?:Row 1 \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) (?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
             RegexOption.DOT_MATCHES_ALL,
         )
         return pairedPattern.find(text)?.groupValues?.get(1)?.trim()
