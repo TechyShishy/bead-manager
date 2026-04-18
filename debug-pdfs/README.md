@@ -11,15 +11,15 @@ are ignored by git (see the `.gitignore` entry for `debug-pdfs/*.pdf`).
    # List available reports (paths are relative to the app home directory)
    adb shell run-as com.techyshishy.beadmanager.debug ls cache/pdf-debug/
    ```
-   Copy the file you want to `/sdcard/`, then pull it:
+   Pull the file directly to `debug-pdfs/` using `dd` piped through `run-as`:
    ```
-   adb shell run-as com.techyshishy.beadmanager.debug cp cache/pdf-debug/<filename>.txt /sdcard/
-   adb pull /sdcard/<filename>.txt debug-pdfs/
+   adb shell "run-as com.techyshishy.beadmanager.debug dd if='cache/pdf-debug/<filename>.txt'" | dd of="debug-pdfs/<filename>.txt"
    ```
-   > **Why the detour through `/sdcard/`?** `adb pull` runs as the adb user, which
-   > doesn't have permission to read `/data/user/0/` or `/data/data/` directly, even
-   > on debug builds. `run-as` executes the `cp` as the app's own UID, which does
-   > have access. See [jevakallio's gist](https://gist.github.com/jevakallio/452c54ef613792f25e45663ab2db117b) for the full explanation.
+   > **Why `dd` instead of `adb pull`?** On Android 10+, `run-as` can no longer copy
+   > files to `/sdcard/`, so the classic `cp /sdcard/ → adb pull` workaround no longer
+   > works. `dd` reads the file as the app's UID and pipes it directly to the host
+   > without touching shared storage. See [tuanchauict's writeup](https://iamtuna.org/2023-10-08/use-adb-backup-restore-local-data-2)
+   > and [jevakallio's gist](https://gist.github.com/jevakallio/452c54ef613792f25e45663ab2db117b) for background.
 3. Drop the failing PDF into this directory:
    ```
    cp ~/Downloads/failing-pattern.pdf debug-pdfs/

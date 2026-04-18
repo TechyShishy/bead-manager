@@ -39,15 +39,14 @@ class PdfImportDiagnosticsWriter @Inject constructor(
             val ts = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
             val file = File(dir, "pdf-import-debug-$ts.txt")
             file.writeText(collector.toReport())
-            // adb pull cannot read /data/user/0/ directly — even on debug builds the adb
-            // user lacks permission. The workaround is to copy via run-as (which executes
-            // as the app's UID) to /sdcard/, then pull from there. Path passed to run-as
-            // is relative to the app home directory (/data/user/0/<pkg>/).
+            // adb pull cannot read /data/user/0/ directly. On Android 10+ run-as can no
+            // longer copy to /sdcard/ either. The correct approach is to pipe dd through
+            // run-as directly to the host — no shared storage involved.
+            // Path is relative to the app home directory (/data/user/0/<pkg>/).
             val relativePath = "cache/pdf-debug/${file.name}"
             Log.d(TAG, "PDF import diagnostics written: ${file.absolutePath}")
-            Log.d(TAG, "Retrieve:")
-            Log.d(TAG, "  adb shell run-as ${context.packageName} cp $relativePath /sdcard/")
-            Log.d(TAG, "  adb pull /sdcard/${file.name} debug-pdfs/")
+            Log.d(TAG, "Retrieve (run from repo root):")
+            Log.d(TAG, "  adb shell \"run-as ${context.packageName} dd if='$relativePath'\" | dd of=\"debug-pdfs/${file.name}\"")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to write PDF import diagnostics: ${e.message}")
         }
