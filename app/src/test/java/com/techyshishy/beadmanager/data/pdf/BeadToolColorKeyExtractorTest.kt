@@ -274,9 +274,10 @@ class BeadToolColorKeyExtractorTest {
 
     @Test
     fun `parseBlockTexts ignores false letter match from intro text hash-number before first Chart entry`() {
-        // The relaxed letterRegex matches #11 in "using #11 Miyuki Delica" as letter "II".
-        // That false pendingLetter must be overwritten by the first real Chart entry
-        // and must never appear in the result map.
+        // "This design uses #11 Miyuki Delica beads": "uses " satisfies the optional
+        // \w{3,5} prefix but it is not at line-start — "This " precedes it on the same
+        // line. The MULTILINE-anchored letterRegex never matches, so no false pending
+        // letter is ever set. II must not appear in the result map.
         val blocks = listOf(
             "This design uses #11 Miyuki Delica beads",
             "Chart #:A",
@@ -311,6 +312,25 @@ class BeadToolColorKeyExtractorTest {
         )
         val result = extractor.parseBlockTexts(blocks)
         assertEquals("DB0010", result["T"])
+    }
+
+    @Test
+    fun `parseBlockTexts does not clobber pending letter when description block contains hash-number mid-sentence`() {
+        // Regression for CarnivalMask.pdf: Chart #:P (Block 14) is followed by a
+        // long dimensions block (Block 15) containing "using #11 Miyuki Delica"
+        // mid-sentence. The unanchored letterRegex matched "using #11" (5-char word
+        // + space + # + "11") and set pendingLetter to "II", overwriting "P". Block
+        // 16 then stored II=DB2142 and P was reported missing.
+        // Fix: MULTILINE anchor requires the match to be at line-start. "using #11"
+        // mid-sentence never starts a line, so it cannot fire.
+        val blocks = listOf(
+            "Chart #:P",
+            "The approximate dimensions when using #11 Miyuki Delica seed\nbeads are: width - 28.476cm (11.21in); height - 35cm (13.77in)",
+            "DB-2142",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB2142", result["P"])
+        assertFalse("II must not appear — false match from mid-sentence #11", result.containsKey("II"))
     }
 
     @Test

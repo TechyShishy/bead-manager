@@ -186,7 +186,12 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         // Colon is optional (OCR sometimes drops it). Letters may be lowercase
         // or confusable digits (0→O, 1→I). The "Chart " prefix is optional to
         // tolerate OCR garbling of "Chart" (e.g. "lart #:R" from "Chart #:R").
-        val letterRegex = Regex("""(?:\w{3,5} )?#:?([A-Za-z01]{1,2})""")
+        // MULTILINE anchors the match to line-start so that mid-sentence occurrences
+        // like "using #11 Miyuki" in a description block cannot fire and overwrite a
+        // pending chart letter. Real Chart entries always appear at the start of a
+        // block (and thus the start of a line). Note: a line break directly before a
+        // \w{3,5} #NN sequence would still match; no such OCR output has been observed.
+        val letterRegex = Regex("""^(?:\w{3,5} )?#:?([A-Za-z01]{1,2})""", RegexOption.MULTILINE)
         // DB codes range from 1–9999; BeadTool strips leading zeros so DB0003
         // prints as "DB-3". Allow 1–4 digits on the canonical DB- arm.
         // The garbled arm (digit-dash) retains the 3-4 digit constraint because
