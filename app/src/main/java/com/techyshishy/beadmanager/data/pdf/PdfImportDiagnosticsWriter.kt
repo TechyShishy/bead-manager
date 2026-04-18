@@ -39,8 +39,14 @@ class PdfImportDiagnosticsWriter @Inject constructor(
             val ts = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
             val file = File(dir, "pdf-import-debug-$ts.txt")
             file.writeText(collector.toReport())
+            // context.cacheDir returns /data/user/0/<pkg>/cache on-device, but adb pull
+            // requires the /data/data/<pkg>/cache form. Log both for convenience.
+            val adbPath = file.absolutePath.replace(
+                Regex("^/data/user/\\d+/"),
+                "/data/data/",
+            )
             Log.d(TAG, "PDF import diagnostics written to: ${file.absolutePath}")
-            Log.d(TAG, "Retrieve with: adb pull ${file.absolutePath}")
+            Log.d(TAG, "Retrieve with: adb shell run-as ${context.packageName} cat $adbPath > pdf-import-debug.txt")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to write PDF import diagnostics: ${e.message}")
         }
