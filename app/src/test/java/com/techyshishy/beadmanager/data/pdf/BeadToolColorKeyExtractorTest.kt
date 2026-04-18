@@ -312,4 +312,23 @@ class BeadToolColorKeyExtractorTest {
         val result = extractor.parseBlockTexts(blocks)
         assertEquals("DB0010", result["T"])
     }
+
+    @Test
+    fun `parseBlockTexts recovers I when OCR appends lowercase l stem artifact after capital I`() {
+        // Regression for AmberDragonPeyote.pdf Block 60: OCR produced "Chart #:Il"
+        // (capital I followed by a lowercase-l OCR artifact of the same glyph).
+        // normalizeLetter previously ran replace('l','I') character-by-character,
+        // turning "Il" → "II" — stored as II=DB0734 while the grid uses single I.
+        // The fix pre-strips the "Il" bigram to "I" before the character pass.
+        val blocks = listOf(
+            "Chart #:Il",    // I entry; OCR produced capital I + lowercase l stem
+            "DB-734",
+            "Chart #:L",     // genuine L entry, must survive
+            "DB-1582",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0734", result["I"])
+        assertEquals("DB1582", result["L"])
+        assertFalse("II must not appear in map", result.containsKey("II"))
+    }
 }
