@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
+import javax.inject.Inject
+
 /**
  * Extracts the text content of a PDF identified by [uri], returning one [String] per page.
  *
@@ -45,3 +47,14 @@ suspend fun extractPdfText(contentResolver: ContentResolver, uri: Uri): List<Str
             }
         }
     }
+
+/**
+ * Injectable wrapper around [extractPdfText].
+ *
+ * Exists solely so [com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase] can receive a
+ * mockable collaborator in unit tests. All production logic lives in the top-level function.
+ */
+class PdfTextExtractor @Inject constructor() {
+    suspend fun extract(contentResolver: ContentResolver, uri: Uri): List<String> =
+        extractPdfText(contentResolver, uri)
+}

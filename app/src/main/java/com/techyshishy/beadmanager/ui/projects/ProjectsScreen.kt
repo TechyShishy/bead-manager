@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -69,6 +70,7 @@ fun ProjectsScreen(
     viewModel: ProjectsViewModel,
     onProjectSelected: (projectId: String, projectName: String) -> Unit,
 ) {
+    val context = LocalContext.current
     val projects by viewModel.projects.collectAsState()
     val beadSatisfaction by viewModel.beadSatisfaction.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
@@ -78,10 +80,15 @@ fun ProjectsScreen(
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
     var importError by remember { mutableStateOf<ImportResult.Failure?>(null) }
 
-    val rgpPicker = rememberLauncherForActivityResult(
+    val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        uri?.let { viewModel.importFromRgp(it) }
+        if (uri == null) return@rememberLauncherForActivityResult
+        if (context.contentResolver.getType(uri) == "application/pdf") {
+            viewModel.importFromPdf(uri)
+        } else {
+            viewModel.importFromRgp(uri)
+        }
     }
 
     LaunchedEffect(viewModel.importResult) {
@@ -98,10 +105,10 @@ fun ProjectsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.projects)) },
                 actions = {
-                    IconButton(onClick = { rgpPicker.launch(arrayOf("*/*")) }) {
+                    IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
                         Icon(
                             Icons.Outlined.FileOpen,
-                            contentDescription = stringResource(R.string.import_from_rgp),
+                            contentDescription = stringResource(R.string.import_from_file),
                         )
                     }
                     Box {
@@ -301,6 +308,10 @@ private fun ImportErrorDialog(
         }
         is ImportResult.Failure.WriteError ->
             stringResource(R.string.import_failed_write_error)
+        is ImportResult.Failure.NotPdf ->
+            stringResource(R.string.import_failed_not_pdf)
+        is ImportResult.Failure.NoPatternFound ->
+            stringResource(R.string.import_failed_no_pattern_found)
     }
     AlertDialog(
         onDismissRequest = onDismiss,

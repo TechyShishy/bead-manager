@@ -25,6 +25,13 @@ sealed class ImportResult {
         data class UnrecognizedCodes(val codes: List<String>) : Failure()
         /** Project document was created but the grid write failed. The partial project was deleted. */
         data object WriteError : Failure()
+        /** The selected file is not a valid PDF (used by PDF import path). */
+        data object NotPdf : Failure()
+        /**
+         * The PDF is readable but contains no recognizable bead pattern, or the color key is
+         * incomplete (used by PDF import path).
+         */
+        data object NoPatternFound : Failure()
     }
 }
 

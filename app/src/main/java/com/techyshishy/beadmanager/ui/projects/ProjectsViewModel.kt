@@ -11,6 +11,7 @@ import com.techyshishy.beadmanager.data.model.computeProjectSatisfaction
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportResult
 import com.techyshishy.beadmanager.domain.ImportRgpProjectUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +35,7 @@ class ProjectsViewModel @Inject constructor(
     private val inventoryRepository: InventoryRepository,
     private val preferencesRepository: PreferencesRepository,
     private val importRgpProjectUseCase: ImportRgpProjectUseCase,
+    private val importPdfProjectUseCase: ImportPdfProjectUseCase,
 ) : ViewModel() {
 
     private val _sortOrder = MutableStateFlow(ProjectSortOrder.DEFAULT)
@@ -152,6 +154,13 @@ class ProjectsViewModel @Inject constructor(
     fun importFromRgp(uri: Uri) {
         viewModelScope.launch {
             val result = importRgpProjectUseCase.import(uri)
+            _importResult.emit(result)
+        }
+    }
+
+    fun importFromPdf(uri: Uri) {
+        viewModelScope.launch {
+            val result = importPdfProjectUseCase.import(uri)
             _importResult.emit(result)
         }
     }

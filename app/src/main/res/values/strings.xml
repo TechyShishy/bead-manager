@@ -118,6 +118,8 @@
 
     <!-- RGP import -->
     <string name="import_from_rgp">Import from RGP file</string>
+    <!-- File import (PDF or RGP) -->
+    <string name="import_from_file">Import from file</string>
 
     <!-- Projects sort -->
     <string name="sort_projects">Sort projects</string>
@@ -141,6 +143,13 @@
     <string name="import_failed_no_delica_codes">This project uses custom colors and does not contain any Miyuki Delica codes.</string>
     <string name="import_failed_unrecognized_codes">The following color codes were not found in the Delica catalog: %1$s</string>
     <string name="import_failed_write_error">Project was created but the bead grid could not be saved. Please try again.</string>
+    <!--
+        TODO: The original issue spec (#33) proposed "import_error_" prefix for these two strings.
+        We used "import_failed_" to match the existing RGP error naming convention. Consider
+        a renaming pass to harmonise all import error string names to a single prefix.
+    -->
+    <string name="import_failed_not_pdf">The selected file does not appear to be a valid PDF.</string>
+    <string name="import_failed_no_pattern_found">No recognizable bead pattern was found in this PDF.</string>
 
     <!-- RGP export -->
     <string name="export_rgp">Export as RGP</string>

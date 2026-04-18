@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.projects
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportRgpProjectUseCase
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
 import io.mockk.every
@@ -34,12 +35,13 @@ class ProjectsViewModelTest {
             projectRepository,
             inventoryRepository,
             preferencesRepository,
-            mockk(relaxed = true),
+            mockk<ImportRgpProjectUseCase>(relaxed = true),
+            mockk<ImportPdfProjectUseCase>(relaxed = true),
         )
     }
 
     @Test
-    fun `default sort order is CREATED_AT DESCENDING`() = runTest {
+    fun `initial sortOrder is DEFAULT`() = runTest {
         val vm = createViewModel()
         assertEquals(ProjectSortOrder.DEFAULT, vm.sortOrder.value)
         assertEquals(ProjectSortKey.CREATED_AT, vm.sortOrder.value.key)
