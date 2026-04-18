@@ -242,4 +242,32 @@ class BeadToolColorKeyExtractorTest {
     fun `parseBlockTexts returns empty map for empty block list`() {
         assertTrue(extractor.parseBlockTexts(emptyList()).isEmpty())
     }
+
+    @Test
+    fun `parseBlockTexts recovers letter when Chart word is garbled and DB prefix is garbled to digit-dash`() {
+        // Regression for DragonEye-MiyukiDelica.pdf: OCR garbled "Chart #:R" to
+        // "lart #:R" (C+h merged into l) and "DB-663" to "3-663" (D dropped, B→3).
+        // Both the letter regex and the DB code regex must tolerate these mutations.
+        val blocks = listOf(
+            "lart #:R",
+            "3-663\nOpaque Olive\nCount:2004",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0663", result["R"])
+    }
+
+    @Test
+    fun `parseBlockTexts ignores false letter match from intro text hash-number before first Chart entry`() {
+        // The relaxed letterRegex matches #11 in "using #11 Miyuki Delica" as letter "II".
+        // That false pendingLetter must be overwritten by the first real Chart entry
+        // and must never appear in the result map.
+        val blocks = listOf(
+            "This design uses #11 Miyuki Delica beads",
+            "Chart #:A",
+            "DB-0010",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0010", result["A"])
+        assertFalse("II should not appear — false match from intro text", result.containsKey("II"))
+    }
 }

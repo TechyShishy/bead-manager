@@ -184,9 +184,12 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     internal fun parseBlockTexts(blockTexts: List<String>): Map<String, String> {
         val result = mutableMapOf<String, String>()
         // Colon is optional (OCR sometimes drops it). Letters may be lowercase
-        // or confusable digits (0→O, 1→I).
-        val letterRegex = Regex("""Chart #:?([A-Za-z01]{1,2})""")
-        val dbCodeRegex = Regex("""(DB-\d{3,4})""")
+        // or confusable digits (0→O, 1→I). The "Chart " prefix is optional to
+        // tolerate OCR garbling of "Chart" (e.g. "lart #:R" from "Chart #:R").
+        val letterRegex = Regex("""(?:\w{3,5} )?#:?([A-Za-z01]{1,2})""")
+        // Also matches digit-dash-digits (e.g. "3-663") to handle OCR garbling
+        // of the "DB-" prefix (e.g. "DB-663" → "3-663" when D is dropped and B→3).
+        val dbCodeRegex = Regex("""(DB-\d{3,4}|\d-\d{3,4})""")
         var pendingLetter: String? = null
 
         for (text in blockTexts) {
@@ -230,11 +233,13 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     /**
      * Normalizes an OCR-extracted DB code to the catalog format.
      *
-     * OCR output: `DB-161`, `DB-0010` (hyphen, variable digit count).
+     * OCR output: `DB-161`, `DB-0010` (hyphen, variable digit count), or
+     * garbled variants such as `3-663` where the `DB-` prefix was corrupted
+     * (D dropped, B→3). In the garbled case the digits after the dash are used.
      * Catalog format: `DB0161`, `DB0010` (no hyphen, zero-padded to 4 digits).
      */
     private fun normalizeDbCode(raw: String): String {
-        val digits = raw.removePrefix("DB-")
+        val digits = if (raw.startsWith("DB-")) raw.removePrefix("DB-") else raw.substringAfter("-")
         return "DB" + digits.padStart(4, '0')
     }
 
