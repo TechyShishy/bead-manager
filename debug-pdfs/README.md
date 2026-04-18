@@ -8,14 +8,18 @@ are ignored by git (see the `.gitignore` entry for `debug-pdfs/*.pdf`).
 1. Trigger a failing import on the device.
 2. Retrieve the diagnostic report:
    ```
-   adb shell run-as com.techyshishy.beadmanager.debug find /data/data/com.techyshishy.beadmanager.debug/cache/pdf-debug -name "*.txt" | \
-     xargs -I{} adb shell run-as com.techyshishy.beadmanager.debug cat {}
+   # List available reports (paths are relative to the app home directory)
+   adb shell run-as com.techyshishy.beadmanager.debug ls cache/pdf-debug/
    ```
-   Or pull the file directly:
+   Copy the file you want to `/sdcard/`, then pull it:
    ```
-   adb shell run-as com.techyshishy.beadmanager.debug ls /data/data/com.techyshishy.beadmanager.debug/cache/pdf-debug/
-   adb pull /data/data/com.techyshishy.beadmanager.debug/cache/pdf-debug/<filename>.txt debug-pdfs/
+   adb shell run-as com.techyshishy.beadmanager.debug cp cache/pdf-debug/<filename>.txt /sdcard/
+   adb pull /sdcard/<filename>.txt debug-pdfs/
    ```
+   > **Why the detour through `/sdcard/`?** `adb pull` runs as the adb user, which
+   > doesn't have permission to read `/data/user/0/` or `/data/data/` directly, even
+   > on debug builds. `run-as` executes the `cp` as the app's own UID, which does
+   > have access. See [jevakallio's gist](https://gist.github.com/jevakallio/452c54ef613792f25e45663ab2db117b) for the full explanation.
 3. Drop the failing PDF into this directory:
    ```
    cp ~/Downloads/failing-pattern.pdf debug-pdfs/

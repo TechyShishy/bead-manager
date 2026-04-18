@@ -39,14 +39,15 @@ class PdfImportDiagnosticsWriter @Inject constructor(
             val ts = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
             val file = File(dir, "pdf-import-debug-$ts.txt")
             file.writeText(collector.toReport())
-            // context.cacheDir returns /data/user/0/<pkg>/cache on-device, but adb pull
-            // requires the /data/data/<pkg>/cache form. Log both for convenience.
-            val adbPath = file.absolutePath.replace(
-                Regex("^/data/user/\\d+/"),
-                "/data/data/",
-            )
-            Log.d(TAG, "PDF import diagnostics written to: ${file.absolutePath}")
-            Log.d(TAG, "Retrieve with: adb shell run-as ${context.packageName} cat $adbPath > pdf-import-debug.txt")
+            // adb pull cannot read /data/user/0/ directly — even on debug builds the adb
+            // user lacks permission. The workaround is to copy via run-as (which executes
+            // as the app's UID) to /sdcard/, then pull from there. Path passed to run-as
+            // is relative to the app home directory (/data/user/0/<pkg>/).
+            val relativePath = "cache/pdf-debug/${file.name}"
+            Log.d(TAG, "PDF import diagnostics written: ${file.absolutePath}")
+            Log.d(TAG, "Retrieve:")
+            Log.d(TAG, "  adb shell run-as ${context.packageName} cp $relativePath /sdcard/")
+            Log.d(TAG, "  adb pull /sdcard/${file.name} debug-pdfs/")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to write PDF import diagnostics: ${e.message}")
         }
