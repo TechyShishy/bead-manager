@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -185,6 +186,14 @@ fun ProjectInfoScreen(
                                 Icon(
                                     Icons.Filled.Delete,
                                     contentDescription = stringResource(R.string.project_info_image_remove),
+                                )
+                            }
+                        }
+                        if (!isUploading && rowCount > 0) {
+                            IconButton(onClick = { viewModel.generatePreviewFromGrid() }) {
+                                Icon(
+                                    Icons.Filled.GridOn,
+                                    contentDescription = stringResource(R.string.project_info_image_generate),
                                 )
                             }
                         }

@@ -47,6 +47,17 @@ class ProjectImageRepository @Inject constructor(
     }
 
     /**
+     * Uploads raw [bytes] as the cover image for [projectId] and returns the HTTPS download URL.
+     * Intended for programmatically generated images (e.g. rendered preview bitmaps) where no
+     * content URI is available.
+     */
+    suspend fun uploadCoverBytes(projectId: String, bytes: ByteArray): String {
+        val ref = coverRef(projectId)
+        ref.putBytes(bytes).await()
+        return ref.downloadUrl.await().toString()
+    }
+
+    /**
      * Deletes the cover image for [projectId]. Silently succeeds if no image exists.
      * All other [StorageException] codes (permission, network, etc.) are rethrown so the
      * caller can surface them to the user.

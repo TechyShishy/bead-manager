@@ -20,6 +20,7 @@ import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.domain.ExportResult
 import com.techyshishy.beadmanager.domain.ExportRgpProjectUseCase
+import com.techyshishy.beadmanager.domain.GenerateProjectPreviewUseCase
 import com.techyshishy.beadmanager.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -65,6 +66,7 @@ class ProjectDetailViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val exportRgpProjectUseCase: ExportRgpProjectUseCase,
     private val projectImageRepository: ProjectImageRepository,
+    private val generateProjectPreviewUseCase: GenerateProjectPreviewUseCase,
 ) : ViewModel() {
 
     private val _projectId = MutableStateFlow("")
@@ -273,6 +275,33 @@ class ProjectDetailViewModel @Inject constructor(
     /** Resets [imageUploadState] to [ImageUploadState.Idle] after the UI has consumed an error. */
     fun resetImageUploadState() {
         _imageUploadState.value = ImageUploadState.Idle
+    }
+
+    /**
+     * Renders the project's peyote grid to a PNG and uploads it as the cover image.
+     *
+     * Reuses [imageUploadState] to drive progress and error display in the UI — no new
+     * state is needed. Silently no-ops when the project or its grid rows are unavailable.
+     */
+    fun generatePreviewFromGrid() {
+        val currentProject = project.value ?: return
+        val rows = projectRows.value.takeIf { it.isNotEmpty() } ?: return
+        _imageUploadState.value = ImageUploadState.Uploading
+        viewModelScope.launch {
+            runCatching {
+                val bytes = generateProjectPreviewUseCase.render(
+                    rows = rows,
+                    colorMapping = currentProject.colorMapping,
+                    beadLookup = beadLookup.value,
+                )
+                val url = projectImageRepository.uploadCoverBytes(currentProject.projectId, bytes)
+                projectRepository.updateProject(currentProject.copy(imageUrl = url))
+            }.onSuccess {
+                _imageUploadState.value = ImageUploadState.Idle
+            }.onFailure {
+                _imageUploadState.value = ImageUploadState.Error(R.string.project_info_image_generate_error)
+            }
+        }
     }
 
     // ── Bead list mutations ──────────────────────────────────────────────────

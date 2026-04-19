@@ -234,6 +234,8 @@
     <string name="project_info_image_add">Add image</string>
     <string name="project_info_image_change">Change image</string>
     <string name="project_info_image_remove">Remove image</string>
+    <string name="project_info_image_generate">Generate preview from grid</string>
+    <string name="project_info_image_generate_error">Preview generation failed. Please try again.</string>
     <string name="project_info_image_uploading">Uploading image…</string>
     <string name="project_info_image_upload_error">Upload failed. Please try again.</string>
 </resources>
