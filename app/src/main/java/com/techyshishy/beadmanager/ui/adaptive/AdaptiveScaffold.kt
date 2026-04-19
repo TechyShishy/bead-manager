@@ -179,8 +179,13 @@ fun AdaptiveScaffold() {
                             beadCode = code,
                             viewModel = detailVm,
                             onNavigateBack = {
+                                val returnProjectId = catalogDetailReturnProjectId
                                 catalogDetailCode = null
                                 catalogDetailReturnProjectId = null
+                                if (returnProjectId != null) {
+                                    ordersProjectId = returnProjectId
+                                    currentTab = AppTab.PROJECTS
+                                }
                             },
                             onAddToProject = {
                                 catalogProjectPickerBeadCode = code
