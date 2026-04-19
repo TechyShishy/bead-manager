@@ -1,6 +1,9 @@
 package com.techyshishy.beadmanager.ui.projects
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +21,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -26,6 +31,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,10 +48,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
+import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import java.text.DateFormat
 
@@ -60,6 +70,7 @@ fun ProjectInfoScreen(
     val project by viewModel.project.collectAsState()
     val projectRows by viewModel.projectRows.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
+    val imageUploadState by viewModel.imageUploadState.collectAsState()
 
     val rowCount = project?.rowCount ?: 0
     val stepCountText = remember(projectRows) {
@@ -75,6 +86,22 @@ fun ProjectInfoScreen(
     var notesInput by rememberSaveable { mutableStateOf("") }
     val notesFocusRequester = remember { FocusRequester() }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    val imagePicker = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.uploadProjectImage(uri)
+    }
+
+    LaunchedEffect(imageUploadState) {
+        if (imageUploadState is ImageUploadState.Error) {
+            snackbarHostState.showSnackbar(
+                context.getString((imageUploadState as ImageUploadState.Error).messageRes)
+            )
+            viewModel.resetImageUploadState()
+        }
+    }
+
     LaunchedEffect(notesEditMode) {
         if (notesEditMode) notesFocusRequester.requestFocus()
     }
@@ -84,6 +111,7 @@ fun ProjectInfoScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.project_info_title)) },
@@ -119,6 +147,67 @@ fun ProjectInfoScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            // ── Cover image ─────────────────────────────────────────────────
+            item {
+                InfoSectionHeader(stringResource(R.string.project_info_image_header))
+            }
+            item {
+                val isUploading = imageUploadState is ImageUploadState.Uploading
+                val imageUrl = project?.imageUrl
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    if (imageUrl != null) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = stringResource(R.string.project_info_image_header),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp),
+                    ) {
+                        if (isUploading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.project_info_image_uploading))
+                        }
+                        if (!isUploading && imageUrl != null) {
+                            IconButton(onClick = { viewModel.removeProjectImage() }) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = stringResource(R.string.project_info_image_remove),
+                                )
+                            }
+                        }
+                        if (!isUploading) {
+                            IconButton(
+                                onClick = {
+                                    imagePicker.launch(
+                                        PickVisualMediaRequest(PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                            ) {
+                                val cd = if (imageUrl != null)
+                                    stringResource(R.string.project_info_image_change)
+                                else
+                                    stringResource(R.string.project_info_image_add)
+                                Icon(Icons.Filled.Edit, contentDescription = cd)
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
+
             if (rowCount > 0) {
                 item {
                     InfoSectionHeader(stringResource(R.string.project_info_grid_header))

@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Users can only read and write their own files.
+    // Uploads and overwrites are capped at 10 MB to prevent runaway storage costs.
+    // Note: request.resource is null for delete operations, so the size guard cannot
+    // be applied to deletes — they are split into a separate allow clause.
+    match /users/{uid}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    // Debug builds use a separate prefix to avoid polluting production storage.
+    match /users_debug/{uid}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

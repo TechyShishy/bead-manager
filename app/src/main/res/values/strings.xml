@@ -228,4 +228,12 @@
     <string name="project_info_notes_empty">No notes yet. Tap the edit icon to add.</string>
     <string name="project_info_notes_edit">Edit notes</string>
     <string name="project_info_notes_save">Save notes</string>
+
+    <!-- Project cover image (ProjectInfoScreen) -->
+    <string name="project_info_image_header">Cover Image</string>
+    <string name="project_info_image_add">Add image</string>
+    <string name="project_info_image_change">Change image</string>
+    <string name="project_info_image_remove">Remove image</string>
+    <string name="project_info_image_uploading">Uploading image…</string>
+    <string name="project_info_image_upload_error">Upload failed. Please try again.</string>
 </resources>

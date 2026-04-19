@@ -141,6 +141,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.auth.ktx)
+    implementation(libs.firebase.storage.ktx)
 
     // Credential Manager (Google Sign-In)
     implementation(libs.androidx.credentials)

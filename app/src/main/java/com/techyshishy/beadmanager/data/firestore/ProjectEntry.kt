@@ -44,4 +44,5 @@ data class ProjectEntry(
     val position: Map<String, Int> = emptyMap(),
     val markedSteps: Map<String, Map<String, Int>> = emptyMap(),
     val markedRows: Map<String, Int> = emptyMap(),
+    val imageUrl: String? = null,
 )

@@ -5,9 +5,11 @@ import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.domain.ExportRgpProjectUseCase
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -46,6 +49,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -53,6 +57,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -86,6 +91,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -93,6 +99,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -126,6 +133,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -133,6 +141,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -166,6 +175,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -173,6 +183,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -210,6 +221,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -217,6 +229,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -255,6 +268,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -262,6 +276,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         // Do not call initialize — project.value remains null.
 
@@ -295,6 +310,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -302,6 +318,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -342,6 +359,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -349,6 +367,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -386,6 +405,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -393,6 +413,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -434,6 +455,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -441,6 +463,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -478,6 +501,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -485,6 +509,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -526,6 +551,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -533,6 +559,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -563,6 +590,7 @@ class ProjectDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -570,6 +598,7 @@ class ProjectDetailViewModelTest {
             catalogRepository,
             preferencesRepository,
             exportUseCase,
+            projectImageRepository,
         )
         // Do not call initialize — project.value remains null.
 
@@ -577,5 +606,100 @@ class ProjectDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `uploadProjectImage calls repository and persists url to Firestore`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project")
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true) {
+            coEvery { uploadCover("p1", any()) } returns "https://example.com/cover.jpg"
+        }
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+            projectImageRepository,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        val fakeUri = mockk<android.net.Uri>()
+        vm.uploadProjectImage(fakeUri)
+        advanceUntilIdle()
+
+        coVerify { projectImageRepository.uploadCover("p1", fakeUri) }
+        coVerify { projectRepository.updateProject(project.copy(imageUrl = "https://example.com/cover.jpg")) }
+        assertTrue(vm.imageUploadState.value is ImageUploadState.Idle)
+    }
+
+    @Test
+    fun `removeProjectImage calls repository and clears imageUrl in Firestore`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            imageUrl = "https://example.com/cover.jpg",
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+            projectImageRepository,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.removeProjectImage()
+        advanceUntilIdle()
+
+        coVerify { projectImageRepository.deleteCover("p1") }
+        coVerify { projectRepository.updateProject(project.copy(imageUrl = null)) }
+        assertTrue(vm.imageUploadState.value is ImageUploadState.Idle)
     }
 }

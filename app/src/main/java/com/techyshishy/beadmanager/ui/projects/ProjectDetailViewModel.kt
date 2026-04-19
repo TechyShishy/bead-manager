@@ -1,6 +1,7 @@
 package com.techyshishy.beadmanager.ui.projects
 
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.db.BeadEntity
@@ -15,9 +16,11 @@ import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.domain.ExportResult
 import com.techyshishy.beadmanager.domain.ExportRgpProjectUseCase
+import com.techyshishy.beadmanager.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -42,6 +45,13 @@ sealed class AddBeadEvent {
     data object AlreadyPresent : AddBeadEvent()
 }
 
+/** State of a cover-image upload or delete operation. */
+sealed class ImageUploadState {
+    data object Idle : ImageUploadState()
+    data object Uploading : ImageUploadState()
+    data class Error(@StringRes val messageRes: Int) : ImageUploadState()
+}
+
 /**
  * Drives the Project Detail screen (bead list).
  */
@@ -54,6 +64,7 @@ class ProjectDetailViewModel @Inject constructor(
     private val catalogRepository: CatalogRepository,
     private val preferencesRepository: PreferencesRepository,
     private val exportRgpProjectUseCase: ExportRgpProjectUseCase,
+    private val projectImageRepository: ProjectImageRepository,
 ) : ViewModel() {
 
     private val _projectId = MutableStateFlow("")
@@ -208,6 +219,60 @@ class ProjectDetailViewModel @Inject constructor(
         viewModelScope.launch {
             projectRepository.updateProject(currentProject.copy(notes = trimmed))
         }
+    }
+
+    // ── Cover image ──────────────────────────────────────────────────────────
+
+    private val _imageUploadState = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)
+
+    /**
+     * Observable upload/delete progress. Screens collect this to show a progress indicator
+     * or a Snackbar on error. Resets to [ImageUploadState.Idle] after success.
+     */
+    val imageUploadState: StateFlow<ImageUploadState> = _imageUploadState
+
+    /**
+     * Uploads the image at [uri] to Firebase Storage and persists the resulting download URL
+     * to [ProjectEntry.imageUrl]. The content URI must be valid at call time — invoke this
+     * from the image picker's `onResult` callback while the URI grant is still active.
+     */
+    fun uploadProjectImage(uri: Uri) {
+        val currentProject = project.value ?: return
+        _imageUploadState.value = ImageUploadState.Uploading
+        viewModelScope.launch {
+            runCatching {
+                val url = projectImageRepository.uploadCover(currentProject.projectId, uri)
+                projectRepository.updateProject(currentProject.copy(imageUrl = url))
+            }.onSuccess {
+                _imageUploadState.value = ImageUploadState.Idle
+            }.onFailure {
+                _imageUploadState.value = ImageUploadState.Error(R.string.project_info_image_upload_error)
+            }
+        }
+    }
+
+    /**
+     * Deletes the cover image from Firebase Storage and clears [ProjectEntry.imageUrl] in
+     * Firestore. Silently succeeds if no image is stored.
+     */
+    fun removeProjectImage() {
+        val currentProject = project.value ?: return
+        _imageUploadState.value = ImageUploadState.Uploading
+        viewModelScope.launch {
+            runCatching {
+                projectImageRepository.deleteCover(currentProject.projectId)
+                projectRepository.updateProject(currentProject.copy(imageUrl = null))
+            }.onSuccess {
+                _imageUploadState.value = ImageUploadState.Idle
+            }.onFailure {
+                _imageUploadState.value = ImageUploadState.Error(R.string.project_info_image_upload_error)
+            }
+        }
+    }
+
+    /** Resets [imageUploadState] to [ImageUploadState.Idle] after the UI has consumed an error. */
+    fun resetImageUploadState() {
+        _imageUploadState.value = ImageUploadState.Idle
     }
 
     // ── Bead list mutations ──────────────────────────────────────────────────
