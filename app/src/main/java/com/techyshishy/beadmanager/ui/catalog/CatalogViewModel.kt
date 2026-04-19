@@ -248,6 +248,10 @@ class CatalogViewModel @Inject constructor(
         stockOnlyFilter.value = false
     }
 
+    fun pinAll(codes: List<String>) {
+        pinnedCodes.value = codes
+    }
+
     fun toggleStockOnly() {
         stockOnlyFilter.value = !stockOnlyFilter.value
     }

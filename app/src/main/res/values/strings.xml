@@ -84,6 +84,7 @@
     <!-- Project detail / bead list -->
     <string name="no_beads">No beads yet. Add beads from the Catalog tab.</string>
     <string name="remove_bead">Remove bead</string>
+    <string name="pin_all_to_comparison">Pin all beads to catalog comparison</string>
     <string name="confirm_remove_bead">Remove %1$s from this project?</string>
     <string name="bead_progress">%1$s g / %2$s g received</string>
     <string name="bead_target_met">✓ Target met</string>

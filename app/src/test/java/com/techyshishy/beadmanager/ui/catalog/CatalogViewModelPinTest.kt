@@ -99,4 +99,24 @@ class CatalogViewModelPinTest {
         vm.toggleStockOnly()
         assertFalse(vm.stockOnlyFilter.value)
     }
+
+    @Test
+    fun `pinAll replaces pinnedCodes with the given list`() = runTest {
+        val vm = makeViewModel()
+        vm.togglePin("DB0003")
+
+        vm.pinAll(listOf("DB0001", "DB0002"))
+
+        assertEquals(listOf("DB0001", "DB0002"), vm.pinnedCodes.value)
+    }
+
+    @Test
+    fun `pinAll with empty list clears pinnedCodes`() = runTest {
+        val vm = makeViewModel()
+        vm.togglePin("DB0001")
+
+        vm.pinAll(emptyList())
+
+        assertTrue(vm.pinnedCodes.value.isEmpty())
+    }
 }

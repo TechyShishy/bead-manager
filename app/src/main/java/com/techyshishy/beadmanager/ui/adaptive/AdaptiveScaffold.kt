@@ -356,6 +356,11 @@ fun AdaptiveScaffold() {
                                 projectsCatalogSwapTargetCode = oldCode
                                 projectsCatalogPickerMode = true
                             },
+                            onPinAllToComparison = { codes ->
+                                catalogViewModel.pinAll(codes)
+                                catalogDetailCode = null
+                                currentTab = AppTab.CATALOG
+                            },
                         )
                     }
                     else -> {
