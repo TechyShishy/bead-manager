@@ -1,6 +1,9 @@
 package com.techyshishy.beadmanager.domain
 
+import android.content.ContentResolver
+import android.database.Cursor
 import android.net.Uri
+import android.provider.OpenableColumns
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
@@ -62,8 +65,9 @@ class ImportPdfProjectUseCaseTest {
         xlsmParser: XlsmPdfParser = mockk(),
         colorKeyExtractor: BeadToolColorKeyExtractor = mockk(),
         diagnosticsWriter: PdfImportDiagnosticsWriter = mockk(relaxed = true),
+        contentResolver: ContentResolver = mockk(relaxed = true),
     ) = ImportPdfProjectUseCase(
-        contentResolver = mockk(relaxed = true),
+        contentResolver = contentResolver,
         catalogRepository = catalog,
         projectRepository = projectRepository,
         beadToolParser = beadToolParser,
@@ -72,6 +76,19 @@ class ImportPdfProjectUseCaseTest {
         textExtractor = textExtractor,
         diagnosticsWriter = diagnosticsWriter,
     )
+
+    /**
+     * Returns a [ContentResolver] mock whose [ContentResolver.query] call yields a cursor
+     * with the given [displayName] in [OpenableColumns.DISPLAY_NAME].
+     */
+    private fun contentResolverWithDisplayName(displayName: String): ContentResolver = mockk {
+        val cursor: Cursor = mockk(relaxed = true) {
+            every { moveToFirst() } returns true
+            every { getColumnIndex(OpenableColumns.DISPLAY_NAME) } returns 0
+            every { getString(0) } returns displayName
+        }
+        every { query(any(), any(), null, null, null) } returns cursor
+    }
 
     // ── fixtures ──────────────────────────────────────────────────────────────
 
@@ -234,9 +251,10 @@ class ImportPdfProjectUseCaseTest {
             projectRepository = repo,
             beadToolParser = btParser,
             colorKeyExtractor = extractor,
+            contentResolver = contentResolverWithDisplayName("My BeadTool Pattern.pdf"),
         ).import(uri)
         assertTrue("Expected Success but got $result", result is ImportResult.Success)
-        assertEquals("Test Pattern", (result as ImportResult.Success).name)
+        assertEquals("My BeadTool Pattern", (result as ImportResult.Success).name)
         // colorMapping in ProjectEntry is the OCR result (letter → DB code)
         assertEquals(ocrColorMap, capturedEntry.captured.colorMapping)
         // Grid rows: step.description holds the color letter; id is 1-based index within row
@@ -266,9 +284,10 @@ class ImportPdfProjectUseCaseTest {
             projectRepository = repo,
             beadToolParser = btParser,
             xlsmParser = xParser,
+            contentResolver = contentResolverWithDisplayName("My XLSM Pattern.pdf"),
         ).import(uri)
         assertTrue("Expected Success but got $result", result is ImportResult.Success)
-        assertEquals("XLSM Pattern", (result as ImportResult.Success).name)
+        assertEquals("My XLSM Pattern", (result as ImportResult.Success).name)
         assertEquals(mapOf("A" to "DB-0001", "B" to "DB-0002"), capturedEntry.captured.colorMapping)
         val rows = capturedRows.captured
         assertEquals(1, rows.size)
@@ -278,5 +297,60 @@ class ImportPdfProjectUseCaseTest {
         assertEquals(2, rows[0].steps[1].id)
         assertEquals("B", rows[0].steps[1].description)
         assertEquals(2, rows[0].steps[1].count)
+    }
+
+    // ── deriveProjectName tests ───────────────────────────────────────────────
+
+    /** Shared success setup used by filename-derivation tests. */
+    private fun buildXlsmSuccessUseCase(contentResolver: ContentResolver): ImportPdfProjectUseCase {
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns xlsmProject }
+        return buildUseCase(
+            catalog = catalogWith("DB-0001", "DB-0002"),
+            beadToolParser = btParser,
+            xlsmParser = xParser,
+            contentResolver = contentResolver,
+        )
+    }
+
+    @Test
+    fun `project name is derived from URI filename with extension stripped`() = runTest {
+        val result = buildXlsmSuccessUseCase(
+            contentResolverWithDisplayName("My Pattern.pdf"),
+        ).import(uri)
+        assertEquals("My Pattern", (result as ImportResult.Success).name)
+    }
+
+    @Test
+    fun `project name strips PDF extension case-insensitively`() = runTest {
+        val result = buildXlsmSuccessUseCase(
+            contentResolverWithDisplayName("Pattern.PDF"),
+        ).import(uri)
+        assertEquals("Pattern", (result as ImportResult.Success).name)
+    }
+
+    @Test
+    fun `project name is trimmed of surrounding whitespace`() = runTest {
+        val result = buildXlsmSuccessUseCase(
+            contentResolverWithDisplayName("  My Pattern.pdf  "),
+        ).import(uri)
+        assertEquals("My Pattern", (result as ImportResult.Success).name)
+    }
+
+    @Test
+    fun `project name falls back to Imported Project when cursor is null`() = runTest {
+        val nullCursorResolver: ContentResolver = mockk {
+            every { query(any(), any(), null, null, null) } returns null
+        }
+        val result = buildXlsmSuccessUseCase(nullCursorResolver).import(uri)
+        assertEquals("Imported Project", (result as ImportResult.Success).name)
+    }
+
+    @Test
+    fun `project name falls back to Imported Project when display name is blank after stripping`() = runTest {
+        val result = buildXlsmSuccessUseCase(
+            contentResolverWithDisplayName(".pdf"),
+        ).import(uri)
+        assertEquals("Imported Project", (result as ImportResult.Success).name)
     }
 }

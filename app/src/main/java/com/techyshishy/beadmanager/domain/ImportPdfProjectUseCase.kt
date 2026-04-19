@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.domain
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
@@ -73,7 +74,13 @@ class ImportPdfProjectUseCase @Inject constructor(
         diagnostics.parsedProjectName = pdfProject.name
         Log.d(TAG, "Parsed project: name='${pdfProject.name}', rows=${pdfProject.rows.size}, colorMapping=${pdfProject.colorMapping}")
 
-        // 4. Validate all DB codes in colorMapping against the local catalog.
+        // 4. Derive the project name from the URI filename rather than the in-document title.
+        //    In-document titles are often generic ("Bead Pattern", "Sheet1"); the filename is
+        //    the most reliable user-controlled signal for what the project should be called.
+        val projectName = deriveProjectName(uri)
+        Log.d(TAG, "Derived project name from filename: '$projectName'")
+
+        // 5. Validate all DB codes in colorMapping against the local catalog.
         val catalogMap = catalogRepository.allBeadsAsMap()
         val unrecognized = pdfProject.colorMapping.values.filter { it !in catalogMap }.sorted()
         if (unrecognized.isNotEmpty()) {
@@ -84,7 +91,7 @@ class ImportPdfProjectUseCase @Inject constructor(
             return ImportResult.Failure.UnrecognizedCodes(unrecognized)
         }
 
-        // 5. Map PdfProject → Firestore shape and write.
+        // 6. Map PdfProject → Firestore shape and write.
         val projectRows = pdfProject.rows.map { row ->
             ProjectRgpRow(
                 id = row.id,
@@ -97,7 +104,7 @@ class ImportPdfProjectUseCase @Inject constructor(
         val projectId = try {
             projectRepository.createProject(
                 ProjectEntry(
-                    name = pdfProject.name,
+                    name = projectName,
                     colorMapping = pdfProject.colorMapping,
                 ),
             )
@@ -118,8 +125,8 @@ class ImportPdfProjectUseCase @Inject constructor(
                 .onFailure { Log.e(TAG, "Cleanup of partial project $projectId failed", it) }
             return ImportResult.Failure.WriteError
         }
-        Log.d(TAG, "Import succeeded: name='${pdfProject.name}', projectId=$projectId")
-        return ImportResult.Success(projectId = projectId, name = pdfProject.name)
+        Log.d(TAG, "Import succeeded: name='$projectName', projectId=$projectId")
+        return ImportResult.Success(projectId = projectId, name = projectName)
     }
 
     /**
@@ -208,6 +215,40 @@ class ImportPdfProjectUseCase @Inject constructor(
                 ?: "XLSM: IncompleteColorMapping — missing ${e.missingLetters}"
             ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
         }
+    }
+
+    /**
+     * Derives a project name from the URI's display name.
+     *
+     * Queries [ContentResolver] for [OpenableColumns.DISPLAY_NAME], strips a trailing `.pdf`
+     * extension (case-insensitive), and trims surrounding whitespace. Returns
+     * `"Imported Project"` if the display name cannot be retrieved or is blank after
+     * stripping.
+     */
+    private fun deriveProjectName(uri: Uri): String {
+        // TODO: contentResolver.query() is unguarded. A ContentProvider crash (e.g. provider
+        //  process death, stale URI) will propagate as an unhandled exception through import()
+        //  instead of gracefully degrading to "Imported Project". Wrap the query block in a
+        //  try/catch(Exception) that returns null so the fallback path is always taken on any
+        //  query failure.
+        val displayName = contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (col >= 0) cursor.getString(col) else null
+            } else null
+        }
+        val stripped = displayName
+            ?.trim()
+            ?.let { if (it.endsWith(".pdf", ignoreCase = true)) it.dropLast(4) else it }
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        return stripped ?: "Imported Project"
     }
 
     private sealed class ParseOutcome {
