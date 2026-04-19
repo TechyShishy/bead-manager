@@ -24,6 +24,10 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
+    match /users/{uid}/pins/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
+
     // -----------------------------------------------------------------------
     // Debug data — users_debug/{uid}/...
     // Same ownership rules as production; data is isolated to prevent
@@ -38,6 +42,10 @@ service cloud.firestore {
     }
 
     match /users_debug/{uid}/orders/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /users_debug/{uid}/pins/{document=**} {
       allow read, write: if isOwner(uid);
     }
   }

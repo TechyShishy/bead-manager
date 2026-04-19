@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.ui.catalog
 
+import com.techyshishy.beadmanager.data.firestore.FirestoreCatalogPinsSource
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
@@ -33,7 +34,10 @@ class CatalogViewModelPinTest {
         val preferencesRepository = mockk<PreferencesRepository> {
             every { globalLowStockThreshold } returns flowOf(5.0)
         }
-        return CatalogViewModel(catalogRepository, inventoryRepository, preferencesRepository)
+        val pinsSource = mockk<FirestoreCatalogPinsSource>(relaxed = true) {
+            every { pinnedCodesStream() } returns flowOf(emptyList())
+        }
+        return CatalogViewModel(catalogRepository, inventoryRepository, preferencesRepository, pinsSource)
     }
 
     @Test

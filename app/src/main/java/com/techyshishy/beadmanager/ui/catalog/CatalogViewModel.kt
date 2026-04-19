@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.ui.catalog
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.techyshishy.beadmanager.data.firestore.FirestoreCatalogPinsSource
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
@@ -11,8 +12,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -20,14 +24,28 @@ class CatalogViewModel @Inject constructor(
     catalogRepository: CatalogRepository,
     inventoryRepository: InventoryRepository,
     preferencesRepository: PreferencesRepository,
+    private val pinsSource: FirestoreCatalogPinsSource,
 ) : ViewModel() {
 
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
 
-    // Session-only comparison pin state. Cleared when the ViewModel is destroyed (tab change
-    // or process death). Never persisted.
+    // Comparison pin state. Kept in sync with Firestore via the pinsSource stream so pins
+    // survive ViewModel destruction, process death, and device switches. Mutations write
+    // optimistically to this flow first (instant UI feedback) then persist to Firestore.
     val pinnedCodes: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
+
+    init {
+        // Keeps pinnedCodes in sync with the Firestore stream. On the originating device the
+        // snapshot arrives after the optimistic local write, so the onEach update is a no-op.
+        // Rapid back-to-back mutations can theoretically cause a brief intermediate snapshot
+        // to overwrite a later write, but the sub-millisecond window makes this unobservable
+        // in practice. If write ordering ever becomes a concern, replace with Firestore
+        // FieldValue.arrayUnion/arrayRemove operations.
+        pinsSource.pinnedCodesStream()
+            .onEach { codes -> pinnedCodes.value = codes }
+            .launchIn(viewModelScope)
+    }
     val stockOnlyFilter: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     val colorGroups: StateFlow<List<String>> = catalogRepository.allBeadsLookup()
@@ -235,21 +253,26 @@ class CatalogViewModel @Inject constructor(
     // --- Comparison pin actions ---
 
     fun togglePin(code: String) {
-        val current = pinnedCodes.value
-        pinnedCodes.value = if (code in current) current - code else current + code
+        val updated = pinnedCodes.value.let { if (code in it) it - code else it + code }
+        pinnedCodes.value = updated
+        viewModelScope.launch { pinsSource.setPinnedCodes(updated) }
     }
 
     fun unpinBead(code: String) {
-        pinnedCodes.value = pinnedCodes.value - code
+        val updated = pinnedCodes.value - code
+        pinnedCodes.value = updated
+        viewModelScope.launch { pinsSource.setPinnedCodes(updated) }
     }
 
     fun clearAllPins() {
         pinnedCodes.value = emptyList()
         stockOnlyFilter.value = false
+        viewModelScope.launch { pinsSource.setPinnedCodes(emptyList()) }
     }
 
     fun pinAll(codes: List<String>) {
         pinnedCodes.value = codes
+        viewModelScope.launch { pinsSource.setPinnedCodes(codes) }
     }
 
     fun toggleStockOnly() {
