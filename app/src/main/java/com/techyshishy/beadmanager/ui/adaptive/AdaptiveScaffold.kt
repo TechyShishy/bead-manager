@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
@@ -77,6 +78,9 @@ fun AdaptiveScaffold() {
 
     // Catalog tab: nav state (grid → bead detail).
     var catalogDetailCode by rememberSaveable { mutableStateOf<String?>(null) }
+    // Scroll position of the catalog grid — lives here so it survives CatalogScreen leaving
+    // the composition when a bead detail pane is shown.
+    val catalogGridState = rememberLazyGridState()
     // Non-null while catalog-initiated project picker is active; holds the staged bead code.
     var catalogProjectPickerBeadCode by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -175,6 +179,7 @@ fun AdaptiveScaffold() {
                         CatalogScreen(
                             viewModel = catalogViewModel,
                             onBeadSelected = { selected -> catalogDetailCode = selected },
+                            gridState = catalogGridState,
                         )
                     }
                 }

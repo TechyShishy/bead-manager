@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -76,6 +77,7 @@ import kotlinx.coroutines.launch
 fun CatalogScreen(
     viewModel: CatalogViewModel,
     onBeadSelected: (String) -> Unit,
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     val beads by viewModel.beads.collectAsState()
     val sortBuckets by viewModel.sortBuckets.collectAsState()
@@ -102,14 +104,13 @@ fun CatalogScreen(
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600
     val showNavBar = !isPhoneLayout && sortBuckets.size > 1
 
-    val lazyGridState = rememberLazyGridState()
     val coroutineScope = rememberCoroutineScope()
 
     // Tracks which beads list item is closest to the vertical center of the visible grid area.
     // Uses derivedStateOf so scroll events only trigger recomposition when the value changes.
-    val centerVisibleIndex by remember(lazyGridState) {
+    val centerVisibleIndex by remember(gridState) {
         derivedStateOf {
-            val visible = lazyGridState.layoutInfo.visibleItemsInfo
+            val visible = gridState.layoutInfo.visibleItemsInfo
             if (visible.isEmpty()) -1 else visible[visible.size / 2].index
         }
     }
@@ -188,13 +189,13 @@ fun CatalogScreen(
                     buckets = sortBuckets,
                     currentBucketIndex = currentBucketIndex,
                     onBucketClick = { bucket ->
-                        coroutineScope.launch { lazyGridState.animateScrollToItem(bucket.startIndex) }
+                        coroutineScope.launch { gridState.animateScrollToItem(bucket.startIndex) }
                     },
                 )
             }
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 120.dp),
-                state = lazyGridState,
+                state = gridState,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 contentPadding = if (!isPhoneLayout) WindowInsets.navigationBars.asPaddingValues()
                                  else WindowInsets(0, 0, 0, 0).asPaddingValues(),
