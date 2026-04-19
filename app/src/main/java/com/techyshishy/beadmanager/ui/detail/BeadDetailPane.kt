@@ -348,8 +348,8 @@ fun BeadDetailPane(
                 value = threshold,
                 onValueChange = { threshold = it },
                 onValueChangeFinished = { viewModel.updateThreshold(threshold.toDouble()) },
-                valueRange = 1f..30f,
-                steps = 28,
+                valueRange = 1f..100f,
+                steps = 98,
             )
 
             // Notes field — saved on IME Done and also on focus loss so edits
