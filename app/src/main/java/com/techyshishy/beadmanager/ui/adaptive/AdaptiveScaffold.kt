@@ -83,6 +83,11 @@ fun AdaptiveScaffold() {
     val catalogGridState = rememberLazyGridState()
     // Non-null while catalog-initiated project picker is active; holds the staged bead code.
     var catalogProjectPickerBeadCode by rememberSaveable { mutableStateOf<String?>(null) }
+    // Non-null when catalog detail was opened via a tap in ProjectDetailScreen;
+    // holds the originating project ID so back navigation can return to that project.
+    // Intentionally not cleared on nav-tab tap — mirrors the allOrdersCameFromProjects
+    // pattern so that manually switching tabs and then pressing back still routes correctly.
+    var catalogDetailReturnProjectId by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Projects tab: nav state (projects → project detail → add-to-order).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -156,7 +161,13 @@ fun AdaptiveScaffold() {
         when (currentTab) {
             AppTab.CATALOG -> {
                 BackHandler(catalogDetailCode != null) {
+                    val returnProjectId = catalogDetailReturnProjectId
                     catalogDetailCode = null
+                    if (returnProjectId != null) {
+                        catalogDetailReturnProjectId = null
+                        ordersProjectId = returnProjectId
+                        currentTab = AppTab.PROJECTS
+                    }
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
                     val code = catalogDetailCode
@@ -167,7 +178,10 @@ fun AdaptiveScaffold() {
                         BeadDetailPane(
                             beadCode = code,
                             viewModel = detailVm,
-                            onNavigateBack = { catalogDetailCode = null },
+                            onNavigateBack = {
+                                catalogDetailCode = null
+                                catalogDetailReturnProjectId = null
+                            },
                             onAddToProject = {
                                 catalogProjectPickerBeadCode = code
                                 currentTab = AppTab.PROJECTS
@@ -359,6 +373,11 @@ fun AdaptiveScaffold() {
                             onPinAllToComparison = { codes ->
                                 catalogViewModel.pinAll(codes)
                                 catalogDetailCode = null
+                                currentTab = AppTab.CATALOG
+                            },
+                            onViewInCatalog = { beadCode ->
+                                catalogDetailCode = beadCode
+                                catalogDetailReturnProjectId = ordersProjectId
                                 currentTab = AppTab.CATALOG
                             },
                         )

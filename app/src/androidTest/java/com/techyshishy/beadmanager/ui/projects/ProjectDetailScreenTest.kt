@@ -56,6 +56,7 @@ class ProjectDetailScreenTest {
                 onAddBeadFromCatalog = {},
                 onReplaceBeadFromCatalog = {},
                 onPinAllToComparison = {},
+                onViewInCatalog = {},
             )
         }
 
@@ -76,6 +77,7 @@ class ProjectDetailScreenTest {
                 onAddBeadFromCatalog = {},
                 onReplaceBeadFromCatalog = {},
                 onPinAllToComparison = {},
+                onViewInCatalog = {},
             )
         }
 
@@ -112,6 +114,7 @@ class ProjectDetailScreenTest {
                 onAddBeadFromCatalog = {},
                 onReplaceBeadFromCatalog = {},
                 onPinAllToComparison = { codes -> capturedCodes = codes },
+                onViewInCatalog = {},
             )
         }
 

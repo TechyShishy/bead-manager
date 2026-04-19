@@ -83,6 +83,7 @@ fun ProjectDetailScreen(
     onAddBeadFromCatalog: () -> Unit,
     onReplaceBeadFromCatalog: (oldCode: String) -> Unit,
     onPinAllToComparison: (List<String>) -> Unit,
+    onViewInCatalog: (String) -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
@@ -320,6 +321,7 @@ fun ProjectDetailScreen(
                         activeOrderStatus = activeOrderStatus[bead.beadCode],
                         onReplace = { onReplaceBeadFromCatalog(bead.beadCode) },
                         onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked && bead.targetGrams > 0.0 },
+                        onViewInCatalog = { onViewInCatalog(bead.beadCode) },
                     )
                     HorizontalDivider()
                 }
@@ -435,6 +437,7 @@ private fun ProjectBeadRow(
     activeOrderStatus: OrderItemStatus?,
     onReplace: () -> Unit,
     onDelete: (() -> Unit)?,
+    onViewInCatalog: () -> Unit,
 ) {
     val progress = if (bead.targetGrams > 0.0) {
         (inventoryGrams / bead.targetGrams).coerceIn(0.0, 1.0).toFloat()
@@ -450,6 +453,10 @@ private fun ProjectBeadRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                onClickLabel = stringResource(R.string.view_in_catalog),
+                onClick = onViewInCatalog,
+            )
             .padding(start = 4.dp, end = 4.dp, top = 10.dp, bottom = 8.dp),
     ) {
         Row(
