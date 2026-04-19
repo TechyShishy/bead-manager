@@ -197,6 +197,19 @@ class ProjectDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Persists [notes] to [ProjectEntry.notes]. A blank or empty string is stored as null to
+     * keep the Firestore document clean. Writes via [ProjectRepository.updateProject] with
+     * [SetOptions.merge] semantics via the source.
+     */
+    fun updateNotes(notes: String?) {
+        val currentProject = project.value ?: return
+        val trimmed = notes?.trim()?.takeIf { it.isNotEmpty() }
+        viewModelScope.launch {
+            projectRepository.updateProject(currentProject.copy(notes = trimmed))
+        }
+    }
+
     // ── Bead list mutations ──────────────────────────────────────────────────
 
     private val _addBeadEvents = MutableSharedFlow<AddBeadEvent>(extraBufferCapacity = 1)

@@ -214,4 +214,18 @@
     <string name="comparison_strip_clear_all">Clear all</string>
 
     <!-- Project list satisfaction bar rendered in ProjectsScreen -->
+
+    <!-- Project Info screen -->
+    <string name="project_info_title">Project Info</string>
+    <string name="project_info_grid_header">Grid</string>
+    <!-- %1$d = row count, %2$s = step count (may be "…" while loading) -->
+    <string name="project_info_grid_size">%1$d rows × %2$s steps</string>
+    <string name="project_info_dimensions_label">Dimensions</string>
+    <string name="project_info_palette_header">Color Palette</string>
+    <string name="project_info_details_header">Details</string>
+    <string name="project_info_created_label">Created</string>
+    <string name="project_info_notes_header">Notes</string>
+    <string name="project_info_notes_empty">No notes yet. Tap the edit icon to add.</string>
+    <string name="project_info_notes_edit">Edit notes</string>
+    <string name="project_info_notes_save">Save notes</string>
 </resources>

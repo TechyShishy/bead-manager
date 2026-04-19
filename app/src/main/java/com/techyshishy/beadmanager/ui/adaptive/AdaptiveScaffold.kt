@@ -57,6 +57,7 @@ import com.techyshishy.beadmanager.ui.orders.OrderDetailScreen
 import com.techyshishy.beadmanager.ui.orders.OrderDetailViewModel
 import com.techyshishy.beadmanager.ui.projects.ProjectDetailScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectDetailViewModel
+import com.techyshishy.beadmanager.ui.projects.ProjectInfoScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectsScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectsViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
@@ -97,6 +98,8 @@ fun AdaptiveScaffold() {
     var projectsCatalogPickerMode by rememberSaveable { mutableStateOf(false) }
     // Non-null while the catalog picker is open for replacing a bead; holds the old bead code.
     var projectsCatalogSwapTargetCode by rememberSaveable { mutableStateOf<String?>(null) }
+    // True while the Project Info screen is open over the project detail.
+    var projectInfoMode by rememberSaveable { mutableStateOf(false) }
 
     // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -212,6 +215,7 @@ fun AdaptiveScaffold() {
                             projectsCatalogSwapTargetCode = null
                         }
                         ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
+                        projectInfoMode -> projectInfoMode = false
                         else -> ordersProjectId = null
                     }
                 }
@@ -360,6 +364,15 @@ fun AdaptiveScaffold() {
                             },
                         )
                     }
+                    projectInfoMode && ordersProjectId != null -> {
+                        val projectDetailVm: ProjectDetailViewModel =
+                            hiltViewModel(key = "project_detail_$ordersProjectId")
+                        ProjectInfoScreen(
+                            projectId = ordersProjectId!!,
+                            viewModel = projectDetailVm,
+                            onNavigateBack = { projectInfoMode = false },
+                        )
+                    }
                     ordersProjectId != null -> {
                         val projectDetailVm: ProjectDetailViewModel =
                             hiltViewModel(key = "project_detail_$ordersProjectId")
@@ -385,6 +398,7 @@ fun AdaptiveScaffold() {
                                 catalogDetailReturnProjectId = ordersProjectId
                                 currentTab = AppTab.CATALOG
                             },
+                            onViewProjectInfo = { projectInfoMode = true },
                         )
                     }
                     else -> {

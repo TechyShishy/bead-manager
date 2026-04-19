@@ -1,0 +1,278 @@
+package com.techyshishy.beadmanager.ui.projects
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
+import com.techyshishy.beadmanager.R
+import java.text.DateFormat
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProjectInfoScreen(
+    projectId: String,
+    viewModel: ProjectDetailViewModel,
+    onNavigateBack: () -> Unit,
+) {
+    LaunchedEffect(projectId) { viewModel.initialize(projectId) }
+
+    val project by viewModel.project.collectAsState()
+    val projectRows by viewModel.projectRows.collectAsState()
+    val beadLookup by viewModel.beadLookup.collectAsState()
+
+    val rowCount = project?.rowCount ?: 0
+    val stepCountText = remember(projectRows) {
+        projectRows.maxOfOrNull { it.steps.size }?.toString() ?: "…"
+    }
+
+    val colorMapping = project?.colorMapping.orEmpty()
+    val sortedPaletteEntries = remember(colorMapping) {
+        colorMapping.entries.sortedBy { it.key }
+    }
+
+    var notesEditMode by rememberSaveable { mutableStateOf(false) }
+    var notesInput by rememberSaveable { mutableStateOf("") }
+    val notesFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(notesEditMode) {
+        if (notesEditMode) notesFocusRequester.requestFocus()
+    }
+
+    BackHandler(enabled = notesEditMode) {
+        notesEditMode = false
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.project_info_title)) },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (notesEditMode) notesEditMode = false
+                        else onNavigateBack()
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                        )
+                    }
+                },
+                actions = {
+                    if (notesEditMode) {
+                        IconButton(onClick = {
+                            viewModel.updateNotes(notesInput)
+                            notesEditMode = false
+                        }) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = stringResource(R.string.project_info_notes_save),
+                            )
+                        }
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            if (rowCount > 0) {
+                item {
+                    InfoSectionHeader(stringResource(R.string.project_info_grid_header))
+                }
+                item {
+                    InfoDetailRow(
+                        label = stringResource(R.string.project_info_dimensions_label),
+                        value = stringResource(
+                            R.string.project_info_grid_size,
+                            rowCount,
+                            stepCountText,
+                        ),
+                    )
+                    HorizontalDivider()
+                }
+            }
+
+            if (sortedPaletteEntries.isNotEmpty()) {
+                item {
+                    InfoSectionHeader(stringResource(R.string.project_info_palette_header))
+                }
+                items(sortedPaletteEntries, key = { it.key }) { (key, code) ->
+                    val hex = beadLookup[code]?.hex
+                    val swatchColor = remember(hex) {
+                        hex?.let { runCatching { Color(it.toColorInt()) }.getOrNull() }
+                    }
+                    PaletteEntryRow(
+                        paletteKey = key,
+                        beadCode = code,
+                        swatchColor = swatchColor,
+                    )
+                    HorizontalDivider()
+                }
+            }
+
+            item {
+                InfoSectionHeader(stringResource(R.string.project_info_details_header))
+            }
+            item {
+                val createdText = project?.createdAt?.toDate()?.let {
+                    DateFormat.getDateInstance(DateFormat.LONG).format(it)
+                } ?: "…"
+                InfoDetailRow(
+                    label = stringResource(R.string.project_info_created_label),
+                    value = createdText,
+                )
+                HorizontalDivider()
+            }
+
+            item {
+                InfoSectionHeader(stringResource(R.string.project_info_notes_header))
+            }
+            item {
+                if (notesEditMode) {
+                    OutlinedTextField(
+                        value = notesInput,
+                        onValueChange = { notesInput = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .focusRequester(notesFocusRequester),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                        minLines = 3,
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                    ) {
+                        Text(
+                            text = project?.notes?.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.project_info_notes_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (project?.notes.isNullOrBlank())
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else
+                                MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = {
+                            notesInput = project?.notes.orEmpty()
+                            notesEditMode = true
+                        }) {
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = stringResource(R.string.project_info_notes_edit),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(
+            start = 16.dp,
+            end = 16.dp,
+            top = 16.dp,
+            bottom = 4.dp,
+        ),
+    )
+}
+
+@Composable
+private fun InfoDetailRow(label: String, value: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(text = value, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+private fun PaletteEntryRow(paletteKey: String, beadCode: String, swatchColor: Color?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = paletteKey,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.width(28.dp),
+        )
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .background(
+                    swatchColor ?: MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.shapes.extraSmall,
+                ),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = beadCode,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -84,6 +85,7 @@ fun ProjectDetailScreen(
     onReplaceBeadFromCatalog: (oldCode: String) -> Unit,
     onPinAllToComparison: (List<String>) -> Unit,
     onViewInCatalog: (String) -> Unit,
+    onViewProjectInfo: () -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
@@ -256,6 +258,12 @@ fun ProjectDetailScreen(
                                     contentDescription = stringResource(R.string.export_rgp),
                                 )
                             }
+                        }
+                        IconButton(onClick = onViewProjectInfo) {
+                            Icon(
+                                Icons.Outlined.Info,
+                                contentDescription = stringResource(R.string.project_info_title),
+                            )
                         }
                     }
                 },
