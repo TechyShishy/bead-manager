@@ -142,8 +142,8 @@ class BeadToolPdfParser @Inject constructor() {
      *
      * Paired rows ("Row 1&2") emit two [PdfRow] entries with detangled step
      * sequences — lower-numbered row first. The raw buffer interleaves the two
-     * rows' beads: even-indexed beads belong to the higher-numbered row (row 2)
-     * and odd-indexed beads belong to the lower-numbered row (row 1).
+     * rows' beads: even-indexed beads belong to the lower-numbered row (row 1)
+     * and odd-indexed beads belong to the higher-numbered row (row 2).
      */
     private fun parseRows(rowBlock: String): List<PdfRow> {
         val rows = mutableListOf<PdfRow>()
@@ -171,27 +171,27 @@ class BeadToolPdfParser @Inject constructor() {
      * Splits an interleaved paired-row buffer into two independent step sequences.
      *
      * BeadTool 4 encodes "Row 1&2" lines by alternating beads from each row:
-     * even-indexed beads (0, 2, 4, …) belong to the higher-numbered row (row 2),
-     * odd-indexed beads (1, 3, 5, …) belong to the lower-numbered row (row 1).
+     * even-indexed beads (0, 2, 4, …) belong to the lower-numbered row (row 1),
+     * odd-indexed beads (1, 3, 5, …) belong to the higher-numbered row (row 2).
      *
      * Row 1 ends up at list index 0 (even) in the rows array passed to
-     * [GenerateProjectPreviewUseCase]. The renderer displays even-index rows as-is
-     * (bead 0 maps to the leftmost visual position). Single (R)-labeled rows also land
-     * at even list indices and are extracted R→L from the PDF; Row 1 must therefore be
+     * [GenerateProjectPreviewUseCase]. The renderer places even-index rows into even
+     * pixel columns (flush, no vertical offset). Single (R)-labeled rows also land at
+     * even list indices and are extracted R→L from the PDF; Row 1 must therefore be
      * stored R→L as well to align visually with those adjacent rows. The natural
-     * extraction of odd-indexed interleaved beads yields L→R order, so it must be
+     * extraction of even-indexed interleaved beads yields L→R order, so it must be
      * reversed before storage.
      *
      * Row 2 ends up at list index 1 (odd). The renderer reverses odd-index rows before
-     * display, so row 2 must be stored L→R (natural extraction order) for the rendered
-     * result to be correct.
+     * placing them into odd pixel columns (offset down by half a bead height), so row 2
+     * must be stored L→R (natural extraction order) for the rendered result to be correct.
      *
      * @return Pair of (row1Steps, row2Steps)
      */
     private fun detangleSteps(steps: List<PdfStep>): Pair<List<PdfStep>, List<PdfStep>> {
         val flat = steps.flatMap { step -> List(step.count) { step.colorLetter } }
-        val row1Beads = flat.filterIndexed { i, _ -> i % 2 == 1 }
-        val row2Beads = flat.filterIndexed { i, _ -> i % 2 == 0 }
+        val row1Beads = flat.filterIndexed { i, _ -> i % 2 == 0 }
+        val row2Beads = flat.filterIndexed { i, _ -> i % 2 == 1 }
         return encodeRle(row1Beads.reversed()) to encodeRle(row2Beads)
     }
 

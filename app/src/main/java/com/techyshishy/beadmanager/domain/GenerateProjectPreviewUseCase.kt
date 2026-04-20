@@ -14,7 +14,7 @@ import javax.inject.Inject
  * Renders a project's RGP peyote grid into a PNG and returns the compressed bytes.
  *
  * The coordinate system follows flat peyote stitch geometry: two consecutive buffer rows
- * together form one visual row, with odd buffer rows flush at the top and even buffer rows
+ * together form one visual row, with even buffer rows flush at the top and odd buffer rows
  * offset downward by half a bead height. Odd buffer rows are also worked right-to-left
  * (RTL), so the RLE-expanded bead sequence must be reversed before mapping bead index to
  * screen column.
@@ -57,10 +57,10 @@ class GenerateProjectPreviewUseCase @Inject constructor() {
             val bufWidth = rows.maxOf { row -> row.steps.sumOf { it.count } }
 
             val canvasWidth = bufWidth * 2 * BEAD_WIDTH_PX
-            // Even buffer rows are always offset downward by half a bead height, and one is
-            // always present regardless of parity, so the canvas always needs the extra half-bead
-            // of room at the bottom. The even-row beads span from (beadRow*H + H/2) to
-            // ((beadRow+1)*H + H/2), and the maximum beadRow is (bufHeight-1)/2 (integer div).
+            // Odd buffer rows are offset downward by half a bead height. In a valid peyote
+            // grid bufHeight is always even, so at least one odd row is always present. The
+            // odd-row beads span from (beadRow*H + H/2) to ((beadRow+1)*H + H/2), and the
+            // maximum beadRow for the last odd row is (bufHeight-1)/2 (integer div).
             val canvasHeight = ((bufHeight + 1) / 2) * BEAD_HEIGHT_PX + BEAD_HEIGHT_PX / 2
 
             val bitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
@@ -80,8 +80,8 @@ class GenerateProjectPreviewUseCase @Inject constructor() {
                     }
                 }
 
-                // Odd rows are worked RTL — reverse the expanded sequence so bead index 0
-                // maps to the rightmost column rather than the leftmost.
+                // Odd rows are stored RTL — reverse the expanded sequence so bead index 0
+                // maps to the rightmost occupied column rather than the leftmost.
                 val beads = if (isOddRow) expanded.reversed() else expanded
 
                 for (bx in beads.indices) {
@@ -91,7 +91,7 @@ class GenerateProjectPreviewUseCase @Inject constructor() {
                     val argb = runCatching { android.graphics.Color.parseColor(hex) }.getOrNull()
                         ?: continue
 
-                    val col = if (isOddRow) bx * 2 else bx * 2 + 1
+                    val col = if (isOddRow) bx * 2 + 1 else bx * 2
                     val sx = col * BEAD_WIDTH_PX
                     val sy = beadRow * BEAD_HEIGHT_PX + if (col % 2 == 1) BEAD_HEIGHT_PX / 2 else 0
 
