@@ -53,6 +53,7 @@ class BeadToolPdfParser @Inject constructor() {
         Log.d(TAG, "BeadTool: row block found (${rowBlock.length} chars), first line='${rowBlock.lines().firstOrNull()}'")
         val rows = parseRows(rowBlock)
         diagnostics?.beadToolRowCount = rows.size
+        diagnostics?.beadToolRowSummary = rows.map { r -> "row ${r.id}: ${r.steps.sumOf { it.count }} beads" }
         Log.d(TAG, "BeadTool: parsed ${rows.size} rows")
         return PdfProject(name = name, colorMapping = emptyMap(), rows = rows)
     }
@@ -156,6 +157,7 @@ class BeadToolPdfParser @Inject constructor() {
             if (steps.isEmpty()) continue
             if (pairedId != null) {
                 val (row1Steps, row2Steps) = detangleSteps(steps)
+                Log.d(TAG, "Detangled rows $id&$pairedId: buffer=${steps.sumOf { it.count }} beads → row $id=${row1Steps.sumOf { it.count }}, row $pairedId=${row2Steps.sumOf { it.count }}")
                 rows.add(PdfRow(id = id, steps = row1Steps))
                 rows.add(PdfRow(id = pairedId, steps = row2Steps))
             } else {

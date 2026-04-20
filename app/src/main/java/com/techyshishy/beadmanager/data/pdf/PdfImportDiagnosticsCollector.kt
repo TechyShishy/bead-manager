@@ -50,6 +50,12 @@ class PdfImportDiagnosticsCollector {
     /** Number of rows parsed from the row block. */
     var beadToolRowCount: Int? = null
 
+    /**
+     * Per-row summary of parsed step counts, e.g. `["row 1: 107 beads", "row 2: 106 beads"]`.
+     * Populated on both paired and single-row patterns; useful for verifying detangle output.
+     */
+    var beadToolRowSummary: List<String>? = null
+
     // ── BeadTool color-key OCR state ──────────────────────────────────────────
 
     /** 0-based page index of the color key page; -1 if not found. */
@@ -117,6 +123,10 @@ class PdfImportDiagnosticsCollector {
         if (beadToolAttempted) {
             appendLine("Row block found : $beadToolRowBlockFound")
             appendLine("Row count       : ${beadToolRowCount ?: "N/A"}")
+            beadToolRowSummary?.let { summary ->
+                appendLine("Row summary     :")
+                summary.forEach { line -> appendLine("  $line") }
+            }
             beadToolStrippedText?.let {
                 appendLine()
                 appendLine("--- Stripped text (${it.length} chars) ---")
@@ -138,7 +148,8 @@ class PdfImportDiagnosticsCollector {
             beadToolRowBlock?.let {
                 appendLine()
                 appendLine("--- Row block (${it.length} chars) ---")
-                appendLine(it)
+                appendLine(it.take(MAX_TEXT_CHARS))
+                if (it.length > MAX_TEXT_CHARS) appendLine("[... truncated at $MAX_TEXT_CHARS chars]")
             }
         }
         appendLine()

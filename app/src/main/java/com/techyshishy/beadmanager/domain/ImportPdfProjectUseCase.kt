@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import com.techyshishy.beadmanager.BuildConfig
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
@@ -126,6 +127,10 @@ class ImportPdfProjectUseCase @Inject constructor(
             return ImportResult.Failure.WriteError
         }
         Log.d(TAG, "Import succeeded: name='$projectName', projectId=$projectId")
+        // In debug builds write a diagnostics report even on success so that
+        // parse correctness (e.g. per-row step counts) can be verified without
+        // needing to trigger a failure.
+        if (BuildConfig.DEBUG) diagnosticsWriter.write(diagnostics)
         return ImportResult.Success(projectId = projectId, name = projectName)
     }
 
