@@ -139,8 +139,10 @@ class BeadToolPdfParser @Inject constructor() {
     /**
      * Parses every row line in [rowBlock] into [PdfRow] objects.
      *
-     * Paired rows ("Row 1&2") emit two [PdfRow] entries sharing the same
-     * step list — lower-numbered row first.
+     * Paired rows ("Row 1&2") emit two [PdfRow] entries with detangled step
+     * sequences — lower-numbered row first. The raw buffer interleaves the two
+     * rows' beads: even-indexed beads belong to the higher-numbered row (row 2)
+     * and odd-indexed beads belong to the lower-numbered row (row 1).
      */
     private fun parseRows(rowBlock: String): List<PdfRow> {
         val rows = mutableListOf<PdfRow>()
@@ -152,11 +154,51 @@ class BeadToolPdfParser @Inject constructor() {
                 PdfStep(count = m.groupValues[1].toInt(), colorLetter = m.groupValues[2])
             }.toList()
             if (steps.isEmpty()) continue
-            rows.add(PdfRow(id = id, steps = steps))
             if (pairedId != null) {
-                rows.add(PdfRow(id = pairedId, steps = steps))
+                val (row1Steps, row2Steps) = detangleSteps(steps)
+                rows.add(PdfRow(id = id, steps = row1Steps))
+                rows.add(PdfRow(id = pairedId, steps = row2Steps))
+            } else {
+                rows.add(PdfRow(id = id, steps = steps))
             }
         }
         return rows
+    }
+
+    /**
+     * Splits an interleaved paired-row buffer into two independent step sequences.
+     *
+     * BeadTool 4 encodes "Row 1&2" lines by alternating beads from each row:
+     * even-indexed beads (0, 2, 4, …) belong to the higher-numbered row (row 2),
+     * odd-indexed beads (1, 3, 5, …) belong to the lower-numbered row (row 1).
+     * No reversal is applied to either sequence — the beads are taken in the
+     * order they appear at their respective indices (see issue #45).
+     *
+     * @return Pair of (row1Steps, row2Steps)
+     */
+    private fun detangleSteps(steps: List<PdfStep>): Pair<List<PdfStep>, List<PdfStep>> {
+        val flat = steps.flatMap { step -> List(step.count) { step.colorLetter } }
+        val row1Beads = flat.filterIndexed { i, _ -> i % 2 == 1 }
+        val row2Beads = flat.filterIndexed { i, _ -> i % 2 == 0 }
+        return encodeRle(row1Beads) to encodeRle(row2Beads)
+    }
+
+    /** Re-encodes a flat bead list into RLE [PdfStep] form. */
+    private fun encodeRle(beads: List<String>): List<PdfStep> {
+        if (beads.isEmpty()) return emptyList()
+        val result = mutableListOf<PdfStep>()
+        var current = beads[0]
+        var count = 1
+        for (i in 1 until beads.size) {
+            if (beads[i] == current) {
+                count++
+            } else {
+                result.add(PdfStep(count, current))
+                current = beads[i]
+                count = 1
+            }
+        }
+        result.add(PdfStep(count, current))
+        return result
     }
 }

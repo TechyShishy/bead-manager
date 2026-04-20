@@ -8,6 +8,7 @@ import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.domain.ExportRgpProjectUseCase
+import com.techyshishy.beadmanager.domain.GenerateProjectPreviewUseCase
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -50,6 +51,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -58,6 +60,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -92,6 +95,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -100,6 +104,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -134,6 +139,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -142,6 +148,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -176,6 +183,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -184,6 +192,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -222,6 +231,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -230,6 +240,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -269,6 +280,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -277,6 +289,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         // Do not call initialize — project.value remains null.
 
@@ -311,6 +324,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -319,6 +333,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -360,6 +375,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -368,6 +384,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -406,6 +423,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -414,6 +432,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -456,6 +475,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -464,6 +484,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -502,6 +523,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -510,6 +532,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -552,6 +575,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -560,6 +584,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -591,6 +616,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -599,6 +625,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         // Do not call initialize — project.value remains null.
 
@@ -631,6 +658,7 @@ class ProjectDetailViewModelTest {
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true) {
             coEvery { uploadCover("p1", any()) } returns "https://example.com/cover.jpg"
         }
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -639,6 +667,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}
@@ -680,6 +709,7 @@ class ProjectDetailViewModelTest {
         }
         val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
         val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
         val vm = ProjectDetailViewModel(
             projectRepository,
             orderRepository,
@@ -688,6 +718,7 @@ class ProjectDetailViewModelTest {
             preferencesRepository,
             exportUseCase,
             projectImageRepository,
+            generateProjectPreviewUseCase,
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.project.collect {}

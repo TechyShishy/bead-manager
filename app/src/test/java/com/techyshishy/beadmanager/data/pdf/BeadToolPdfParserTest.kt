@@ -1,6 +1,7 @@
 package com.techyshishy.beadmanager.data.pdf
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,7 +49,7 @@ class BeadToolPdfParserTest {
 
         assertEquals(3, result.rows.size)
         assertEquals(1, result.rows[0].id)
-        assertEquals(result.rows[0].steps, result.rows[1].steps) // row 2 is a copy of row 1
+        assertNotEquals(result.rows[0].steps, result.rows[1].steps)
         assertEquals(2, result.rows[1].id)
         assertEquals(3, result.rows[2].id)
     }
@@ -56,10 +57,16 @@ class BeadToolPdfParserTest {
     @Test
     fun `parse correctly parses steps from a paired row`() {
         val pages = minimalPages(wordChartRows = "Row 1&2 (L) (3)A, (2)B\nRow 3 (R) (1)C")
-        val steps = parser.parse(pages).rows[0].steps
-        assertEquals(2, steps.size)
-        assertEquals(PdfStep(count = 3, colorLetter = "A"), steps[0])
-        assertEquals(PdfStep(count = 2, colorLetter = "B"), steps[1])
+        val result = parser.parse(pages)
+        // Buffer: A A A B B (5 beads, indices 0-4)
+        // Row 1 (odd indices [1,3]): A, B → [PdfStep(1,"A"), PdfStep(1,"B")]
+        // Row 2 (even indices [0,2,4]): A, A, B → [PdfStep(2,"A"), PdfStep(1,"B")]
+        val row1Steps = result.rows[0].steps
+        val row2Steps = result.rows[1].steps
+        assertEquals(2, row1Steps.size)
+        assertEquals(PdfStep(count = 1, colorLetter = "A"), row1Steps[0])
+        assertEquals(PdfStep(count = 1, colorLetter = "B"), row1Steps[1])
+        assertEquals(listOf(PdfStep(2, "A"), PdfStep(1, "B")), row2Steps)
     }
 
     @Test
@@ -70,7 +77,31 @@ class BeadToolPdfParserTest {
         )
         val result = parser.parse(pages)
         assertEquals(3, result.rows.size)
-        assertEquals(PdfStep(3, "A"), result.rows[0].steps[0])
+        // Row 1 odd-indexed beads from (3)A,(2)B buffer: index 1 → A
+        assertEquals(PdfStep(1, "A"), result.rows[0].steps[0])
+    }
+
+    @Test
+    fun `parseRows detangles paired-row buffer into distinct row1 and row2 step sequences`() {
+        // Buffer: E D F C G B H A (8 individually counted beads, interleaved)
+        // Even indices [0,2,4,6] = E,F,G,H → Row 2
+        // Odd  indices [1,3,5,7] = D,C,B,A → Row 1
+        val pages = minimalPages(
+            wordChartRows = "Row 1&2 (L) (1)E, (1)D, (1)F, (1)C, (1)G, (1)B, (1)H, (1)A\nRow 3 (R) (1)X",
+        )
+        val result = parser.parse(pages)
+        val row1 = result.rows[0]
+        val row2 = result.rows[1]
+        assertEquals(1, row1.id)
+        assertEquals(2, row2.id)
+        assertEquals(
+            listOf(PdfStep(1, "D"), PdfStep(1, "C"), PdfStep(1, "B"), PdfStep(1, "A")),
+            row1.steps,
+        )
+        assertEquals(
+            listOf(PdfStep(1, "E"), PdfStep(1, "F"), PdfStep(1, "G"), PdfStep(1, "H")),
+            row2.steps,
+        )
     }
 
     // ── happy path — single rows ──────────────────────────────────────────────
@@ -119,9 +150,10 @@ class BeadToolPdfParserTest {
             wordChartRows = "Row 1&2 (L) (3)A,\n(2)B\nRow 3 (R) (1)C",
         )
         val steps = parser.parse(pages).rows[0].steps
+        // Row 1 odd-indexed beads from (3)A,(2)B buffer: indices 1,3 → A,B
         assertEquals(2, steps.size)
-        assertEquals(PdfStep(3, "A"), steps[0])
-        assertEquals(PdfStep(2, "B"), steps[1])
+        assertEquals(PdfStep(1, "A"), steps[0])
+        assertEquals(PdfStep(1, "B"), steps[1])
     }
 
     @Test
@@ -131,9 +163,10 @@ class BeadToolPdfParserTest {
             wordChartRows = "Row 1&2 (L) (3)A\n(2)B\nRow 3 (R) (1)C",
         )
         val steps = parser.parse(pages).rows[0].steps
+        // Row 1 odd-indexed beads from (3)A,(2)B buffer: indices 1,3 → A,B
         assertEquals(2, steps.size)
-        assertEquals(PdfStep(3, "A"), steps[0])
-        assertEquals(PdfStep(2, "B"), steps[1])
+        assertEquals(PdfStep(1, "A"), steps[0])
+        assertEquals(PdfStep(1, "B"), steps[1])
     }
 
     // ── header/footer stripping ───────────────────────────────────────────────
