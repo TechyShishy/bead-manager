@@ -60,13 +60,16 @@ class BeadToolPdfParserTest {
         val result = parser.parse(pages)
         // Buffer: A A A B B (5 beads, indices 0-4)
         // Row 1 (odd indices [1,3]): A, B → [PdfStep(1,"A"), PdfStep(1,"B")]
-        // Row 2 (even indices [0,2,4]): A, A, B → [PdfStep(2,"A"), PdfStep(1,"B")]
+        // Row 2 (even indices [0,2,4]): A, A, B → reversed → B, A, A
+        //   → [PdfStep(1,"B"), PdfStep(2,"A")]
+        // Row 2 is reversed because the preview renderer reverses odd-buffer-index rows;
+        // storing R→L here lets the renderer produce the correct L→R visual order.
         val row1Steps = result.rows[0].steps
         val row2Steps = result.rows[1].steps
         assertEquals(2, row1Steps.size)
         assertEquals(PdfStep(count = 1, colorLetter = "A"), row1Steps[0])
         assertEquals(PdfStep(count = 1, colorLetter = "B"), row1Steps[1])
-        assertEquals(listOf(PdfStep(2, "A"), PdfStep(1, "B")), row2Steps)
+        assertEquals(listOf(PdfStep(1, "B"), PdfStep(2, "A")), row2Steps)
     }
 
     @Test
@@ -84,8 +87,8 @@ class BeadToolPdfParserTest {
     @Test
     fun `parseRows detangles paired-row buffer into distinct row1 and row2 step sequences`() {
         // Buffer: E D F C G B H A (8 individually counted beads, interleaved)
-        // Even indices [0,2,4,6] = E,F,G,H → Row 2
-        // Odd  indices [1,3,5,7] = D,C,B,A → Row 1
+        // Even indices [0,2,4,6] = E,F,G,H → Row 2; reversed for storage → H,G,F,E
+        // Odd  indices [1,3,5,7] = D,C,B,A → Row 1 (no reversal)
         val pages = minimalPages(
             wordChartRows = "Row 1&2 (L) (1)E, (1)D, (1)F, (1)C, (1)G, (1)B, (1)H, (1)A\nRow 3 (R) (1)X",
         )
@@ -99,7 +102,7 @@ class BeadToolPdfParserTest {
             row1.steps,
         )
         assertEquals(
-            listOf(PdfStep(1, "E"), PdfStep(1, "F"), PdfStep(1, "G"), PdfStep(1, "H")),
+            listOf(PdfStep(1, "H"), PdfStep(1, "G"), PdfStep(1, "F"), PdfStep(1, "E")),
             row2.steps,
         )
     }
