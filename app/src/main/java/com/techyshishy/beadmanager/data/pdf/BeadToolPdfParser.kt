@@ -174,14 +174,17 @@ class BeadToolPdfParser @Inject constructor() {
      * even-indexed beads (0, 2, 4, …) belong to the higher-numbered row (row 2),
      * odd-indexed beads (1, 3, 5, …) belong to the lower-numbered row (row 1).
      *
-     * Row 1's beads are returned in the order they appear in the buffer (left-to-right
-     * for an (L)-labeled buffer), matching what [GenerateProjectPreviewUseCase] expects
-     * for even-buffer-index rows (displayed as-is).
+     * Row 1 ends up at list index 0 (even) in the rows array passed to
+     * [GenerateProjectPreviewUseCase]. The renderer displays even-index rows as-is
+     * (bead 0 maps to the leftmost visual position). Single (R)-labeled rows also land
+     * at even list indices and are extracted R→L from the PDF; Row 1 must therefore be
+     * stored R→L as well to align visually with those adjacent rows. The natural
+     * extraction of odd-indexed interleaved beads yields L→R order, so it must be
+     * reversed before storage.
      *
-     * Row 2's beads are **reversed** before being returned. The preview renderer reverses
-     * odd-buffer-index rows (Row 2 is index 1) before display, so the stored sequence must
-     * be right-to-left for the image to render left-to-right correctly. Without this
-     * reversal Row 2 appears mirrored in the preview.
+     * Row 2 ends up at list index 1 (odd). The renderer reverses odd-index rows before
+     * display, so row 2 must be stored L→R (natural extraction order) for the rendered
+     * result to be correct.
      *
      * @return Pair of (row1Steps, row2Steps)
      */
@@ -189,7 +192,7 @@ class BeadToolPdfParser @Inject constructor() {
         val flat = steps.flatMap { step -> List(step.count) { step.colorLetter } }
         val row1Beads = flat.filterIndexed { i, _ -> i % 2 == 1 }
         val row2Beads = flat.filterIndexed { i, _ -> i % 2 == 0 }
-        return encodeRle(row1Beads) to encodeRle(row2Beads.reversed())
+        return encodeRle(row1Beads.reversed()) to encodeRle(row2Beads)
     }
 
     /** Re-encodes a flat bead list into RLE [PdfStep] form. */
