@@ -14,7 +14,7 @@ import javax.inject.Inject
  * Renders a project's RGP peyote grid into a PNG and returns the compressed bytes.
  *
  * The coordinate system follows flat peyote stitch geometry: two consecutive buffer rows
- * together form one visual row, with even buffer rows flush at the top and odd buffer rows
+ * together form one visual row, with odd buffer rows flush at the top and even buffer rows
  * offset downward by half a bead height. Odd buffer rows are also worked right-to-left
  * (RTL), so the RLE-expanded bead sequence must be reversed before mapping bead index to
  * screen column.
@@ -57,15 +57,11 @@ class GenerateProjectPreviewUseCase @Inject constructor() {
             val bufWidth = rows.maxOf { row -> row.steps.sumOf { it.count } }
 
             val canvasWidth = bufWidth * 2 * BEAD_WIDTH_PX
-            // When bufHeight is even the last row is an odd row (offset down by half a bead
-            // height), so the canvas needs that extra half-bead of room at the bottom.
-            // When bufHeight is odd the last row is an even row (no vertical offset), so
-            // the required height is exactly (bufHeight+1)/2 full bead heights.
-            val canvasHeight = if (bufHeight % 2 == 0) {
-                (bufHeight / 2) * BEAD_HEIGHT_PX + BEAD_HEIGHT_PX / 2
-            } else {
-                ((bufHeight + 1) / 2) * BEAD_HEIGHT_PX
-            }
+            // Even buffer rows are always offset downward by half a bead height, and one is
+            // always present regardless of parity, so the canvas always needs the extra half-bead
+            // of room at the bottom. The even-row beads span from (beadRow*H + H/2) to
+            // ((beadRow+1)*H + H/2), and the maximum beadRow is (bufHeight-1)/2 (integer div).
+            val canvasHeight = ((bufHeight + 1) / 2) * BEAD_HEIGHT_PX + BEAD_HEIGHT_PX / 2
 
             val bitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -97,7 +93,7 @@ class GenerateProjectPreviewUseCase @Inject constructor() {
 
                     val col = if (isOddRow) bx * 2 else bx * 2 + 1
                     val sx = col * BEAD_WIDTH_PX
-                    val sy = beadRow * BEAD_HEIGHT_PX + if (col % 2 == 0) BEAD_HEIGHT_PX / 2 else 0
+                    val sy = beadRow * BEAD_HEIGHT_PX + if (col % 2 == 1) BEAD_HEIGHT_PX / 2 else 0
 
                     paint.color = argb
                     canvas.drawRect(
