@@ -244,8 +244,8 @@ fun ProjectInfoScreen(
                         label = stringResource(R.string.project_info_dimensions_label),
                         value = stringResource(
                             R.string.project_info_summary_dimensions,
-                            summary.visualRowCount,
-                            summary.visualColumnCount,
+                            summary.rowCount,
+                            summary.maxBeadsWide,
                         ),
                     )
                     HorizontalDivider()
