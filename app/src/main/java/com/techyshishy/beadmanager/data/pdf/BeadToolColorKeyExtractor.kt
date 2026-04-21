@@ -34,21 +34,37 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * of the color key page.
      *
      * Two signals are tried in order:
-     * 1. `"Color count"` — English-language BeadTool exports include a metadata line
-     *    such as `"Color count - 18. Bead count - 42000."` on the color key page.
-     * 2. `"Chart #:"` + `"DB-"` — The color key entries themselves are language-independent.
+     * 1. `"Chart #:"` + `"DB-"` — The color key entries themselves are language-independent.
      *    Localized BeadTool exports (e.g. Italian, which uses `"Conteggio"` instead of
      *    `"Count"`) omit the English metadata line but still emit `Chart #:A`, `DB-1910`,
      *    etc. for every color. Both tokens must appear together to avoid false positives
      *    from bead-graph pages (single-letter cells) or word-chart pages (`(n)A` format),
-     *    neither of which contains DB codes.
+     *    neither of which contains DB codes. This is also the correct signal for PDFs such
+     *    as MariVirra-style exports where a separate metadata page contains `"Color count:"`
+     *    as plain text before the actual legend page — `"Chart #:"` + `"DB-"` only appear
+     *    together on the legend page, so this picks the right page regardless of order.
+     * 2. `"Color count"` — English-language BeadTool exports include a metadata line
+     *    such as `"Color count - 18. Bead count - 42000."` on the color key page. This is
+     *    a fallback for rasterized color-key pages (e.g. CraftPatternsShop/BeadTool exports)
+     *    where the chart entries are images: PDFBox cannot read `"Chart #:"` or `"DB-"` from
+     *    the raster, so only this weaker signal is available.
      *
      * Returns -1 when no such page is found.
      */
-    fun findColorKeyPageIndex(pages: List<String>): Int =
-        // "DB-" is a substring check; in practice BeadTool page content is strictly
-        // structured bead data so no false matches against prose are expected.
-        pages.indexOfFirst { "Color count" in it || ("Chart #:" in it && "DB-" in it) }
+    fun findColorKeyPageIndex(pages: List<String>): Int {
+        // Primary signal: a page carrying both Chart # entries and DB codes.
+        // Language-independent and unambiguous even when a separate metadata page
+        // (e.g. MariVirra-style exports) lists "Color count:" as plain text before
+        // the actual legend page — "Chart #:" + "DB-" only ever appear together on
+        // the legend page itself, so this picks the right page regardless of order.
+        val chartAndDb = pages.indexOfFirst { "Chart #:" in it && "DB-" in it }
+        if (chartAndDb != -1) return chartAndDb
+        // Fallback: English-language CraftPatternsShop/BeadTool exports include a
+        // "Color count - N" metadata line on the rasterized color-key page. When
+        // the color key is an image (not selectable text), PDFBox cannot see the
+        // Chart # or DB codes, so only this weaker signal is available.
+        return pages.indexOfFirst { "Color count" in it }
+    }
 
     /**
      * Parses raw OCR text from a color key page into a letter-to-DB-code map.

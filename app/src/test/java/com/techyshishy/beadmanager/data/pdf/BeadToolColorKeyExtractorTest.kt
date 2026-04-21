@@ -66,6 +66,23 @@ class BeadToolColorKeyExtractorTest {
         assertEquals(-1, extractor.findColorKeyPageIndex(pages))
     }
 
+    @Test
+    fun `findColorKeyPageIndex prefers page with Chart entries and DB codes over earlier Color count only page`() {
+        // Regression for AztecSymbolBookmarkPeyote.pdf (MariVirra-style exports):
+        // The metadata/info page lists "Color count: 3" as plain text before the
+        // actual legend page. findColorKeyPageIndex previously returned the info
+        // page (index 1) because "Color count" matched the first OR branch, causing
+        // OCR to run against description text instead of the color legend.
+        // The legend page (index 2) has "Chart #:" + "DB-" as selectable text and
+        // is the correct selection; it must win over the earlier "Color count" page.
+        val pages = listOf(
+            "Author: MariVirraPatterns\nPeyote\nAztec Symbol\n",
+            "Title: Aztec Symbol Peyote\nColor count: 3\nBead count: 2116\n",
+            "instagram.com/virra_ornament\nChart #:A\nDB-159\nOpaque Vermillion Red AB\nCount:392\nChart #:B\nDB-200\nWhite\nCount:944\n",
+        )
+        assertEquals(2, extractor.findColorKeyPageIndex(pages))
+    }
+
     // ── parseColorKeyText ─────────────────────────────────────────────────────
 
     @Test
