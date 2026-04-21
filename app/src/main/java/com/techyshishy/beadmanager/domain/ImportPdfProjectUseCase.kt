@@ -65,15 +65,11 @@ class ImportPdfProjectUseCase @Inject constructor(
             }
         }
 
-        // 3. A blank name indicates the parser could not identify document structure.
-        if (pdfProject.name.isBlank()) {
-            Log.w(TAG, "Parsed project has a blank name — NoPatternFound")
-            diagnostics.parsedProjectName = "(blank)"
-            diagnostics.failureReason = "Blank project name after successful parse"
-            diagnosticsWriter.write(diagnostics)
-            return ImportResult.Failure.NoPatternFound
-        }
-        diagnostics.parsedProjectName = pdfProject.name
+        // 3. Record the in-document name for diagnostics only. The project name presented to
+        //    the user always comes from the filename (step 4); in-document titles are often
+        //    generic or absent (e.g. a blank first page), and a blank title does not mean
+        //    the parse failed — successful row extraction is the authoritative signal.
+        diagnostics.parsedProjectName = pdfProject.name.ifBlank { "(blank)" }
         Log.d(TAG, "Parsed project: name='${pdfProject.name}', rows=${pdfProject.rows.size}, colorMapping=${pdfProject.colorMapping}")
 
         // 4. Derive the project name from the URI filename rather than the in-document title.

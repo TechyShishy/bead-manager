@@ -188,7 +188,9 @@ class ImportPdfProjectUseCaseTest {
     }
 
     @Test
-    fun `returns NoPatternFound when parsed project has a blank name`() = runTest {
+    fun `succeeds and uses filename when parsed project has a blank in-document name`() = runTest {
+        // PDFs whose first page is blank yield an empty in-document title.
+        // The import should not fail — it should fall through to filename-based naming.
         val blankNameProject = xlsmProject.copy(name = "")
         val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
         val xParser: XlsmPdfParser = mockk { every { parse(any(), any(), any()) } returns blankNameProject }
@@ -196,8 +198,10 @@ class ImportPdfProjectUseCaseTest {
             catalog = catalogWith("DB-0001", "DB-0002"),
             beadToolParser = btParser,
             xlsmParser = xParser,
+            contentResolver = contentResolverWithDisplayName("LandscapeTapestry.pdf"),
         ).import(uri)
-        assertTrue("Expected NoPatternFound but got $result", result is ImportResult.Failure.NoPatternFound)
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        assertEquals("LandscapeTapestry", (result as ImportResult.Success).name)
     }
 
     @Test
