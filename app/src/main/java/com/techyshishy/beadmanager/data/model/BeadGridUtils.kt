@@ -115,3 +115,38 @@ fun computeBeadRequirements(
         scaled.roundToLong() / 100.0
     }
 }
+
+/**
+ * Computes summary statistics for a project's bead grid.
+ *
+ * Returns null when [rowCount] is zero (indicating no grid) or [rows] is empty.
+ *
+ * [beadCountsByKey] maps each palette letter key found in the grid steps to the total step
+ * count for that key across all rows. Steps with an empty [com.techyshishy.beadmanager.data.firestore.ProjectRgpStep.description]
+ * are skipped. Keys present in [colorMapping] but absent from all steps are not included.
+ */
+fun computeGridSummary(
+    rows: List<ProjectRgpRow>,
+    colorMapping: Map<String, String>,
+    rowCount: Int,
+): GridSummary? {
+    if (rowCount == 0 || rows.isEmpty()) return null
+
+    val beadCountsByKey = mutableMapOf<String, Int>()
+    for (row in rows) {
+        for (step in row.steps) {
+            val key = step.description
+            if (key.isNotEmpty() && key in colorMapping) {
+                beadCountsByKey[key] = (beadCountsByKey[key] ?: 0) + step.count
+            }
+        }
+    }
+
+    return GridSummary(
+        totalBeads = beadCountsByKey.values.sum(),
+        totalColors = colorMapping.size,
+        rowCount = rowCount,
+        maxBeadsWide = rows.maxOf { row -> row.steps.sumOf { it.count } },
+        beadCountsByKey = beadCountsByKey,
+    )
+}

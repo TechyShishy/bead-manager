@@ -72,6 +72,7 @@ fun ProjectInfoScreen(
     val projectRows by viewModel.projectRows.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
+    val gridSummary by viewModel.gridSummary.collectAsState()
 
     val rowCount = project?.rowCount ?: 0
     val stepCountText = remember(projectRows) {
@@ -81,6 +82,13 @@ fun ProjectInfoScreen(
     val colorMapping = project?.colorMapping.orEmpty()
     val sortedPaletteEntries = remember(colorMapping) {
         colorMapping.entries.sortedBy { it.key }
+    }
+    val sortedBeadCounts = remember(gridSummary, colorMapping) {
+        gridSummary?.beadCountsByKey
+            ?.entries
+            ?.filter { it.key in colorMapping }
+            ?.sortedBy { it.key }
+            ?: emptyList()
     }
 
     var notesEditMode by rememberSaveable { mutableStateOf(false) }
@@ -234,6 +242,49 @@ fun ProjectInfoScreen(
                 }
             }
 
+            val summary = gridSummary
+            if (rowCount > 0 && summary != null) {
+                item {
+                    InfoSectionHeader(stringResource(R.string.project_info_summary_header))
+                }
+                item {
+                    InfoDetailRow(
+                        label = stringResource(R.string.project_info_total_beads_label),
+                        value = summary.totalBeads.toString(),
+                    )
+                    HorizontalDivider()
+                }
+                item {
+                    InfoDetailRow(
+                        label = stringResource(R.string.project_info_total_colors_label),
+                        value = summary.totalColors.toString(),
+                    )
+                    HorizontalDivider()
+                }
+                item {
+                    InfoDetailRow(
+                        label = stringResource(R.string.project_info_dimensions_label),
+                        value = stringResource(
+                            R.string.project_info_summary_dimensions,
+                            summary.rowCount,
+                            summary.maxBeadsWide,
+                        ),
+                    )
+                    HorizontalDivider()
+                }
+                item {
+                    InfoDetailRow(
+                        label = stringResource(R.string.project_info_approx_size_label),
+                        value = stringResource(
+                            R.string.project_info_approx_size_format,
+                            summary.widthMm.toFloat(),
+                            summary.heightMm.toFloat(),
+                        ),
+                    )
+                    HorizontalDivider()
+                }
+            }
+
             if (sortedPaletteEntries.isNotEmpty()) {
                 item {
                     InfoSectionHeader(stringResource(R.string.project_info_palette_header))
@@ -246,6 +297,26 @@ fun ProjectInfoScreen(
                     PaletteEntryRow(
                         paletteKey = key,
                         beadCode = code,
+                        swatchColor = swatchColor,
+                    )
+                    HorizontalDivider()
+                }
+            }
+
+            if (sortedBeadCounts.isNotEmpty()) {
+                item {
+                    InfoSectionHeader(stringResource(R.string.project_info_bead_counts_header))
+                }
+                items(sortedBeadCounts, key = { it.key }) { (key, count) ->
+                    val code = colorMapping.getValue(key)
+                    val hex = beadLookup[code]?.hex
+                    val swatchColor = remember(hex) {
+                        hex?.let { runCatching { Color(it.toColorInt()) }.getOrNull() }
+                    }
+                    BeadCountRow(
+                        paletteKey = key,
+                        beadCode = code,
+                        count = count,
                         swatchColor = swatchColor,
                     )
                     HorizontalDivider()
@@ -371,6 +442,46 @@ private fun PaletteEntryRow(paletteKey: String, beadCode: String, swatchColor: C
         Text(
             text = beadCode,
             style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun BeadCountRow(
+    paletteKey: String,
+    beadCode: String,
+    count: Int,
+    swatchColor: Color?,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = paletteKey,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.width(28.dp),
+        )
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .background(
+                    swatchColor ?: MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.shapes.extraSmall,
+                ),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = beadCode,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

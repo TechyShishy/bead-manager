@@ -11,7 +11,9 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
+import com.techyshishy.beadmanager.data.model.GridSummary
 import com.techyshishy.beadmanager.data.model.computeBeadRequirements
+import com.techyshishy.beadmanager.data.model.computeGridSummary
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
@@ -113,6 +115,18 @@ class ProjectDetailViewModel @Inject constructor(
             .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
         fromGrid + colorMappingOnly
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Summary statistics derived from the project grid and colorMapping.
+     *
+     * Null when the project has no grid ([ProjectEntry.rowCount] == 0) or when the grid rows
+     * have not yet loaded. The UI uses this to conditionally show the Summary and Bead Counts
+     * sections in Project Info.
+     */
+    val gridSummary: StateFlow<GridSummary?> = combine(project, projectRows) { entry, rows ->
+        if (entry == null) null
+        else computeGridSummary(rows, entry.colorMapping, entry.rowCount)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
      * All orders that currently list this project in their [projectIds] array.

@@ -238,4 +238,11 @@
     <string name="project_info_image_generate_error">Preview generation failed. Please try again.</string>
     <string name="project_info_image_uploading">Uploading image…</string>
     <string name="project_info_image_upload_error">Upload failed. Please try again.</string>
+    <string name="project_info_summary_header">Summary</string>
+    <string name="project_info_total_beads_label">Total beads</string>
+    <string name="project_info_total_colors_label">Colors</string>
+    <string name="project_info_summary_dimensions">%1$d rows × %2$d columns</string>
+    <string name="project_info_approx_size_label">Approx. size</string>
+    <string name="project_info_approx_size_format">%1$.1f × %2$.1f mm (approximate)</string>
+    <string name="project_info_bead_counts_header">Bead Counts</string>
 </resources>
