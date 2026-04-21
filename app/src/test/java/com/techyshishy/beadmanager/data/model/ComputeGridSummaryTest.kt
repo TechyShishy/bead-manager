@@ -176,8 +176,8 @@ class ComputeGridSummaryTest {
     // ── physical dimensions ───────────────────────────────────────────────────
 
     @Test
-    fun `widthMm equals maxBeadsWide times 1 point 3`() {
-        // Row with 5 steps each count 2 → maxBeadsWide = 10
+    fun `widthMm equals visualColumnCount times horizontal pitch`() {
+        // Row with 5 steps each count 2 → maxBeadsWide = 10; visualColumnCount = 20
         val result = computeGridSummary(
             rows = listOf(row(1, "A" to 2, "B" to 2, "C" to 2, "D" to 2, "E" to 2)),
             colorMapping = mapOf(
@@ -187,16 +187,31 @@ class ComputeGridSummaryTest {
             rowCount = 10,
         )!!
         assertEquals(10, result.maxBeadsWide)
-        assertEquals(10 * DELICA_BEAD_WIDTH_MM, result.widthMm, 0.001)
+        assertEquals(20, result.visualColumnCount)
+        assertEquals(20 * DELICA_PEYOTE_HORIZONTAL_PITCH_MM, result.widthMm, 0.001)
     }
 
     @Test
-    fun `heightMm equals rowCount times 1 point 6`() {
+    fun `heightMm equals visualRowCount times vertical pitch`() {
+        // rowCount = 20 buffer rows → visualRowCount = 10 visual rows
         val result = computeGridSummary(
             rows = listOf(row(1, "A" to 1)),
             colorMapping = mapOf("A" to "DB0001"),
             rowCount = 20,
         )!!
-        assertEquals(20 * DELICA_BEAD_HEIGHT_MM, result.heightMm, 0.001)
+        assertEquals(10, result.visualRowCount)
+        assertEquals((10 + 0.5) * DELICA_PEYOTE_VERTICAL_PITCH_MM, result.heightMm, 0.001)
+    }
+
+    @Test
+    fun `visualRowCount floors on odd rowCount`() {
+        // A peyote grid should always have even rowCount, but verify floor-division
+        // behaviour matches the preview renderer for any malformed input.
+        val result = computeGridSummary(
+            rows = listOf(row(1, "A" to 1)),
+            colorMapping = mapOf("A" to "DB0001"),
+            rowCount = 7,
+        )!!
+        assertEquals(3, result.visualRowCount) // floor(7/2), not ceiling
     }
 }
