@@ -40,6 +40,12 @@ class BeadToolPdfParser @Inject constructor() {
         val stripped = stripPageHeaders(allText)
         val cleaned = cleanText(stripped)
         val continued = joinContinuationLines(cleaned)
+        Log.d(TAG, "BeadTool pipeline: allText=${allText.length}ch stripped=${stripped.length}ch " +
+            "cleaned=${cleaned.length}ch continued=${continued.length}ch")
+        Log.d(TAG, "BeadTool 'Row 1' presence: allText=${allText.contains("Row 1")} " +
+            "stripped=${stripped.contains("Row 1")} " +
+            "cleaned=${cleaned.contains("Row 1")} " +
+            "continued=${continued.contains("Row 1")}")
         diagnostics?.beadToolStrippedText = stripped
         diagnostics?.beadToolCleanedText = cleaned
         diagnostics?.beadToolContinuedText = continued
@@ -127,9 +133,18 @@ class BeadToolPdfParser @Inject constructor() {
             .sortedBy { it.groupValues[1].toInt() }
             .map { it.value }
             .toList()
-        if (rows.isEmpty()) return null
+        if (rows.isEmpty()) {
+            Log.d(TAG, "extractRowBlock: no rows matched in ${text.length}-char text. " +
+                "Contains 'Row '=${text.contains("Row ")}. " +
+                "First 500 chars: ${text.take(500).replace('\n', '↵')}")
+            return null
+        }
         val hasStart = rows.any { it.startsWith("Row 1&2 ") || it.startsWith("Row 1 ") }
-        if (!hasStart) return null
+        if (!hasStart) {
+            Log.d(TAG, "extractRowBlock: ${rows.size} rows found but none is Row 1 or Row 1&2. " +
+                "Lowest row: '${rows.first().take(80)}'")
+            return null
+        }
         return rows.joinToString("\n")
     }
 

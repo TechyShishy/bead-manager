@@ -36,6 +36,7 @@ class ImportPdfProjectUseCase @Inject constructor(
 
     suspend fun import(uri: Uri): ImportResult {
         val diagnostics = PdfImportDiagnosticsCollector()
+        diagnostics.pdfFilename = queryDisplayName(uri)
 
         // 1. Extract text pages from the PDF. NotPdf covers corrupt files and wrong file types.
         val pages = try {
@@ -78,7 +79,8 @@ class ImportPdfProjectUseCase @Inject constructor(
         // 4. Derive the project name from the URI filename rather than the in-document title.
         //    In-document titles are often generic ("Bead Pattern", "Sheet1"); the filename is
         //    the most reliable user-controlled signal for what the project should be called.
-        val projectName = deriveProjectName(uri)
+        //    Reuse the display name already queried for diagnostics — one IPC call, not two.
+        val projectName = deriveProjectName(diagnostics.pdfFilename)
         Log.d(TAG, "Derived project name from filename: '$projectName'")
 
         // 5. Validate all DB codes in colorMapping against the local catalog.
@@ -233,31 +235,36 @@ class ImportPdfProjectUseCase @Inject constructor(
     }
 
     /**
-     * Derives a project name from the URI's display name.
-     *
-     * Queries [ContentResolver] for [OpenableColumns.DISPLAY_NAME], strips a trailing `.pdf`
-     * extension (case-insensitive), and trims surrounding whitespace. Returns
-     * `"Imported Project"` if the display name cannot be retrieved or is blank after
-     * stripping.
+     * Returns the raw display name of the file at [uri] as reported by the
+     * [ContentResolver] (e.g. `"MyPattern.pdf"`), or null when the query fails
+     * or the column is absent.
      */
-    private fun deriveProjectName(uri: Uri): String {
-        val displayName = try {
-            contentResolver.query(
-                uri,
-                arrayOf(OpenableColumns.DISPLAY_NAME),
-                null,
-                null,
-                null,
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (col >= 0) cursor.getString(col) else null
-                } else null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "ContentProvider query failed; falling back to default project name", e)
-            null
+    private fun queryDisplayName(uri: Uri): String? = try {
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (col >= 0) cursor.getString(col) else null
+            } else null
         }
+    } catch (e: Exception) {
+        Log.w(TAG, "ContentProvider query failed; falling back to default project name", e)
+        null
+    }
+
+    /**
+     * Derives a project name from a raw display name string.
+     *
+     * Strips a trailing `.pdf` extension (case-insensitive) and trims surrounding
+     * whitespace. Returns `"Imported Project"` when [displayName] is null or blank
+     * after stripping.
+     */
+    private fun deriveProjectName(displayName: String?): String {
         val stripped = displayName
             ?.trim()
             ?.let { if (it.endsWith(".pdf", ignoreCase = true)) it.dropLast(4) else it }

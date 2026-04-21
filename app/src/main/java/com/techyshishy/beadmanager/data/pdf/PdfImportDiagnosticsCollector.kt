@@ -88,6 +88,9 @@ class PdfImportDiagnosticsCollector {
 
     // ── Use-case level ────────────────────────────────────────────────────────
 
+    /** Display name of the source PDF file (e.g. "MyPattern.pdf"). */
+    var pdfFilename: String? = null
+
     /** Name of the final parsed project (may be blank on failure). */
     var parsedProjectName: String? = null
 
@@ -103,6 +106,7 @@ class PdfImportDiagnosticsCollector {
         val ts = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         appendLine("=== PDF Import Diagnostics ===")
         appendLine("Timestamp : $ts")
+        appendLine("Filename  : ${pdfFilename ?: "(unknown)"}")
         appendLine("Failure   : ${failureReason ?: "(none — import succeeded)"}")
         appendLine()
 
