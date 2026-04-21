@@ -83,7 +83,57 @@ class BeadToolColorKeyExtractorTest {
         assertEquals(2, extractor.findColorKeyPageIndex(pages))
     }
 
+    @Test
+    fun `findColorKeyPageIndex returns 0 when color key is on first page with Chart and DB entries but no Color count anywhere`() {
+        // Regression for AbsentFlowers (Bead with Bugs format): the color key is
+        // embedded on page 1 of the PDF as plain "Chart #:X / DB-NNN / Count:N"
+        // text. There is no "Color count" metadata line in any page. The primary
+        // Chart+DB signal must fire on page index 0.
+        val pages = listOf(
+            "Absent Flowers in Blue Lighter Cover\nAll rights reserved to beadwithbugs.com.\n" +
+                "Designed by:  Kim Herron\n" +
+                "Chart #:A\nDB-200\nCount:279\n" +
+                "Chart #:B\nDB-301\nCount:274\n" +
+                "Chart #:C\nDB-310\nCount:1128\n",
+            "Absent Flowers in Blue Lighter Cover\nAll rights reserved to beadwithbugs.com. Page 2 of 6\n" +
+                "Designed by:  Kim Herron\n" +
+                "Row 1&2 (L)  (1)A, (9)C\n",
+        )
+        assertEquals(0, extractor.findColorKeyPageIndex(pages))
+    }
+
     // ── parseColorKeyText ─────────────────────────────────────────────────────
+
+    @Test
+    fun `parseColorKeyText maps AbsentFlowers five-color set with three-digit DB codes`() {
+        // Regression for AbsentFlowers (Bead with Bugs format): color key uses
+        // 3-digit DB codes (DB-200, DB-301, DB-310, DB-410, DB-652) with no leading
+        // zeros as printed by BeadTool. All must be zero-padded to 4 digits.
+        val ocrText = """
+            Chart #:A
+            DB-200
+            Count:279
+            Chart #:B
+            DB-301
+            Count:274
+            Chart #:C
+            DB-310
+            Count:1128
+            Chart #:D
+            DB-410
+            Count:131
+            Chart #:E
+            DB-652
+            Count:294
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0200", result["A"])
+        assertEquals("DB0301", result["B"])
+        assertEquals("DB0310", result["C"])
+        assertEquals("DB0410", result["D"])
+        assertEquals("DB0652", result["E"])
+        assertEquals(5, result.size)
+    }
 
     @Test
     fun `parseColorKeyText maps single-letter chart codes to DB codes`() {

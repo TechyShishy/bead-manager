@@ -280,6 +280,48 @@ class BeadToolPdfParserTest {
         assertEquals(listOf(1, 2, 3, 4, 5, 6), result.rows.map { it.id })
     }
 
+    @Test
+    fun `parse joins comma-wrapped continuation lines separated by space-only blank lines (AbsentFlowers combined format)`() {
+        // AbsentFlowers "Bead with Bugs" PDFs combine both layout challenges at once:
+        //  1. Each row's step list may span multiple text lines, with a trailing comma
+        //     signalling that the next line is a continuation (not a new row).
+        //  2. Adjacent rows are separated by space-only blank lines ("\n \n"), which
+        //     the old contiguous-block regex treated as a hard block boundary.
+        // joinContinuationLines must stitch the comma-trailing lines before
+        // extractRowBlock runs, and extractRowBlock must bridge the space-only gaps.
+        val page = buildString {
+            append("Absent Flowers\n")
+            append("All rights reserved to beadwithbugs.com. Page 3 of 6\n")
+            append("Designed by:  Kim Herron          Email:  author@example.com\n")
+            append("Row 1&2 (L)  (1)A, (2)C, (1)B,\n")   // trailing comma → continuation
+            append("(1)C, (1)A\n")                          // continuation for Row 1&2
+            append(" \n")                                    // space-only blank separator
+            append("Row 3 (R)  (2)B, (1)A,\n")             // trailing comma → continuation
+            append("(3)C\n")                                 // continuation for Row 3
+            append(" \n")
+            append("Row 4 (L)  (2)C\n")
+        }
+        val pages = listOf("Absent Flowers\nDesigned by:  Kim Herron\n", page)
+
+        val result = parser.parse(pages)
+
+        // Row 1&2 emits two PdfRows (ids 1 and 2); rows 3–4 follow in order.
+        assertEquals(4, result.rows.size)
+        assertEquals(listOf(1, 2, 3, 4), result.rows.map { it.id })
+
+        // Row 1&2: joined continuation "(1)A, (2)C, (1)B, (1)C, (1)A"
+        // Flat buffer: A C C B C A (indices 0–5)
+        // Row 1 (even indices [0,2,4]): A,C,C → reversed → C,C,A
+        assertEquals(listOf(PdfStep(2, "C"), PdfStep(1, "A")), result.rows[0].steps)
+        // Row 2 (odd indices [1,3,5]): C,B,A → as-is
+        assertEquals(listOf(PdfStep(1, "C"), PdfStep(1, "B"), PdfStep(1, "A")), result.rows[1].steps)
+
+        // Row 3: joined continuation "(2)B, (1)A, (3)C" → steps B B A C C C
+        assertEquals(listOf(PdfStep(2, "B"), PdfStep(1, "A"), PdfStep(3, "C")), result.rows[2].steps)
+        // Row 4: no continuation needed → steps C C
+        assertEquals(listOf(PdfStep(2, "C")), result.rows[3].steps)
+    }
+
     // ── error cases ───────────────────────────────────────────────────────────
 
     @Test
