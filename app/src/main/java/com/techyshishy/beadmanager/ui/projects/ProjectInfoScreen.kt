@@ -164,7 +164,7 @@ fun ProjectInfoScreen(
                         AsyncImage(
                             model = imageUrl,
                             contentDescription = stringResource(R.string.project_info_image_header),
-                            contentScale = ContentScale.Crop,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp),
