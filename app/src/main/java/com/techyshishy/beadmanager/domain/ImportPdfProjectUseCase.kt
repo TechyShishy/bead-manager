@@ -231,22 +231,22 @@ class ImportPdfProjectUseCase @Inject constructor(
      * stripping.
      */
     private fun deriveProjectName(uri: Uri): String {
-        // TODO: contentResolver.query() is unguarded. A ContentProvider crash (e.g. provider
-        //  process death, stale URI) will propagate as an unhandled exception through import()
-        //  instead of gracefully degrading to "Imported Project". Wrap the query block in a
-        //  try/catch(Exception) that returns null so the fallback path is always taken on any
-        //  query failure.
-        val displayName = contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME),
-            null,
-            null,
-            null,
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (col >= 0) cursor.getString(col) else null
-            } else null
+        val displayName = try {
+            contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (col >= 0) cursor.getString(col) else null
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ContentProvider query failed; falling back to default project name", e)
+            null
         }
         val stripped = displayName
             ?.trim()

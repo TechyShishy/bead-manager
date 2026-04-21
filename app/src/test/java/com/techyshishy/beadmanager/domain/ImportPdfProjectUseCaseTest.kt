@@ -353,4 +353,14 @@ class ImportPdfProjectUseCaseTest {
         ).import(uri)
         assertEquals("Imported Project", (result as ImportResult.Success).name)
     }
+
+    @Test
+    fun `project name falls back to Imported Project when query throws`() = runTest {
+        val throwingResolver: ContentResolver = mockk {
+            every { query(any(), any(), null, null, null) } throws RuntimeException("ContentProvider died")
+        }
+        val result = buildXlsmSuccessUseCase(throwingResolver).import(uri)
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        assertEquals("Imported Project", (result as ImportResult.Success).name)
+    }
 }
