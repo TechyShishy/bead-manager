@@ -69,23 +69,18 @@ fun ProjectInfoScreen(
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
     val project by viewModel.project.collectAsState()
-    val projectRows by viewModel.projectRows.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val gridSummary by viewModel.gridSummary.collectAsState()
 
     val rowCount = project?.rowCount ?: 0
-    val stepCountText = remember(projectRows) {
-        projectRows.maxOfOrNull { it.steps.size }?.toString() ?: "…"
-    }
 
     val colorMapping = project?.colorMapping.orEmpty()
-    val sortedPaletteEntries = remember(colorMapping) {
-        colorMapping.entries.sortedBy { it.key }
-    }
     val sortedBeadCounts = remember(gridSummary, colorMapping) {
         gridSummary?.beadCountsByKey
             ?.entries
+            // Defensive: guards against transient staleness between project and gridSummary flows.
+            // Both derive from separate StateFlows and can briefly disagree after a project update.
             ?.filter { it.key in colorMapping }
             ?.sortedBy { it.key }
             ?: emptyList()
@@ -225,23 +220,6 @@ fun ProjectInfoScreen(
                 HorizontalDivider()
             }
 
-            if (rowCount > 0) {
-                item {
-                    InfoSectionHeader(stringResource(R.string.project_info_grid_header))
-                }
-                item {
-                    InfoDetailRow(
-                        label = stringResource(R.string.project_info_dimensions_label),
-                        value = stringResource(
-                            R.string.project_info_grid_size,
-                            rowCount,
-                            stepCountText,
-                        ),
-                    )
-                    HorizontalDivider()
-                }
-            }
-
             val summary = gridSummary
             if (rowCount > 0 && summary != null) {
                 item {
@@ -280,24 +258,6 @@ fun ProjectInfoScreen(
                             summary.widthMm.toFloat(),
                             summary.heightMm.toFloat(),
                         ),
-                    )
-                    HorizontalDivider()
-                }
-            }
-
-            if (sortedPaletteEntries.isNotEmpty()) {
-                item {
-                    InfoSectionHeader(stringResource(R.string.project_info_palette_header))
-                }
-                items(sortedPaletteEntries, key = { it.key }) { (key, code) ->
-                    val hex = beadLookup[code]?.hex
-                    val swatchColor = remember(hex) {
-                        hex?.let { runCatching { Color(it.toColorInt()) }.getOrNull() }
-                    }
-                    PaletteEntryRow(
-                        paletteKey = key,
-                        beadCode = code,
-                        swatchColor = swatchColor,
                     )
                     HorizontalDivider()
                 }
@@ -414,35 +374,6 @@ private fun InfoDetailRow(label: String, value: String) {
         )
         Spacer(Modifier.height(2.dp))
         Text(text = value, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-@Composable
-private fun PaletteEntryRow(paletteKey: String, beadCode: String, swatchColor: Color?) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        Text(
-            text = paletteKey,
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.width(28.dp),
-        )
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .background(
-                    swatchColor ?: MaterialTheme.colorScheme.surfaceVariant,
-                    MaterialTheme.shapes.extraSmall,
-                ),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = beadCode,
-            style = MaterialTheme.typography.bodyMedium,
-        )
     }
 }
 
