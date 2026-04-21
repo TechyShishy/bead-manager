@@ -543,6 +543,7 @@ private fun ProjectBeadRow(
                 modifier = Modifier.fillMaxWidth(),
                 color = if (inventorySufficient) MaterialTheme.colorScheme.tertiary
                         else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.error,
             )
         }
         if (activeOrderStatus != null) {
