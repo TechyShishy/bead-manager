@@ -170,6 +170,17 @@ class ImportPdfProjectUseCase @Inject constructor(
                 diagnostics.failureReason = "BeadTool: no color key page found"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
+            val usedLetters = beadToolProject.rows.flatMap { it.steps }.mapTo(mutableSetOf()) { it.colorLetter }
+            // Prefer text-based color key extraction — cheaper, and works when the color
+            // key is printed as selectable text rather than a rasterized image.
+            val textColorMap = colorKeyExtractor.parseColorKeyText(pages[colorKeyIndex])
+            if (textColorMap.keys.containsAll(usedLetters)) {
+                Log.d(TAG, "Text color key complete (${textColorMap.size} entries) — skipping OCR")
+                diagnostics.ocrMissingLetters = emptySet()
+                return ParseOutcome.Success(beadToolProject.copy(colorMapping = textColorMap))
+            }
+            // Text extraction incomplete — fall through to ML Kit OCR (standard BeadTool 4 path).
+            Log.d(TAG, "Text color key partial or empty (${textColorMap.size} entries) — running OCR on page $colorKeyIndex")
             val colorMap = try {
                 colorKeyExtractor.extractColorKey(
                     contentResolver, uri, colorKeyIndex, diagnostics
@@ -188,7 +199,6 @@ class ImportPdfProjectUseCase @Inject constructor(
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
             // Validate that OCR recovered an entry for every color letter in the parsed rows.
-            val usedLetters = beadToolProject.rows.flatMap { it.steps }.mapTo(mutableSetOf()) { it.colorLetter }
             val missingFromOcr = usedLetters - colorMap.keys
             diagnostics.ocrMissingLetters = missingFromOcr
             Log.d(TAG, "Letters used by pattern: $usedLetters; OCR covered: ${colorMap.keys.sorted()}")

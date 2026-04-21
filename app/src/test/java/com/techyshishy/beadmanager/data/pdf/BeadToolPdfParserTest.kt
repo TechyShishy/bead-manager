@@ -233,7 +233,7 @@ class BeadToolPdfParserTest {
     fun `parse extracts rows separated by a bare form-feed line (double newline after strip)`() {
         // Models pdfbox placing \u000C as a standalone page-separator: after
         // pages.joinToString("\n") and \u000C removal, two bare newlines remain
-        // between rows. This is the case that specifically requires \n* not \n?.
+        // between rows — must not prevent row extraction.
         val pages = listOf(
             "Test Pattern\n",
             "Row 1 (L) (3)A\n\u000C\nRow 2 (R) (2)B\nTest Pattern  Page 1 of 1\nCreated with BeadTool 4 - www.beadtool.net\n",
@@ -242,6 +242,42 @@ class BeadToolPdfParserTest {
         assertEquals(2, result.rows.size)
         assertEquals(1, result.rows[0].id)
         assertEquals(2, result.rows[1].id)
+    }
+
+    // ── non-standard layout (third-party "Bead with Bugs" format) ────────────
+
+    @Test
+    fun `parse extracts rows interleaved across two columns separated by blank space lines`() {
+        // Mirrors the AbsentFlowers "Bead with Bugs" format:
+        //  - Rows appear out of text order due to two-column layout: PDFBox
+        //    extracts the left column (rows 1&2, 3, 6) before the right column
+        //    (rows 4, 5) on the same page.
+        //  - Adjacent rows are separated by space-only blank lines ("\n \n"),
+        //    which the old contiguous-block regex could not bridge.
+        //  - A custom per-page header ("Designed by / Email") appears before
+        //    the first row on each page and is not removed by stripPageHeaders.
+        val page2 = buildString {
+            append("Absent Flowers\n")
+            append("All rights reserved to beadwithbugs.com. Page 2 of 4\n")
+            append("Designed by:  Kim Herron          Email:  author@example.com\n")
+            append("Row 1&2 (L)  (1)A, (5)C\n")
+            append(" \n")
+            append("Row 3 (R)  (2)B\n")
+            append(" \n")
+            append("Row 6 (L)  (3)A\n")  // right-column row interspersed before 4 & 5
+            append(" \n")
+            append("Row 4 (L)  (2)C\n")
+            append(" \n")
+            append("Row 5 (R)  (1)A, (1)B\n")
+        }
+        val pages = listOf("Absent Flowers\nDesigned by:  Kim Herron\n", page2)
+
+        val result = parser.parse(pages)
+
+        // Row 1&2 emits rows 1 and 2; rows 3–6 are sorted by number regardless
+        // of their position in the extracted text.
+        assertEquals(6, result.rows.size)
+        assertEquals(listOf(1, 2, 3, 4, 5, 6), result.rows.map { it.id })
     }
 
     // ── error cases ───────────────────────────────────────────────────────────

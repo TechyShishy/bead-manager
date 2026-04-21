@@ -111,22 +111,26 @@ class BeadToolPdfParser @Inject constructor() {
     // ── Row block extraction ──────────────────────────────────────────────────
 
     /**
-     * Extracts the contiguous block of row-notation lines from [text].
+     * Collects all row-notation lines from [text] and returns them sorted by
+     * row number, or null when no recognizable rows are found.
      *
-     * Tries the paired-row variant first ("Row 1&2 …"), then the single-row
-     * fallback ("Row 1 …"). Returns null when neither matches.
+     * The previous approach required all row lines to form a single contiguous
+     * block in the text. That assumption breaks for PDFs whose row lines are
+     * separated by space-only blank lines (`\n \n`) or interrupted by per-page
+     * custom headers — both of which appear in third-party patterns exported in
+     * a two-column layout (e.g. the "Bead with Bugs" format). Collecting rows
+     * with [Regex.findAll] and sorting by row number is robust to both cases.
      */
     private fun extractRowBlock(text: String): String? {
-        val pairedPattern = Regex(
-            """((?:Row 1&2 \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
-        val singlePattern = Regex(
-            """((?:Row 1 \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)(?:Row \d+ \([LR]\) +(?:\(\d+\)\w+(?:,\s+)?)+\n*)+)""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
-        return pairedPattern.find(text)?.groupValues?.get(1)?.trim()
-            ?: singlePattern.find(text)?.groupValues?.get(1)?.trim()
+        val rowLinePattern = Regex("""Row (\d+)(?:&\d+)? \([LR]\) .+""")
+        val rows = rowLinePattern.findAll(text)
+            .sortedBy { it.groupValues[1].toInt() }
+            .map { it.value }
+            .toList()
+        if (rows.isEmpty()) return null
+        val hasStart = rows.any { it.startsWith("Row 1&2 ") || it.startsWith("Row 1 ") }
+        if (!hasStart) return null
+        return rows.joinToString("\n")
     }
 
     // ── Row parsing ───────────────────────────────────────────────────────────
