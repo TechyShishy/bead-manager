@@ -260,6 +260,68 @@ class ImportPdfProjectUseCaseTest {
         coVerify(exactly = 0) { extractor.extractColorKey(any(), any(), any(), any()) }
     }
 
+    /**
+     * Regression test for #52 (CurlyFlowers2LighterCoverPeyote.pdf).
+     *
+     * The PDF has a selectable-text color key — 9 colors A–I including letter I
+     * (DB-2138). Before the text-first path was added to detectAndParse (commit
+     * 7146476), the code went straight to OCR, which dropped letter I from its
+     * output, causing "missing letters [I]".
+     *
+     * With the text-first path in place, parseColorKeyText covers all 9 letters
+     * and OCR is never invoked.
+     */
+    @Test
+    fun `BeadTool PDF with selectable 9-color key including I imports without OCR (regression #52)`() = runTest {
+        val nineColorProject = PdfProject(
+            name = "Curly Flowers 2",
+            colorMapping = emptyMap(),
+            rows = listOf(
+                PdfRow(
+                    id = 1,
+                    steps = listOf(
+                        PdfStep(1, "A"), PdfStep(1, "B"), PdfStep(1, "C"),
+                        PdfStep(1, "D"), PdfStep(1, "E"), PdfStep(1, "F"),
+                        PdfStep(1, "G"), PdfStep(1, "H"), PdfStep(1, "I"),
+                    ),
+                ),
+            ),
+        )
+        // Normalized codes matching what parseColorKeyText returns (no hyphen, 4-digit zero-padded).
+        val textColorKey = mapOf(
+            "A" to "DB0200", "B" to "DB0310", "C" to "DB0659", "D" to "DB0661",
+            "E" to "DB1132", "F" to "DB1133", "G" to "DB2117", "H" to "DB2126", "I" to "DB2138",
+        )
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } returns nineColorProject }
+        val extractor: BeadToolColorKeyExtractor = mockk {
+            every { findColorKeyPageIndex(any()) } returns 1
+            every { parseColorKeyText(any()) } returns textColorKey
+            coEvery { extractColorKey(any(), any(), any(), any()) } throws RuntimeException("OCR must not be invoked")
+        }
+        val capturedEntry = slot<ProjectEntry>()
+        val repo: ProjectRepository = mockk {
+            coEvery { createProject(capture(capturedEntry)) } returns "proj-52"
+            coEvery { writeProjectGrid("proj-52", any()) } returns Unit
+        }
+        val result = buildUseCase(
+            // Two pages so pages[1] is valid when colorKeyPageIndex = 1.
+            textExtractor = textExtractor(pages = listOf("word chart page", "color key page")),
+            catalog = catalogWith(
+                "DB0200", "DB0310", "DB0659", "DB0661",
+                "DB1132", "DB1133", "DB2117", "DB2126", "DB2138",
+            ),
+            beadToolParser = btParser,
+            colorKeyExtractor = extractor,
+            projectRepository = repo,
+        ).import(uri)
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        // Letter I→DB2138 must be present in the persisted color mapping.
+        assertEquals(textColorKey, capturedEntry.captured.colorMapping)
+        coVerify(exactly = 0) { extractor.extractColorKey(any(), any(), any(), any()) }
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        coVerify(exactly = 0) { extractor.extractColorKey(any(), any(), any(), any()) }
+    }
+
     @Test
     fun `BeadTool happy path writes correct ProjectEntry and grid rows`() = runTest {
         val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } returns twoRowPdfProject }
