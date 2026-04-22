@@ -6,6 +6,8 @@ import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
+import com.techyshishy.beadmanager.data.model.SUFFICIENT_THRESHOLD_GRAMS
+import com.techyshishy.beadmanager.data.model.effectiveThresholdFor
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import com.techyshishy.beadmanager.di.AppScope
 import kotlinx.coroutines.CoroutineScope
@@ -511,5 +513,49 @@ class OrderRepository @Inject constructor(
             source.updateItems(orderId, mutableExisting + toAppend)
         }
         source.addProjectIdToOrder(orderId, projectId)
+    }
+
+    /**
+     * Creates a new restock order with no project association.
+     *
+     * Each item's [targetGrams] is the threshold-only replenishment deficit:
+     *   max(0, effectiveThreshold − quantityGrams)
+     * where effectiveThreshold = per-bead [InventoryEntry.lowStockThresholdGrams] when > 0,
+     * else [globalThresholdGrams].
+     *
+     * Items whose computed [targetGrams] is 0.0 are excluded from the order. The resulting
+     * [OrderEntry] has an empty [OrderEntry.projectIds] list, and each item has an empty
+     * [OrderItemEntry.sourceProjectContributions] map.
+     *
+     * @throws IllegalArgumentException if [beadCodes] is empty or all items resolve to
+     *   zero [targetGrams] (nothing to order).
+     * @return The new Firestore document ID.
+     */
+    suspend fun createRestockOrder(
+        beadCodes: Set<String>,
+        inventory: Map<String, InventoryEntry>,
+        globalThresholdGrams: Double,
+    ): String {
+        require(beadCodes.isNotEmpty()) { "Cannot create a restock order with no beads selected." }
+        val items = beadCodes.mapNotNull { code ->
+            val entry = inventory[code]
+            val inStock = entry?.quantityGrams ?: 0.0
+            val threshold = effectiveThresholdFor(entry, globalThresholdGrams)
+            val raw = (threshold - inStock).coerceAtLeast(0.0)
+            val targetGrams = if (raw < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else raw
+            if (targetGrams == 0.0) return@mapNotNull null
+            OrderItemEntry(
+                beadCode = code,
+                vendorKey = "",
+                targetGrams = targetGrams,
+                packGrams = 0.0,
+                quantityUnits = 0,
+                status = OrderItemStatus.PENDING.firestoreValue,
+                sourceProjectContributions = emptyMap(),
+            )
+        }
+        require(items.isNotEmpty()) { "Cannot create a restock order: all selected beads are at or above threshold." }
+        val entry = OrderEntry(projectIds = emptyList(), items = items)
+        return source.createOrder(entry)
     }
 }
