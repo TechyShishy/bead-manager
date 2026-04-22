@@ -109,14 +109,10 @@
     <string name="bead_vendor_target">%1$s — target %2$s g</string>
     <string name="over_target_warning">Already received %1$s g; ordering this will exceed the %2$s g project target.</string>
 
-    <!-- Catalog picker mode (adding/swapping a bead from project detail, or adding to project from catalog) -->
+    <!-- Catalog picker mode (adding/swapping a bead from project detail) -->
     <string name="picker_add_bead_hint">Add bead to: %1$s</string>
     <string name="picker_swap_bead_hint">Swap bead in: %1$s</string>
-    <string name="picker_add_bead_to_project_hint">Adding %1$s to project…</string>
     <string name="picker_cancel">Cancel</string>
-
-    <!-- Catalog → Add to project -->
-    <string name="add_to_project">Add to project</string>
 
     <!-- RGP import -->
     <string name="import_from_rgp">Import from RGP file</string>

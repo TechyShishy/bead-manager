@@ -78,7 +78,6 @@ fun BeadDetailPane(
     beadCode: String,
     viewModel: BeadDetailViewModel,
     onNavigateBack: (() -> Unit)? = null,
-    onAddToProject: () -> Unit = {},
     isPinned: Boolean = false,
     onPinToggle: () -> Unit = {},
 ) {
@@ -371,14 +370,6 @@ fun BeadDetailPane(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // Add to project
-            Button(
-                onClick = onAddToProject,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.add_to_project))
-            }
-            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
                     context.startActivity(
