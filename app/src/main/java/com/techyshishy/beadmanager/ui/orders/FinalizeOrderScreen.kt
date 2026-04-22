@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -123,6 +124,7 @@ fun FinalizeOrderScreen(
     orderId: String,
     viewModel: FinalizeOrderViewModel,
     onNavigateBack: () -> Unit,
+    onViewInCatalog: (String) -> Unit = {},
 ) {
     LaunchedEffect(orderId) { viewModel.initiate(orderId) }
 
@@ -160,6 +162,7 @@ fun FinalizeOrderScreen(
                 items = state.items,
                 onMarkVendorOrdered = { vendorKey -> viewModel.markVendorOrdered(vendorKey) },
                 onReopen = { viewModel.reopen() },
+                onViewInCatalog = onViewInCatalog,
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -228,6 +231,7 @@ private fun FinalizedViewContent(
     items: List<FinalizedItem>,
     onMarkVendorOrdered: (vendorKey: String) -> Unit,
     onReopen: () -> Unit,
+    onViewInCatalog: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showReopenDialog by remember { mutableStateOf(false) }
@@ -316,6 +320,7 @@ private fun FinalizedViewContent(
                         item = item,
                         isVisited = itemKey in visitedKeys,
                         onVisited = { visitedKeys = visitedKeys + itemKey },
+                        onViewInCatalog = { onViewInCatalog(item.beadCode) },
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                 }
@@ -524,6 +529,7 @@ private fun FinalizedItemRow(
     item: FinalizedItem,
     isVisited: Boolean,
     onVisited: () -> Unit,
+    onViewInCatalog: () -> Unit,
 ) {
     val context = LocalContext.current
     val hexColor = remember(item.hex) {
@@ -533,6 +539,10 @@ private fun FinalizedItemRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                onClickLabel = stringResource(R.string.view_in_catalog),
+                onClick = onViewInCatalog,
+            )
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 8.dp),
     ) {
         Row(

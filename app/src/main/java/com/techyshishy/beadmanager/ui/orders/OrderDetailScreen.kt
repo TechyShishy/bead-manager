@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.ui.orders
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -75,6 +76,7 @@ fun OrderDetailScreen(
     viewModel: OrderDetailViewModel,
     onNavigateBack: () -> Unit,
     onFinalize: () -> Unit,
+    onViewInCatalog: (String) -> Unit = {},
 ) {
     LaunchedEffect(orderId) { viewModel.initialize(orderId) }
 
@@ -168,6 +170,7 @@ fun OrderDetailScreen(
                         onRevertReceived = { viewModel.revertItemReceived(item) },
                         onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
                         onRemove = { removeTarget = item },
+                        onViewInCatalog = { onViewInCatalog(item.beadCode) },
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                 }
@@ -219,6 +222,7 @@ private fun OrderItemRow(
     onRevertReceived: () -> Unit,
     onUpdateStatus: (OrderItemStatus) -> Unit,
     onRemove: () -> Unit,
+    onViewInCatalog: () -> Unit,
 ) {
     val isVendorless = item.vendorKey.isBlank()
     val status = OrderItemStatus.fromFirestore(item.status)
@@ -230,6 +234,10 @@ private fun OrderItemRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                onClickLabel = stringResource(R.string.view_in_catalog),
+                onClick = onViewInCatalog,
+            )
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 8.dp),
     ) {
         Row(

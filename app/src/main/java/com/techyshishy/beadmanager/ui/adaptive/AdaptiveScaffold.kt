@@ -99,6 +99,9 @@ fun AdaptiveScaffold() {
     // Intentionally not cleared on nav-tab tap — mirrors the allOrdersCameFromProjects
     // pattern so that manually switching tabs and then pressing back still routes correctly.
     var catalogDetailReturnProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Non-null when catalog detail was opened from ORDERS or LOW_STOCK; holds the tab
+    // to return to on back. The projectId path takes precedence when both are set.
+    var catalogDetailReturnTab by rememberSaveable { mutableStateOf<AppTab?>(null) }
 
     // Projects tab: nav state (projects → project detail → add-to-order).
     var ordersProjectId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -189,11 +192,16 @@ fun AdaptiveScaffold() {
             AppTab.CATALOG -> {
                 BackHandler(catalogDetailCode != null) {
                     val returnProjectId = catalogDetailReturnProjectId
+                    val returnTab = catalogDetailReturnTab
                     catalogDetailCode = null
-                    if (returnProjectId != null) {
-                        catalogDetailReturnProjectId = null
-                        ordersProjectId = returnProjectId
-                        currentTab = AppTab.PROJECTS
+                    catalogDetailReturnProjectId = null
+                    catalogDetailReturnTab = null
+                    when {
+                        returnProjectId != null -> {
+                            ordersProjectId = returnProjectId
+                            currentTab = AppTab.PROJECTS
+                        }
+                        returnTab != null -> currentTab = returnTab
                     }
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -207,11 +215,16 @@ fun AdaptiveScaffold() {
                             viewModel = detailVm,
                             onNavigateBack = {
                                 val returnProjectId = catalogDetailReturnProjectId
+                                val returnTab = catalogDetailReturnTab
                                 catalogDetailCode = null
                                 catalogDetailReturnProjectId = null
-                                if (returnProjectId != null) {
-                                    ordersProjectId = returnProjectId
-                                    currentTab = AppTab.PROJECTS
+                                catalogDetailReturnTab = null
+                                when {
+                                    returnProjectId != null -> {
+                                        ordersProjectId = returnProjectId
+                                        currentTab = AppTab.PROJECTS
+                                    }
+                                    returnTab != null -> currentTab = returnTab
                                 }
                             },
                             onAddToProject = {
@@ -469,6 +482,12 @@ fun AdaptiveScaffold() {
                             orderId = allOrdersOrderId!!,
                             viewModel = finalizeVm,
                             onNavigateBack = { allOrdersShowFinalizing = false },
+                            onViewInCatalog = { beadCode ->
+                                catalogDetailCode = beadCode
+                                catalogDetailReturnProjectId = null
+                                catalogDetailReturnTab = AppTab.ORDERS
+                                currentTab = AppTab.CATALOG
+                            },
                         )
                     }
                     allOrdersOrderId != null -> {
@@ -479,6 +498,12 @@ fun AdaptiveScaffold() {
                             viewModel = orderDetailVm,
                             onNavigateBack = onExitOrderDetail,
                             onFinalize = { allOrdersShowFinalizing = true },
+                            onViewInCatalog = { beadCode ->
+                                catalogDetailCode = beadCode
+                                catalogDetailReturnProjectId = null
+                                catalogDetailReturnTab = AppTab.ORDERS
+                                currentTab = AppTab.CATALOG
+                            },
                         )
                     }
                     else -> {
@@ -521,6 +546,12 @@ fun AdaptiveScaffold() {
                             viewModel = lowStockViewModel,
                             onAddToOrder = {
                                 lowStockAddToOrderCodes = lowStockViewModel.effectiveSelectedCodes.value
+                            },
+                            onViewInCatalog = { beadCode ->
+                                catalogDetailCode = beadCode
+                                catalogDetailReturnProjectId = null
+                                catalogDetailReturnTab = AppTab.LOW_STOCK
+                                currentTab = AppTab.CATALOG
                             },
                         )
                     }

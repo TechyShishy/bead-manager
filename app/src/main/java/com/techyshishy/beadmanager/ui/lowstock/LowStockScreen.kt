@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,7 @@ import java.math.BigDecimal
 fun LowStockScreen(
     viewModel: LowStockViewModel,
     onAddToOrder: () -> Unit = {},
+    onViewInCatalog: (String) -> Unit = {},
 ) {
     val beads by viewModel.lowStockBeads.collectAsState()
     val selectedCodes by viewModel.effectiveSelectedCodes.collectAsState()
@@ -109,6 +111,7 @@ fun LowStockScreen(
                     item = item,
                     isSelected = item.code in selectedCodes,
                     onToggle = { viewModel.toggleSelection(item.code) },
+                    onViewInCatalog = { onViewInCatalog(item.code) },
                 )
             }
         }
@@ -144,6 +147,7 @@ private fun LowStockBeadRow(
     item: BeadWithInventory,
     isSelected: Boolean,
     onToggle: () -> Unit,
+    onViewInCatalog: () -> Unit,
 ) {
     val bead = item.catalogEntry.bead
     val hexColor = runCatching { Color(bead.hex.toColorInt()) }.getOrDefault(Color.Gray)
@@ -158,7 +162,6 @@ private fun LowStockBeadRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Checkbox(
@@ -166,14 +169,24 @@ private fun LowStockBeadRow(
             onCheckedChange = { onToggle() },
         )
         Spacer(Modifier.width(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .weight(1f)
+                .clickable(
+                    onClickLabel = stringResource(R.string.view_in_catalog),
+                    onClick = onViewInCatalog,
+                )
+                .padding(vertical = 4.dp),
+        ) {
         AsyncImage(
             model = bead.imageUrl,
             contentDescription = null,
             modifier = Modifier
                 .size(36.dp)
                 .clip(MaterialTheme.shapes.small),
-            placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
-            error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+            placeholder = ColorPainter(hexColor),
+            error = ColorPainter(hexColor),
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -205,5 +218,6 @@ private fun LowStockBeadRow(
                 color = MaterialTheme.colorScheme.error,
             )
         }
+        } // end inner clickable Row
     }
 }
