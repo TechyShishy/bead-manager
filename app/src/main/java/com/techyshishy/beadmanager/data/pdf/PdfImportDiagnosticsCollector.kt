@@ -35,6 +35,21 @@ class PdfImportDiagnosticsCollector {
     /** Text after stripPageHeaders + formfeed removal. */
     var beadToolStrippedText: String? = null
 
+    /**
+     * Output of [BeadToolPdfParser.isolatePeyoteSection]: the peyote-section
+     * substring when a section marker was found, or the full stripped text when
+     * no marker was present. Sits between [beadToolStrippedText] and
+     * [beadToolCleanedText] in the pipeline.
+     */
+    var beadToolSectionText: String? = null
+
+    /**
+     * Whether [BeadToolPdfParser.isolatePeyoteSection] found and extracted a
+     * distinct peyote section. When false, [beadToolSectionText] is identical
+     * to [beadToolStrippedText] and is not emitted in the report.
+     */
+    var beadToolSectionIsolated: Boolean = false
+
     /** Text after cleanText (asterisk/Word Chart header removal). */
     var beadToolCleanedText: String? = null
 
@@ -133,6 +148,15 @@ class PdfImportDiagnosticsCollector {
                 appendLine("--- Stripped text (${it.length} chars) ---")
                 appendLine(it.take(MAX_TEXT_CHARS))
                 if (it.length > MAX_TEXT_CHARS) appendLine("[... truncated at $MAX_TEXT_CHARS chars]")
+            }
+            appendLine("Section isolated: $beadToolSectionIsolated")
+            if (beadToolSectionIsolated) {
+                beadToolSectionText?.let {
+                    appendLine()
+                    appendLine("--- Section text (${it.length} chars) ---")
+                    appendLine(it.take(MAX_TEXT_CHARS))
+                    if (it.length > MAX_TEXT_CHARS) appendLine("[... truncated at $MAX_TEXT_CHARS chars]")
+                }
             }
             beadToolCleanedText?.let {
                 appendLine()

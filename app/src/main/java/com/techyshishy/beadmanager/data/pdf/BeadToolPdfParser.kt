@@ -53,6 +53,8 @@ class BeadToolPdfParser @Inject constructor() {
             "cleaned=${cleaned.contains("Row 1")} " +
             "continued=${continued.contains("Row 1")}")
         diagnostics?.beadToolStrippedText = stripped
+        diagnostics?.beadToolSectionText = sectionText
+        diagnostics?.beadToolSectionIsolated = isolated != null
         diagnostics?.beadToolCleanedText = cleaned
         diagnostics?.beadToolContinuedText = continued
         val rowBlock = extractRowBlock(continued)
