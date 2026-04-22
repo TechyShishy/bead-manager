@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -65,6 +67,8 @@ fun ProjectInfoScreen(
     projectId: String,
     viewModel: ProjectDetailViewModel,
     onNavigateBack: () -> Unit,
+    listState: LazyListState,
+    onViewInCatalog: (String) -> Unit,
 ) {
     LaunchedEffect(projectId) { viewModel.initialize(projectId) }
 
@@ -147,6 +151,7 @@ fun ProjectInfoScreen(
         },
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -278,6 +283,7 @@ fun ProjectInfoScreen(
                         beadCode = code,
                         count = count,
                         swatchColor = swatchColor,
+                        onClick = { onViewInCatalog(code) },
                     )
                     HorizontalDivider()
                 }
@@ -383,11 +389,16 @@ private fun BeadCountRow(
     beadCode: String,
     count: Int,
     swatchColor: Color?,
+    onClick: () -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                onClickLabel = stringResource(R.string.view_in_catalog),
+                onClick = onClick,
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Text(
