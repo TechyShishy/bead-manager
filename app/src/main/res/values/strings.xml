@@ -238,6 +238,8 @@
     <string name="project_info_image_generate_error">Preview generation failed. Please try again.</string>
     <string name="project_info_image_uploading">Uploading image…</string>
     <string name="project_info_image_upload_error">Upload failed. Please try again.</string>
+    <string name="project_info_image_view_fullscreen">View fullscreen</string>
+    <string name="project_info_image_fullscreen_close">Close fullscreen image</string>
     <string name="project_info_summary_header">Summary</string>
     <string name="project_info_total_beads_label">Total beads</string>
     <string name="project_info_total_colors_label">Colors</string>

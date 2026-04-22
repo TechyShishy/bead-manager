@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridOn
@@ -54,8 +55,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
@@ -76,6 +80,7 @@ fun ProjectInfoScreen(
     val beadLookup by viewModel.beadLookup.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val gridSummary by viewModel.gridSummary.collectAsState()
+    val imageUrl = project?.imageUrl
 
     val rowCount = project?.rowCount ?: 0
 
@@ -92,6 +97,7 @@ fun ProjectInfoScreen(
 
     var notesEditMode by rememberSaveable { mutableStateOf(false) }
     var notesInput by rememberSaveable { mutableStateOf("") }
+    var showFullscreenImage by rememberSaveable { mutableStateOf(false) }
     val notesFocusRequester = remember { FocusRequester() }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -162,7 +168,6 @@ fun ProjectInfoScreen(
             }
             item {
                 val isUploading = imageUploadState is ImageUploadState.Uploading
-                val imageUrl = project?.imageUrl
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -175,7 +180,12 @@ fun ProjectInfoScreen(
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(200.dp),
+                                .height(200.dp)
+                                .clickable(
+                                    role = Role.Button,
+                                    onClickLabel = stringResource(R.string.project_info_image_view_fullscreen),
+                                    onClick = { showFullscreenImage = true },
+                                ),
                         )
                     }
                     Row(
@@ -345,6 +355,38 @@ fun ProjectInfoScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+    if (showFullscreenImage && imageUrl != null) {
+        Dialog(
+            onDismissRequest = { showFullscreenImage = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { showFullscreenImage = false },
+            ) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = stringResource(R.string.project_info_image_header),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                IconButton(
+                    onClick = { showFullscreenImage = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.project_info_image_fullscreen_close),
+                        tint = Color.White,
+                    )
                 }
             }
         }
