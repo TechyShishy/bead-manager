@@ -322,6 +322,45 @@ class BeadToolPdfParserTest {
         assertEquals(listOf(PdfStep(2, "C")), result.rows[3].steps)
     }
 
+    // ── dual-chart PDFs (loom + peyote) ──────────────────────────────────────
+
+    @Test
+    fun `parse imports only peyote rows when PDF contains both loom and peyote word chart sections`() {
+        // Models a BeadTool 4 PDF that exports both a Loom Word Chart (single rows,
+        // full pattern width) and a Peyote Word Chart (paired rows, half pattern width).
+        // The two sections both use "Row N (L/R)" notation. Without section isolation,
+        // the parser merges all row lines and emits 5 rows (2 loom + 3 peyote) with
+        // mismatched widths. Only the 3 peyote rows should be produced.
+        val pages = listOf(
+            "Carnival Mask\n",
+            buildString {
+                append("Word Chart (Loom)\n")
+                append("Row 1 (L) (5)A\n")
+                append("Row 2 (R) (5)B\n")
+                append("Carnival Mask  Page 20 of 87\n")
+                append("Created with BeadTool 4 - www.beadtool.net\n")
+            },
+            buildString {
+                append("Word Chart (Peyote)\n")
+                append("Row 1&2 (L) (3)A, (2)B\n")
+                append("Row 3 (R) (2)C\n")
+                append("Carnival Mask  Page 58 of 87\n")
+                append("Created with BeadTool 4 - www.beadtool.net\n")
+            },
+        )
+        val result = parser.parse(pages)
+        // Row 1&2 → 2 buffer rows (ids 1 and 2), Row 3 → 1 buffer row (id 3).
+        // The loom rows (ids 1 and 2, full-width) must be discarded entirely.
+        assertEquals(3, result.rows.size)
+        assertEquals(listOf(1, 2, 3), result.rows.map { it.id })
+        // Verify step content comes from the peyote section, not the loom section.
+        // Peyote "Row 1&2 (L) (3)A, (2)B": 5-bead buffer split across rows 1 and 2.
+        // Loom "Row 1 (L) (5)A" would be a single 5-bead step; that must not appear here.
+        val peyoteBuffer = result.rows[0].steps.sumOf { it.count } + result.rows[1].steps.sumOf { it.count }
+        assertEquals("rows 1+2 should total the 5-bead peyote buffer, not the 5-bead loom row", 5, peyoteBuffer)
+        assertEquals("Row 1 must not be a single (5)A loom step", false, result.rows[0].steps == listOf(PdfStep(5, "A")))
+    }
+
     // ── error cases ───────────────────────────────────────────────────────────
 
     @Test

@@ -38,12 +38,19 @@ class BeadToolPdfParser @Inject constructor() {
         val name = extractName(pages)
         val allText = pages.joinToString("\n")
         val stripped = stripPageHeaders(allText)
-        val cleaned = cleanText(stripped)
+        // Some BeadTool 4 PDFs export both a Loom Word Chart and a Peyote Word Chart.
+        // Parsing the full text merges rows from both sections, doubling the row count.
+        // Prefer the Peyote section when the section header is present.
+        val isolated = isolatePeyoteSection(stripped)
+        val sectionText = isolated ?: stripped
+        val cleaned = cleanText(sectionText)
         val continued = joinContinuationLines(cleaned)
         Log.d(TAG, "BeadTool pipeline: allText=${allText.length}ch stripped=${stripped.length}ch " +
+            "section=${sectionText.length}ch (isolated=${isolated != null}) " +
             "cleaned=${cleaned.length}ch continued=${continued.length}ch")
         Log.d(TAG, "BeadTool 'Row 1' presence: allText=${allText.contains("Row 1")} " +
             "stripped=${stripped.contains("Row 1")} " +
+            "section=${sectionText.contains("Row 1")} " +
             "cleaned=${cleaned.contains("Row 1")} " +
             "continued=${continued.contains("Row 1")}")
         diagnostics?.beadToolStrippedText = stripped
@@ -90,6 +97,25 @@ class BeadToolPdfParser @Inject constructor() {
                 "",
             )
             .replace(Regex("""[^\n]* ?Page [0-9]+(?: of [0-9]+)?\n"""), "")
+
+    /**
+     * Isolates the Peyote Word Chart section from [stripped] text when the PDF
+     * contains explicit "Word Chart (Peyote)" / "Word Chart (Loom)" section
+     * markers (present in BeadTool 4 exports that include both stitch types).
+     *
+     * Returns the substring starting at "Word Chart (Peyote)" and ending before
+     * any subsequent "Word Chart (Loom)" marker, or null when no peyote marker
+     * is found — in which case the caller falls back to the full stripped text.
+     */
+    private fun isolatePeyoteSection(stripped: String): String? {
+        val peyoteMarker = "Word Chart (Peyote)"
+        val startIdx = stripped.indexOf(peyoteMarker)
+        if (startIdx == -1) return null
+        val loomMarker = "Word Chart (Loom)"
+        val endIdx = stripped.indexOf(loomMarker, startIdx + peyoteMarker.length)
+            .takeIf { it != -1 } ?: stripped.length
+        return stripped.substring(startIdx, endIdx)
+    }
 
     /**
      * Removes asterisk-wrapped title artifacts and "Word Chart" section
