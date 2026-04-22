@@ -26,18 +26,6 @@ class BeadToolPdfParserTest {
         "Word Chart (Peyote)\n$wordChartRows\nTest Pattern  Page 1 of 1\nCreated with BeadTool 4 - www.beadtool.net\n",
     )
 
-    // ── name extraction ───────────────────────────────────────────────────────
-
-    @Test
-    fun `parse extracts pattern name from first non-blank line of first page`() {
-        val pages = minimalPages(
-            title = "Dragon's Wrath-Peyote",
-            wordChartRows = "Row 1&2 (L) (3)A\nRow 3 (R) (2)B",
-        )
-        val result = parser.parse(pages)
-        assertEquals("Dragon's Wrath-Peyote", result.name)
-    }
-
     // ── happy path — paired rows ──────────────────────────────────────────────
 
     @Test

@@ -8,7 +8,6 @@ package com.techyshishy.beadmanager.data.pdf
  * bead codes (e.g. "DB-0001").
  */
 data class PdfProject(
-    val name: String,
     val colorMapping: Map<String, String>,
     val rows: List<PdfRow>,
 )

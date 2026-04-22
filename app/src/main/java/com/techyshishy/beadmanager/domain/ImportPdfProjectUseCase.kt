@@ -65,21 +65,14 @@ class ImportPdfProjectUseCase @Inject constructor(
             }
         }
 
-        // 3. Record the in-document name for diagnostics only. The project name presented to
-        //    the user always comes from the filename (step 4); in-document titles are often
-        //    generic or absent (e.g. a blank first page), and a blank title does not mean
-        //    the parse failed — successful row extraction is the authoritative signal.
-        diagnostics.parsedProjectName = pdfProject.name.ifBlank { "(blank)" }
-        Log.d(TAG, "Parsed project: name='${pdfProject.name}', rows=${pdfProject.rows.size}, colorMapping=${pdfProject.colorMapping}")
-
-        // 4. Derive the project name from the URI filename rather than the in-document title.
-        //    In-document titles are often generic ("Bead Pattern", "Sheet1"); the filename is
-        //    the most reliable user-controlled signal for what the project should be called.
-        //    Reuse the display name already queried for diagnostics — one IPC call, not two.
+        // 3. Derive the project name from the URI filename. In-document titles are often
+        //    generic ("Bead Pattern", "Sheet1"); the filename is the most reliable
+        //    user-controlled signal for what the project should be called. Reuse the display
+        //    name already queried for diagnostics — one IPC call, not two.
         val projectName = deriveProjectName(diagnostics.pdfFilename)
         Log.d(TAG, "Derived project name from filename: '$projectName'")
 
-        // 5. Validate all DB codes in colorMapping against the local catalog.
+        // 4. Validate all DB codes in colorMapping against the local catalog.
         val catalogMap = catalogRepository.allBeadsAsMap()
         val unrecognized = pdfProject.colorMapping.values.filter { it !in catalogMap }.sorted()
         if (unrecognized.isNotEmpty()) {
@@ -90,7 +83,7 @@ class ImportPdfProjectUseCase @Inject constructor(
             return ImportResult.Failure.UnrecognizedCodes(unrecognized)
         }
 
-        // 6. Map PdfProject → Firestore shape and write.
+        // 5. Map PdfProject → Firestore shape and write.
         val projectRows = pdfProject.rows.map { row ->
             ProjectRgpRow(
                 id = row.id,
@@ -210,11 +203,10 @@ class ImportPdfProjectUseCase @Inject constructor(
 
         // --- XLSM / Word Chart fallback ---
         Log.d(TAG, "Trying XLSM / Word Chart parser")
-        val sourceName = uri.lastPathSegment ?: ""
         return try {
             ParseOutcome.Success(
-                xlsmParser.parse(pages, sourceName = sourceName, diagnostics = diagnostics).also {
-                    Log.d(TAG, "XLSM parser matched: name='${it.name}', rows=${it.rows.size}, colorMapping=${it.colorMapping}")
+                xlsmParser.parse(pages, diagnostics = diagnostics).also {
+                    Log.d(TAG, "XLSM parser matched: rows=${it.rows.size}, colorMapping=${it.colorMapping}")
                 },
             )
         } catch (e: PdfParseException.NoPatternFound) {

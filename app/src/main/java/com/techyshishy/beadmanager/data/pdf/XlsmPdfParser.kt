@@ -27,9 +27,6 @@ class XlsmPdfParser @Inject constructor() {
      * Parses [pages] (one string per PDF page, as returned by [extractPdfText])
      * into a [PdfProject] with a fully-populated [PdfProject.colorMapping].
      *
-     * [sourceName] is used as the project name when no title is identifiable from
-     * the first page (e.g. when it is blank or contains only an image).
-     *
      * When [diagnostics] is provided, the extracted color map, row count, and any
      * missing letters are captured before the function throws.
      *
@@ -40,7 +37,6 @@ class XlsmPdfParser @Inject constructor() {
      */
     fun parse(
         pages: List<String>,
-        sourceName: String = "",
         diagnostics: PdfImportDiagnosticsCollector? = null,
     ): PdfProject {
         diagnostics?.xlsmAttempted = true
@@ -60,19 +56,8 @@ class XlsmPdfParser @Inject constructor() {
             Log.w(TAG, "XLSM IncompleteColorMapping — missing: $missingLetters (used: $usedLetters, mapping keys: ${colorMapping.keys.sorted()})")
             throw PdfParseException.IncompleteColorMapping(missingLetters)
         }
-        val name = extractName(pages, sourceName)
-        return PdfProject(name = name, colorMapping = colorMapping, rows = rows)
+        return PdfProject(colorMapping = colorMapping, rows = rows)
     }
-
-    // ── Name extraction ───────────────────────────────────────────────────────
-
-    private fun extractName(pages: List<String>, sourceName: String): String =
-        pages.firstOrNull()
-            ?.lineSequence()
-            ?.firstOrNull(String::isNotBlank)
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: sourceName
 
     // ── Color mapping extraction ──────────────────────────────────────────────
 

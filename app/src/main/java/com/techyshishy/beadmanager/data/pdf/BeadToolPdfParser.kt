@@ -35,7 +35,6 @@ class BeadToolPdfParser @Inject constructor() {
         diagnostics: PdfImportDiagnosticsCollector? = null,
     ): PdfProject {
         diagnostics?.beadToolAttempted = true
-        val name = extractName(pages)
         val allText = pages.joinToString("\n")
         val stripped = stripPageHeaders(allText)
         // Some BeadTool 4 PDFs export both a Loom Word Chart and a Peyote Word Chart.
@@ -68,17 +67,8 @@ class BeadToolPdfParser @Inject constructor() {
         diagnostics?.beadToolRowCount = rows.size
         diagnostics?.beadToolRowSummary = rows.map { r -> "row ${r.id}: ${r.steps.sumOf { it.count }} beads" }
         Log.d(TAG, "BeadTool: parsed ${rows.size} rows")
-        return PdfProject(name = name, colorMapping = emptyMap(), rows = rows)
+        return PdfProject(colorMapping = emptyMap(), rows = rows)
     }
-
-    // ── Name extraction ───────────────────────────────────────────────────────
-
-    private fun extractName(pages: List<String>): String =
-        pages.firstOrNull()
-            ?.lineSequence()
-            ?.firstOrNull(String::isNotBlank)
-            ?.trim()
-            ?: ""
 
     // ── Text cleaning ─────────────────────────────────────────────────────────
 

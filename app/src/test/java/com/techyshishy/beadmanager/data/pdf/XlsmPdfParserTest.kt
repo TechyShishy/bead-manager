@@ -28,23 +28,6 @@ class XlsmPdfParserTest {
         )
     }
 
-    // ── name extraction ───────────────────────────────────────────────────────
-
-    @Test
-    fun `parse extracts pattern name from first non-blank line of first page`() {
-        val pages = minimalPages(title = "Dog Pattern", wordChartRows = "1 R 2(A)\n")
-        assertEquals("Dog Pattern", parser.parse(pages).name)
-    }
-
-    @Test
-    fun `parse falls back to sourceName when first page has no text`() {
-        val pages = listOf(
-            "",
-            "Word Cart\nRow Direction Word Chart\n1 R 2(A)\n DB0001 A Color A\n",
-        )
-        assertEquals("fallback", parser.parse(pages, sourceName = "fallback").name)
-    }
-
     // ── single-row format ─────────────────────────────────────────────────────
 
     @Test
