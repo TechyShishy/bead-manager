@@ -255,8 +255,8 @@ fun ProjectInfoScreen(
                         label = stringResource(R.string.project_info_approx_size_label),
                         value = stringResource(
                             R.string.project_info_approx_size_format,
-                            summary.widthMm.toFloat(),
-                            summary.heightMm.toFloat(),
+                            (summary.widthMm / 10.0).toFloat(),
+                            (summary.heightMm / 10.0).toFloat(),
                         ),
                     )
                     HorizontalDivider()

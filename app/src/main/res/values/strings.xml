@@ -243,6 +243,6 @@
     <string name="project_info_total_colors_label">Colors</string>
     <string name="project_info_summary_dimensions">%1$d rows × %2$d columns</string>
     <string name="project_info_approx_size_label">Approx. size</string>
-    <string name="project_info_approx_size_format">%1$.1f × %2$.1f mm (approximate)</string>
+    <string name="project_info_approx_size_format">%1$.1f × %2$.1f cm</string>
     <string name="project_info_bead_counts_header">Bead Counts</string>
 </resources>
