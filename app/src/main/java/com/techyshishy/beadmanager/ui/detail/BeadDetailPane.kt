@@ -78,6 +78,7 @@ fun BeadDetailPane(
     beadCode: String,
     viewModel: BeadDetailViewModel,
     onNavigateBack: (() -> Unit)? = null,
+    onViewProjects: () -> Unit = {},
     isPinned: Boolean = false,
     onPinToggle: () -> Unit = {},
 ) {
@@ -370,6 +371,13 @@ fun BeadDetailPane(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
+            Button(
+                onClick = onViewProjects,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.view_projects))
+            }
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
                     context.startActivity(

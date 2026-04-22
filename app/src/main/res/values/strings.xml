@@ -114,6 +114,11 @@
     <string name="picker_swap_bead_hint">Swap bead in: %1$s</string>
     <string name="picker_cancel">Cancel</string>
 
+    <!-- Catalog → View Projects -->
+    <string name="view_projects">View Projects</string>
+    <string name="projects_filtered_by_bead">Projects containing %1$s</string>
+    <string name="no_projects_for_bead">No projects contain this bead.</string>
+
     <!-- RGP import -->
     <string name="import_from_rgp">Import from RGP file</string>
     <!-- File import (PDF or RGP) -->

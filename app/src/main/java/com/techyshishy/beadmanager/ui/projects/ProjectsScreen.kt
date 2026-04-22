@@ -69,11 +69,17 @@ import java.text.DateFormat
 fun ProjectsScreen(
     viewModel: ProjectsViewModel,
     onProjectSelected: (projectId: String, projectName: String) -> Unit,
+    beadCodeFilter: String? = null,
 ) {
     val context = LocalContext.current
     val projects by viewModel.projects.collectAsState()
     val beadSatisfaction by viewModel.beadSatisfaction.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
+
+    val displayedProjects = remember(projects, beadCodeFilter) {
+        if (beadCodeFilter == null) projects
+        else projects.filter { beadCodeFilter in it.colorMapping.values }
+    }
 
     var showSortMenu by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -103,44 +109,52 @@ fun ProjectsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.projects)) },
-                actions = {
-                    IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
-                        Icon(
-                            Icons.Outlined.FileOpen,
-                            contentDescription = stringResource(R.string.import_from_file),
-                        )
+                title = {
+                    if (beadCodeFilter != null) {
+                        Text(stringResource(R.string.projects_filtered_by_bead, beadCodeFilter))
+                    } else {
+                        Text(stringResource(R.string.projects))
                     }
-                    Box {
-                        IconButton(onClick = { showSortMenu = true }) {
+                },
+                actions = {
+                    if (beadCodeFilter == null) {
+                        IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
                             Icon(
-                                Icons.Filled.SwapVert,
-                                contentDescription = stringResource(R.string.sort_projects),
+                                Icons.Outlined.FileOpen,
+                                contentDescription = stringResource(R.string.import_from_file),
                             )
                         }
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false },
-                        ) {
-                            ProjectSortKey.entries.forEach { key ->
-                                val isActive = sortOrder.key == key
-                                DropdownMenuItem(
-                                    text = { Text(key.label()) },
-                                    onClick = {
-                                        viewModel.toggleSortKey(key)
-                                        showSortMenu = false
-                                    },
-                                    trailingIcon = if (isActive) {
-                                        {
-                                            Icon(
-                                                if (sortOrder.direction == SortDirection.ASCENDING) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                                                contentDescription = stringResource(
-                                                    if (sortOrder.direction == SortDirection.ASCENDING) R.string.sort_direction_ascending else R.string.sort_direction_descending,
-                                                ),
-                                            )
-                                        }
-                                    } else null,
+                        Box {
+                            IconButton(onClick = { showSortMenu = true }) {
+                                Icon(
+                                    Icons.Filled.SwapVert,
+                                    contentDescription = stringResource(R.string.sort_projects),
                                 )
+                            }
+                            DropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                            ) {
+                                ProjectSortKey.entries.forEach { key ->
+                                    val isActive = sortOrder.key == key
+                                    DropdownMenuItem(
+                                        text = { Text(key.label()) },
+                                        onClick = {
+                                            viewModel.toggleSortKey(key)
+                                            showSortMenu = false
+                                        },
+                                        trailingIcon = if (isActive) {
+                                            {
+                                                Icon(
+                                                    if (sortOrder.direction == SortDirection.ASCENDING) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                                                    contentDescription = stringResource(
+                                                        if (sortOrder.direction == SortDirection.ASCENDING) R.string.sort_direction_ascending else R.string.sort_direction_descending,
+                                                    ),
+                                                )
+                                            }
+                                        } else null,
+                                    )
+                                }
                             }
                         }
                     }
@@ -148,15 +162,17 @@ fun ProjectsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateDialog = true },
-                modifier = Modifier.navigationBarsPadding(),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_project))
+            if (beadCodeFilter == null) {
+                FloatingActionButton(
+                    onClick = { showCreateDialog = true },
+                    modifier = Modifier.navigationBarsPadding(),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_project))
+                }
             }
         },
     ) { innerPadding ->
-        if (projects.isEmpty()) {
+        if (displayedProjects.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -164,7 +180,11 @@ fun ProjectsScreen(
                     .padding(horizontal = 16.dp, vertical = 32.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.no_projects),
+                    text = if (beadCodeFilter != null) {
+                        stringResource(R.string.no_projects_for_bead)
+                    } else {
+                        stringResource(R.string.no_projects)
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -175,12 +195,14 @@ fun ProjectsScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                items(projects, key = { it.projectId }) { project ->
+                items(displayedProjects, key = { it.projectId }) { project ->
                     ProjectRow(
                         project = project,
                         satisfaction = beadSatisfaction[project.projectId],
                         onClick = { onProjectSelected(project.projectId, project.name) },
-                        onDelete = { deleteTarget = project },
+                        onDelete = if (beadCodeFilter == null) (
+                            { deleteTarget = project }
+                        ) else null,
                     )
                     HorizontalDivider()
                 }
@@ -330,7 +352,7 @@ private fun ProjectRow(
     project: ProjectEntry,
     satisfaction: ProjectSatisfaction?,
     onClick: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
@@ -358,13 +380,15 @@ private fun ProjectRow(
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Filled.Delete,
-                contentDescription = stringResource(R.string.delete_project),
-                tint = MaterialTheme.colorScheme.error,
-            )
+        if (onDelete != null) {
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = stringResource(R.string.delete_project),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }

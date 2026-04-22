@@ -111,6 +111,8 @@ fun AdaptiveScaffold() {
     var projectsCatalogSwapTargetCode by rememberSaveable { mutableStateOf<String?>(null) }
     // True while the Project Info screen is open over the project detail.
     var projectInfoMode by rememberSaveable { mutableStateOf(false) }
+    // Non-null when the Projects tab is showing a bead-filtered list; holds the bead code.
+    var projectsBeadFilter by rememberSaveable { mutableStateOf<String?>(null) }
 
     // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -226,6 +228,10 @@ fun AdaptiveScaffold() {
                                 }
                             },
                             isPinned = code in pinnedCodes,
+                            onViewProjects = {
+                                projectsBeadFilter = code
+                                currentTab = AppTab.PROJECTS
+                            },
                             onPinToggle = { catalogViewModel.togglePin(code) },
                         )
                     } else {
@@ -383,8 +389,13 @@ fun AdaptiveScaffold() {
                         )
                     }
                     else -> {
+                        BackHandler(projectsBeadFilter != null) {
+                            projectsBeadFilter = null
+                            currentTab = AppTab.CATALOG
+                        }
                         ProjectsScreen(
                             viewModel = projectsViewModel,
+                            beadCodeFilter = projectsBeadFilter,
                             onProjectSelected = { projectId, _ ->
                                 ordersProjectId = projectId
                             },
