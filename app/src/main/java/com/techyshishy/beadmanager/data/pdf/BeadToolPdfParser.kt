@@ -211,16 +211,14 @@ class BeadToolPdfParser @Inject constructor() {
      * odd-indexed beads (1, 3, 5, …) belong to the lower-numbered row (row 1),
      * even-indexed beads (0, 2, 4, …) belong to the higher-numbered row (row 2).
      *
-     * Row 2 ends up at list index 1 (odd) in the rows array passed to
-     * [GenerateProjectPreviewUseCase]. The renderer reverses odd-index rows before
-     * placing them into odd pixel columns (offset down by half a bead height). The
-     * natural extraction of even-indexed interleaved beads yields L→R order, so it
-     * must be reversed before storage so that the renderer's reversal produces the
-     * correct display direction.
+     * Row 1 ends up at list index 0 (even) in the rows array passed to
+     * [GenerateProjectPreviewUseCase]. The renderer places even-index rows flush
+     * (no vertical offset) without reversal, so row 1 must be stored reversed to
+     * produce the correct display direction.
      *
-     * Row 1 ends up at list index 0 (even). The renderer places even-index rows into
-     * even pixel columns (flush, no vertical offset) without reversal, so row 1 must
-     * be stored in its natural extraction order (L→R).
+     * Row 2 ends up at list index 1 (odd). The renderer reverses odd-index rows
+     * before placing them into offset pixel columns, so row 2 must be stored in
+     * natural extraction order for the rendered result to be correct.
      *
      * @return Pair of (row1Steps, row2Steps)
      */
@@ -228,7 +226,7 @@ class BeadToolPdfParser @Inject constructor() {
         val flat = steps.flatMap { step -> List(step.count) { step.colorLetter } }
         val evenBeads = flat.filterIndexed { i, _ -> i % 2 == 0 }
         val oddBeads = flat.filterIndexed { i, _ -> i % 2 == 1 }
-        return encodeRle(oddBeads) to encodeRle(evenBeads.reversed())
+        return encodeRle(oddBeads.reversed()) to encodeRle(evenBeads)
     }
 
     /** Re-encodes a flat bead list into RLE [PdfStep] form. */

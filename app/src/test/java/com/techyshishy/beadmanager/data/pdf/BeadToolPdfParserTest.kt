@@ -47,19 +47,20 @@ class BeadToolPdfParserTest {
         val pages = minimalPages(wordChartRows = "Row 1&2 (L) (3)A, (2)B\nRow 3 (R) (1)C")
         val result = parser.parse(pages)
         // Buffer: A A A B B (5 beads, indices 0-4)
-        // Row 1 (odd indices [1,3]): A, B → extracted as-is
-        //   → [PdfStep(1,"A"), PdfStep(1,"B")]
-        // Row 2 (even indices [0,2,4]): A, A, B → reversed for storage → B, A, A
-        //   → [PdfStep(1,"B"), PdfStep(2,"A")]
-        // Row 2 is reversed because it ends up at odd list index 1 in the renderer;
-        // the renderer reverses odd-index rows before placing them into offset pixel
-        // columns, so the data must be stored reversed to display correctly.
+        // Row 1 (odd indices [1,3]): A, B → reversed for storage → B, A
+        //   → [PdfStep(1,"B"), PdfStep(1,"A")]
+        // Row 2 (even indices [0,2,4]): A, A, B → natural order
+        //   → [PdfStep(2,"A"), PdfStep(1,"B")]
+        // Row 1 is reversed because it ends up at even list index 0; the renderer
+        // does not reverse even-index rows, so pre-reversing here produces the
+        // correct display direction. Row 2 is stored natural so the renderer's
+        // odd-row reversal produces the correct result.
         val row1Steps = result.rows[0].steps
         val row2Steps = result.rows[1].steps
         assertEquals(2, row1Steps.size)
-        assertEquals(PdfStep(count = 1, colorLetter = "A"), row1Steps[0])
-        assertEquals(PdfStep(count = 1, colorLetter = "B"), row1Steps[1])
-        assertEquals(listOf(PdfStep(1, "B"), PdfStep(2, "A")), row2Steps)
+        assertEquals(PdfStep(count = 1, colorLetter = "B"), row1Steps[0])
+        assertEquals(PdfStep(count = 1, colorLetter = "A"), row1Steps[1])
+        assertEquals(listOf(PdfStep(2, "A"), PdfStep(1, "B")), row2Steps)
     }
 
     @Test
@@ -70,15 +71,13 @@ class BeadToolPdfParserTest {
         )
         val result = parser.parse(pages)
         assertEquals(3, result.rows.size)
-        // Row 1 odd-indexed beads from (3)A,(2)B buffer: indices 1,3 → [A,B]; stored as-is → A first
-        assertEquals(PdfStep(1, "A"), result.rows[0].steps[0])
+        // Row 1 odd-indexed beads from (3)A,(2)B buffer: indices 1,3 → [A,B]; reversed → B first
+        assertEquals(PdfStep(1, "B"), result.rows[0].steps[0])
     }
 
     @Test
     fun `parseRows detangles paired-row buffer into distinct row1 and row2 step sequences`() {
         // Buffer: E D F C G B H A (8 individually counted beads, interleaved)
-        // Even indices [0,2,4,6] = E,F,G,H → Row 1; reversed for storage → H,G,F,E
-        // Odd  indices [1,3,5,7] = D,C,B,A → Row 2; extracted as-is
         val pages = minimalPages(
             wordChartRows = "Row 1&2 (L) (1)E, (1)D, (1)F, (1)C, (1)G, (1)B, (1)H, (1)A\nRow 3 (R) (1)X",
         )
@@ -88,14 +87,14 @@ class BeadToolPdfParserTest {
         assertEquals(1, row1.id)
         assertEquals(2, row2.id)
         // Buffer: E D F C G B H A (8 individually counted beads, interleaved)
-        // Odd  indices [1,3,5,7] = D,C,B,A → Row 1; extracted as-is
-        // Even indices [0,2,4,6] = E,F,G,H → Row 2; reversed for storage → H,G,F,E
+        // Odd  indices [1,3,5,7] = D,C,B,A → Row 1; reversed for storage → A,B,C,D
+        // Even indices [0,2,4,6] = E,F,G,H → Row 2; natural order
         assertEquals(
-            listOf(PdfStep(1, "D"), PdfStep(1, "C"), PdfStep(1, "B"), PdfStep(1, "A")),
+            listOf(PdfStep(1, "A"), PdfStep(1, "B"), PdfStep(1, "C"), PdfStep(1, "D")),
             row1.steps,
         )
         assertEquals(
-            listOf(PdfStep(1, "H"), PdfStep(1, "G"), PdfStep(1, "F"), PdfStep(1, "E")),
+            listOf(PdfStep(1, "E"), PdfStep(1, "F"), PdfStep(1, "G"), PdfStep(1, "H")),
             row2.steps,
         )
     }
@@ -132,12 +131,12 @@ class BeadToolPdfParserTest {
             wordChartRows = "Row 1&2 (L) (3)AD, (2)AF, (1)AA\nRow 3 (R) (6)AB",
         )
         // Row 1 odd-indexed beads from [AD,AD,AD,AF,AF,AA]: indices 1,3,5 → [AD,AF,AA];
-        // stored as-is → RLE: [PdfStep(1,"AD"), PdfStep(1,"AF"), PdfStep(1,"AA")]
+        // reversed → [AA,AF,AD] → RLE: [PdfStep(1,"AA"), PdfStep(1,"AF"), PdfStep(1,"AD")]
         val steps = parser.parse(pages).rows[0].steps
         assertEquals(3, steps.size)
-        assertEquals("AD", steps[0].colorLetter)
+        assertEquals("AA", steps[0].colorLetter)
         assertEquals("AF", steps[1].colorLetter)
-        assertEquals("AA", steps[2].colorLetter)
+        assertEquals("AD", steps[2].colorLetter)
     }
 
     // ── continuation lines ────────────────────────────────────────────────────
@@ -148,10 +147,10 @@ class BeadToolPdfParserTest {
             wordChartRows = "Row 1&2 (L) (3)A,\n(2)B\nRow 3 (R) (1)C",
         )
         val steps = parser.parse(pages).rows[0].steps
-        // Row 1 odd-indexed beads: indices 1,3 → [A,B]; stored as-is
+        // Row 1 odd-indexed beads: indices 1,3 → [A,B]; reversed for storage → [B,A]
         assertEquals(2, steps.size)
-        assertEquals(PdfStep(1, "A"), steps[0])
-        assertEquals(PdfStep(1, "B"), steps[1])
+        assertEquals(PdfStep(1, "B"), steps[0])
+        assertEquals(PdfStep(1, "A"), steps[1])
     }
 
     @Test
@@ -161,10 +160,10 @@ class BeadToolPdfParserTest {
             wordChartRows = "Row 1&2 (L) (3)A\n(2)B\nRow 3 (R) (1)C",
         )
         val steps = parser.parse(pages).rows[0].steps
-        // Row 1 odd-indexed beads: indices 1,3 → [A,B]; stored as-is
+        // Row 1 odd-indexed beads: indices 1,3 → [A,B]; reversed for storage → [B,A]
         assertEquals(2, steps.size)
-        assertEquals(PdfStep(1, "A"), steps[0])
-        assertEquals(PdfStep(1, "B"), steps[1])
+        assertEquals(PdfStep(1, "B"), steps[0])
+        assertEquals(PdfStep(1, "A"), steps[1])
     }
 
     // ── header/footer stripping ───────────────────────────────────────────────
@@ -302,10 +301,10 @@ class BeadToolPdfParserTest {
 
         // Row 1&2: joined continuation "(1)A, (2)C, (1)B, (1)C, (1)A"
         // Flat buffer: A C C B C A (indices 0–5)
-        // Row 1 (odd indices [1,3,5]): C,B,A → as-is
-        assertEquals(listOf(PdfStep(1, "C"), PdfStep(1, "B"), PdfStep(1, "A")), result.rows[0].steps)
-        // Row 2 (even indices [0,2,4]): A,C,C → reversed → C,C,A
-        assertEquals(listOf(PdfStep(2, "C"), PdfStep(1, "A")), result.rows[1].steps)
+        // Row 1 (odd indices [1,3,5]): C,B,A → reversed → A,B,C
+        assertEquals(listOf(PdfStep(1, "A"), PdfStep(1, "B"), PdfStep(1, "C")), result.rows[0].steps)
+        // Row 2 (even indices [0,2,4]): A,C,C → natural order
+        assertEquals(listOf(PdfStep(1, "A"), PdfStep(2, "C")), result.rows[1].steps)
 
         // Row 3: joined continuation "(2)B, (1)A, (3)C" → steps B B A C C C
         assertEquals(listOf(PdfStep(2, "B"), PdfStep(1, "A"), PdfStep(3, "C")), result.rows[2].steps)
