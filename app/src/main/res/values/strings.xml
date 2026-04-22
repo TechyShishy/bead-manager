@@ -245,4 +245,11 @@
     <string name="project_info_approx_size_label">Approx. size</string>
     <string name="project_info_approx_size_format">%1$.1f × %2$.1f cm</string>
     <string name="project_info_bead_counts_header">Bead Counts</string>
+
+    <!-- Low Stock tab -->
+    <string name="low_stock">Low Stock</string>
+    <string name="low_stock_add_to_order">Add to order →</string>
+    <string name="low_stock_empty">All beads are at or above their low-stock threshold.</string>
+    <!-- %1$d = number of selected beads -->
+    <string name="low_stock_selected_count">%1$d selected</string>
 </resources>

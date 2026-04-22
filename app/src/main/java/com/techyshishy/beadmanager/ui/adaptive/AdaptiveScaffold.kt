@@ -20,10 +20,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -61,10 +63,12 @@ import com.techyshishy.beadmanager.ui.projects.ProjectDetailViewModel
 import com.techyshishy.beadmanager.ui.projects.ProjectInfoScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectsScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectsViewModel
+import com.techyshishy.beadmanager.ui.lowstock.LowStockScreen
+import com.techyshishy.beadmanager.ui.lowstock.LowStockViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
 import com.techyshishy.beadmanager.ui.settings.SettingsViewModel
 
-enum class AppTab { CATALOG, PROJECTS, ORDERS, SETTINGS }
+enum class AppTab { CATALOG, PROJECTS, ORDERS, LOW_STOCK, SETTINGS }
 
 @Composable
 fun AdaptiveScaffold() {
@@ -107,6 +111,10 @@ fun AdaptiveScaffold() {
 
     // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Low Stock tab: non-null when the order picker is open; holds selected bead codes.
+    // Declared here (unused until #71) so AdaptiveScaffold's shape is final.
+    @Suppress("UNUSED_VARIABLE", "unused")
+    var lowStockAddToOrderCodes by rememberSaveable { mutableStateOf<Set<String>?>(null) }
     var allOrdersShowFinalizing by rememberSaveable { mutableStateOf(false) }
     // True when the current order detail was opened via redirect from the Projects tab;
     // back navigation should return to Projects rather than staying in Orders.
@@ -151,6 +159,18 @@ fun AdaptiveScaffold() {
                     )
                 },
                 label = { Text(stringResource(R.string.orders)) },
+            )
+            item(
+                selected = currentTab == AppTab.LOW_STOCK,
+                onClick = { currentTab = AppTab.LOW_STOCK },
+                icon = {
+                    Icon(
+                        if (currentTab == AppTab.LOW_STOCK) Icons.Filled.Inventory
+                        else Icons.Outlined.Inventory,
+                        contentDescription = null,
+                    )
+                },
+                label = { Text(stringResource(R.string.low_stock)) },
             )
             item(
                 selected = currentTab == AppTab.SETTINGS,
@@ -470,6 +490,11 @@ fun AdaptiveScaffold() {
                         )
                     }
                 }
+            }
+
+            AppTab.LOW_STOCK -> {
+                val lowStockViewModel: LowStockViewModel = hiltViewModel()
+                LowStockScreen(viewModel = lowStockViewModel)
             }
 
             AppTab.SETTINGS -> {
