@@ -91,9 +91,6 @@ class PdfImportDiagnosticsCollector {
     /** Display name of the source PDF file (e.g. "MyPattern.pdf"). */
     var pdfFilename: String? = null
 
-    /** Name of the final parsed project (may be blank on failure). */
-    var parsedProjectName: String? = null
-
     /** Catalog codes not found in Room (UnrecognizedCodes failure path). */
     var unrecognizedCatalogCodes: List<String>? = null
 
@@ -185,7 +182,6 @@ class PdfImportDiagnosticsCollector {
 
         // Use-case
         appendLine("── Use Case ─────────────────────────────────────────────────")
-        appendLine("Project name    : ${parsedProjectName ?: "(not set)"}")
         unrecognizedCatalogCodes?.let { appendLine("Unknown codes   : $it") }
         appendLine()
         appendLine("=== End of Report ===")
