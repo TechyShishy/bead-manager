@@ -130,7 +130,7 @@ fun LowStockScreen(
                 )
                 Button(
                     onClick = onAddToOrder,
-                    enabled = false,
+                    enabled = selectedCodes.isNotEmpty(),
                 ) {
                     Text(stringResource(R.string.low_stock_add_to_order))
                 }

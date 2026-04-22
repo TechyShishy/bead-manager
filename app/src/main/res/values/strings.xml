@@ -252,4 +252,8 @@
     <string name="low_stock_empty">All beads are at or above their low-stock threshold.</string>
     <!-- %1$d = number of selected beads -->
     <string name="low_stock_selected_count">%1$d selected</string>
+    <string name="new_restock_order">New restock order</string>
+    <string name="add_restock_to_existing_order_confirm">Add the selected low-stock beads to this order?</string>
+    <string name="no_restock_eligible_orders">No existing orders.\n\nTap New restock order to create one.</string>
+    <string name="low_stock_append_nothing_added">All selected beads are already at or above threshold.</string>
 </resources>

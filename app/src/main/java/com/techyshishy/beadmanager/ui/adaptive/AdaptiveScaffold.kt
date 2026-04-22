@@ -63,6 +63,8 @@ import com.techyshishy.beadmanager.ui.projects.ProjectDetailViewModel
 import com.techyshishy.beadmanager.ui.projects.ProjectInfoScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectsScreen
 import com.techyshishy.beadmanager.ui.projects.ProjectsViewModel
+import com.techyshishy.beadmanager.ui.lowstock.LowStockAddToOrderScreen
+import com.techyshishy.beadmanager.ui.lowstock.LowStockAddToOrderViewModel
 import com.techyshishy.beadmanager.ui.lowstock.LowStockScreen
 import com.techyshishy.beadmanager.ui.lowstock.LowStockViewModel
 import com.techyshishy.beadmanager.ui.settings.SettingsScreen
@@ -112,8 +114,6 @@ fun AdaptiveScaffold() {
     // All-Orders tab: nav state (list → order detail → finalize).
     var allOrdersOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     // Low Stock tab: non-null when the order picker is open; holds selected bead codes.
-    // Declared here (unused until #71) so AdaptiveScaffold's shape is final.
-    @Suppress("UNUSED_VARIABLE", "unused")
     var lowStockAddToOrderCodes by rememberSaveable { mutableStateOf<Set<String>?>(null) }
     var allOrdersShowFinalizing by rememberSaveable { mutableStateOf(false) }
     // True when the current order detail was opened via redirect from the Projects tab;
@@ -494,7 +494,37 @@ fun AdaptiveScaffold() {
 
             AppTab.LOW_STOCK -> {
                 val lowStockViewModel: LowStockViewModel = hiltViewModel()
-                LowStockScreen(viewModel = lowStockViewModel)
+                BackHandler(lowStockAddToOrderCodes != null) { lowStockAddToOrderCodes = null }
+                when {
+                    lowStockAddToOrderCodes != null -> {
+                        val addToOrderVm: LowStockAddToOrderViewModel = hiltViewModel()
+                        LowStockAddToOrderScreen(
+                            viewModel = addToOrderVm,
+                            onNavigateBack = { lowStockAddToOrderCodes = null },
+                            onNewOrder = {
+                                val codes = lowStockAddToOrderCodes ?: return@LowStockAddToOrderScreen null
+                                addToOrderVm.createRestockOrder(codes)
+                            },
+                            onImportIntoOrder = { orderId ->
+                                val codes = lowStockAddToOrderCodes ?: return@LowStockAddToOrderScreen false
+                                addToOrderVm.appendToOrder(orderId, codes)
+                            },
+                            onNavigateToOrder = { orderId ->
+                                lowStockAddToOrderCodes = null
+                                allOrdersOrderId = orderId
+                                currentTab = AppTab.ORDERS
+                            },
+                        )
+                    }
+                    else -> {
+                        LowStockScreen(
+                            viewModel = lowStockViewModel,
+                            onAddToOrder = {
+                                lowStockAddToOrderCodes = lowStockViewModel.effectiveSelectedCodes.value
+                            },
+                        )
+                    }
+                }
             }
 
             AppTab.SETTINGS -> {

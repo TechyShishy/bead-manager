@@ -516,6 +516,84 @@ class OrderRepository @Inject constructor(
     }
 
     /**
+     * Builds vendor-less restock [OrderItemEntry] instances for the given bead codes.
+     *
+     * Each item's [targetGrams] is `max(0, effectiveThreshold − quantityGrams)`. Items that
+     * compute to zero (already at or above threshold) are excluded from the result.
+     */
+    private fun buildRestockItems(
+        beadCodes: Set<String>,
+        inventory: Map<String, InventoryEntry>,
+        globalThresholdGrams: Double,
+    ): List<OrderItemEntry> = beadCodes.mapNotNull { code ->
+        val entry = inventory[code]
+        val inStock = entry?.quantityGrams ?: 0.0
+        val threshold = effectiveThresholdFor(entry, globalThresholdGrams)
+        val raw = (threshold - inStock).coerceAtLeast(0.0)
+        val targetGrams = if (raw < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else raw
+        if (targetGrams == 0.0) return@mapNotNull null
+        OrderItemEntry(
+            beadCode = code,
+            vendorKey = "",
+            targetGrams = targetGrams,
+            packGrams = 0.0,
+            quantityUnits = 0,
+            status = OrderItemStatus.PENDING.firestoreValue,
+            sourceProjectContributions = emptyMap(),
+        )
+    }
+
+    /**
+     * Appends restock items to an existing order using the threshold-only formula.
+     *
+     * When a vendor-less item for the same bead already exists in the order, its [targetGrams]
+     * is incremented rather than creating a duplicate — the same merge behaviour as
+     * [importProjectItems]. Items that compute to zero [targetGrams] are excluded.
+     *
+     * @return `true` if the order was modified (at least one item merged or appended),
+     *   `false` if [beadCodes] is empty or all beads are already at or above threshold.
+     */
+    suspend fun appendRestockItems(
+        orderId: String,
+        beadCodes: Set<String>,
+        inventory: Map<String, InventoryEntry>,
+        globalThresholdGrams: Double,
+    ): Boolean {
+        if (beadCodes.isEmpty()) return false
+        val newItems = buildRestockItems(beadCodes, inventory, globalThresholdGrams)
+        if (newItems.isEmpty()) return false
+        val existingItems = source.orderSnapshot(orderId)?.items ?: emptyList()
+
+        // Merge into existing vendor-less items where the same bead already appears;
+        // append as new items where it does not.
+        var hasMerges = false
+        val mutableExisting = existingItems.toMutableList()
+        val toAppend = mutableListOf<OrderItemEntry>()
+        for (item in newItems) {
+            val existingIndex = mutableExisting.indexOfFirst {
+                it.beadCode == item.beadCode && it.vendorKey.isBlank() && it.packGrams == 0.0
+            }
+            if (existingIndex >= 0) {
+                // Only targetGrams is incremented — sourceProjectContributions is intentionally
+                // left unchanged. Restock contributions have no project to attribute to, so the
+                // map won't balance with targetGrams for items touched by both paths. This is
+                // correct: detachProject subtracts only recorded project contributions, so the
+                // untracked restock portion correctly survives detachment.
+                mutableExisting[existingIndex] = mutableExisting[existingIndex].copy(
+                    targetGrams = mutableExisting[existingIndex].targetGrams + item.targetGrams,
+                )
+                hasMerges = true
+            } else {
+                toAppend.add(item)
+            }
+        }
+
+        if (!hasMerges && toAppend.isEmpty()) return false
+        source.updateItems(orderId, mutableExisting + toAppend)
+        return true
+    }
+
+    /**
      * Creates a new restock order with no project association.
      *
      * Each item's [targetGrams] is the threshold-only replenishment deficit:
@@ -537,23 +615,7 @@ class OrderRepository @Inject constructor(
         globalThresholdGrams: Double,
     ): String {
         require(beadCodes.isNotEmpty()) { "Cannot create a restock order with no beads selected." }
-        val items = beadCodes.mapNotNull { code ->
-            val entry = inventory[code]
-            val inStock = entry?.quantityGrams ?: 0.0
-            val threshold = effectiveThresholdFor(entry, globalThresholdGrams)
-            val raw = (threshold - inStock).coerceAtLeast(0.0)
-            val targetGrams = if (raw < SUFFICIENT_THRESHOLD_GRAMS) 0.0 else raw
-            if (targetGrams == 0.0) return@mapNotNull null
-            OrderItemEntry(
-                beadCode = code,
-                vendorKey = "",
-                targetGrams = targetGrams,
-                packGrams = 0.0,
-                quantityUnits = 0,
-                status = OrderItemStatus.PENDING.firestoreValue,
-                sourceProjectContributions = emptyMap(),
-            )
-        }
+        val items = buildRestockItems(beadCodes, inventory, globalThresholdGrams)
         require(items.isNotEmpty()) { "Cannot create a restock order: all selected beads are at or above threshold." }
         val entry = OrderEntry(projectIds = emptyList(), items = items)
         return source.createOrder(entry)
