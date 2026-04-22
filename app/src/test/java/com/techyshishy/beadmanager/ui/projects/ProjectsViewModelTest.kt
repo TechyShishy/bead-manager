@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.projects
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.CreateBlankProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportRgpProjectUseCase
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
@@ -35,6 +36,7 @@ class ProjectsViewModelTest {
             projectRepository,
             inventoryRepository,
             preferencesRepository,
+            mockk<CreateBlankProjectUseCase>(relaxed = true),
             mockk<ImportRgpProjectUseCase>(relaxed = true),
             mockk<ImportPdfProjectUseCase>(relaxed = true),
         )

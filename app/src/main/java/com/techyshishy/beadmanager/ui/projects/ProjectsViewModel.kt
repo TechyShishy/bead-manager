@@ -11,6 +11,7 @@ import com.techyshishy.beadmanager.data.model.computeProjectSatisfaction
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.CreateBlankProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportResult
 import com.techyshishy.beadmanager.domain.ImportRgpProjectUseCase
@@ -34,6 +35,7 @@ class ProjectsViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val inventoryRepository: InventoryRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val createBlankProjectUseCase: CreateBlankProjectUseCase,
     private val importRgpProjectUseCase: ImportRgpProjectUseCase,
     private val importPdfProjectUseCase: ImportPdfProjectUseCase,
 ) : ViewModel() {
@@ -138,7 +140,8 @@ class ProjectsViewModel @Inject constructor(
         val trimmed = name.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
-            projectRepository.createProject(ProjectEntry(name = trimmed))
+            val result = createBlankProjectUseCase.create(trimmed)
+            _importResult.emit(result)
         }
     }
 

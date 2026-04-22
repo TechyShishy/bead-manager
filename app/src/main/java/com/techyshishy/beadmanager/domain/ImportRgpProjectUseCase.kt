@@ -14,27 +14,6 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import javax.inject.Inject
 
-sealed class ImportResult {
-    data class Success(val projectId: String, val name: String) : ImportResult()
-    sealed class Failure : ImportResult() {
-        data object NotGzip : Failure()
-        data object InvalidJson : Failure()
-        /** The file's colorMapping contains only hex colors — no Delica codes to import. */
-        data object NoDelicaCodes : Failure()
-        /** One or more DB codes in colorMapping were not found in the local catalog. */
-        data class UnrecognizedCodes(val codes: List<String>) : Failure()
-        /** Project document was created but the grid write failed. The partial project was deleted. */
-        data object WriteError : Failure()
-        /** The selected file is not a valid PDF (used by PDF import path). */
-        data object NotPdf : Failure()
-        /**
-         * The PDF is readable but contains no recognizable bead pattern, or the color key is
-         * incomplete (used by PDF import path).
-         */
-        data object NoPatternFound : Failure()
-    }
-}
-
 class ImportRgpProjectUseCase @Inject constructor(
     private val contentResolver: ContentResolver,
     private val catalogRepository: CatalogRepository,
