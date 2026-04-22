@@ -16,6 +16,10 @@ private val writerJson = Json { explicitNulls = false }
  * re-importing a project always produces the same `id` field, which rowguide and pxlpxl
  * rely on for project identity. Kotlin [Int] arithmetic wraps on overflow, producing
  * the same truncated 32-bit result as the original algorithm.
+ *
+ * Note: this function can return negative values due to overflow. Call sites that write
+ * an `id` field to an RGP file must mask the sign bit (`and Int.MAX_VALUE`) to guarantee
+ * a non-negative result.
  */
 internal fun djb2(s: String): Int {
     var h = 5381
@@ -45,7 +49,9 @@ internal fun djb2(s: String): Int {
  */
 fun writeRgp(stream: OutputStream, project: ProjectEntry, rows: List<ProjectRgpRow>) {
     val rgpProject = RgpProject(
-        id = djb2(project.projectId),
+        // Mask the sign bit so the id is always non-negative; djb2 can produce negative
+        // values due to 32-bit overflow when the project ID is long enough to wrap.
+        id = djb2(project.projectId) and Int.MAX_VALUE,
         name = project.name,
         rows = rows.map { row ->
             RgpRow(

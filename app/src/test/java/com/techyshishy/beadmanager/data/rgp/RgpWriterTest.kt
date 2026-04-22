@@ -147,4 +147,18 @@ class RgpWriterTest {
         val id2 = writeThenParse(project, rows).id
         assertEquals(id1, id2)
     }
+
+    @Test
+    fun `written id is non-negative when djb2 of the project id is negative`() {
+        // "zzzzzzz" (7 z's) produces djb2 = -663054085 due to 32-bit overflow.
+        // Verify the precondition holds so the test fails loudly if djb2 changes.
+        assertTrue("precondition: djb2(\"zzzzzzz\") must be negative", djb2("zzzzzzz") < 0)
+
+        val parsed = writeThenParse(
+            projectEntry(projectId = "zzzzzzz", colorMapping = mapOf("A" to "DB0001")),
+            makeRows(1 to listOf(Triple(1, 1, "A"))),
+        )
+        assertTrue("id must be >= 0 but was ${parsed.id}", parsed.id >= 0)
+        assertEquals("id must equal djb2 with sign bit masked", djb2("zzzzzzz") and Int.MAX_VALUE, parsed.id)
+    }
 }
