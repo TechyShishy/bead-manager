@@ -89,6 +89,17 @@ android {
         }
     }
 
+    packaging {
+        resources {
+            // JUnit 5 and its transitive dependencies include duplicate licence files.
+            // Pick the first occurrence so the instrumented test APK merges cleanly.
+            pickFirsts += setOf(
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+            )
+        }
+    }
+
 }
 
 // KSP compiler arguments

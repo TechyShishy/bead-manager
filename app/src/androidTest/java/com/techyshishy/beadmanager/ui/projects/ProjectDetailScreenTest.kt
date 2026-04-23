@@ -1,6 +1,5 @@
 package com.techyshishy.beadmanager.ui.projects
 
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -57,6 +56,7 @@ class ProjectDetailScreenTest {
                 onReplaceBeadFromCatalog = {},
                 onPinAllToComparison = {},
                 onViewInCatalog = {},
+                onViewProjectInfo = {},
             )
         }
 
@@ -78,6 +78,7 @@ class ProjectDetailScreenTest {
                 onReplaceBeadFromCatalog = {},
                 onPinAllToComparison = {},
                 onViewInCatalog = {},
+                onViewProjectInfo = {},
             )
         }
 
@@ -115,6 +116,7 @@ class ProjectDetailScreenTest {
                 onReplaceBeadFromCatalog = {},
                 onPinAllToComparison = { codes -> capturedCodes = codes },
                 onViewInCatalog = {},
+                onViewProjectInfo = {},
             )
         }
 
