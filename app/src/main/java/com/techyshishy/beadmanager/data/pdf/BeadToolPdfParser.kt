@@ -125,12 +125,17 @@ class BeadToolPdfParser @Inject constructor() {
      * with a trailing comma or starting the next fragment directly with a step
      * notation `(N)X`. Both cases are handled.
      *
+     * The lookahead mirrors [stepRegex]: it tolerates optional whitespace inside
+     * the count group and between `)` and the color letter so that a continuation
+     * line beginning with a whitespace-variant token such as `( 1)B` is still
+     * stitched to the preceding row line.
+     *
      * Ported verbatim from the rowguide TypeScript reference implementation.
      */
     private fun joinContinuationLines(text: String): String =
         text
             .replace(Regex(""",\n+"""), ", ")
-            .replace(Regex("""\n+(?=\(\d+\)\w)"""), ", ")
+            .replace(Regex("""\n+(?=\(\s*\d+\s*\)\s*\w)"""), ", ")
 
     // ── Row block extraction ──────────────────────────────────────────────────
 
@@ -171,8 +176,14 @@ class BeadToolPdfParser @Inject constructor() {
     /** Matches `Row N` or `Row N&M` header with direction indicator. */
     private val rowLineRegex = Regex("""Row (\d+)(?:&(\d+))? \([LR]\) (.+)""")
 
-    /** Matches a single step token, e.g. `(3)AD` or `(1)A`. */
-    private val stepRegex = Regex("""\((\d+)\)([A-Z]{1,2})""")
+    /** Matches a single step token, e.g. `(3)AD` or `(1)A`.
+     *
+     * Optional whitespace is allowed inside the count group and between `)` and
+     * the color letter to handle BeadTool 4 PDF text extraction artifacts such as
+     * `( 1)B`, `(1) A`, and `( 1) A`. The `\s*` is bounded by the required
+     * `[A-Z]{1,2}` anchor so it cannot consume delimiter characters.
+     */
+    private val stepRegex = Regex("""\(\s*(\d+)\s*\)\s*([A-Z]{1,2})""")
 
     /**
      * Parses every row line in [rowBlock] into [PdfRow] objects.

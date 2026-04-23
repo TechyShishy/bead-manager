@@ -351,6 +351,82 @@ class BeadToolPdfParserTest {
         assertEquals("Row 1 must not be a single (5)A loom step", false, result.rows[0].steps == listOf(PdfStep(5, "A")))
     }
 
+    // ── whitespace-variant step tokens (#88) ─────────────────────────────────
+
+    @Test
+    fun `parse joins continuation line whose first token has internal whitespace`() {
+        // A wrapped row whose continuation starts with a whitespace-variant token.
+        // Without the \s* fix in joinContinuationLines the lookahead would not fire,
+        // the newline would not be replaced, and the continuation would be silently dropped.
+        val pages = minimalPages(
+            wordChartRows = "Row 1 (R) (1)A,\n( 1) B, (1)C",
+        )
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        assertEquals(3, result.rows[0].steps.sumOf { it.count })
+        assertEquals(PdfStep(1, "A"), result.rows[0].steps[0])
+        assertEquals(PdfStep(1, "B"), result.rows[0].steps[1])
+        assertEquals(PdfStep(1, "C"), result.rows[0].steps[2])
+    }
+
+    @Test
+    fun `parse handles space before digit in step token`() {
+        // Token: "( 1)B" — space inside opening paren before digit
+        val pages = minimalPages(wordChartRows = "Row 1 (R)  ( 1)B, (1)A, (1)B")
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        assertEquals(3, result.rows[0].steps.sumOf { it.count })
+        assertEquals(PdfStep(1, "B"), result.rows[0].steps[0])
+        assertEquals(PdfStep(1, "A"), result.rows[0].steps[1])
+        assertEquals(PdfStep(1, "B"), result.rows[0].steps[2])
+    }
+
+    @Test
+    fun `parse handles space after closing paren in step token`() {
+        // Token: "(1) A" — space between ) and color letter
+        val pages = minimalPages(wordChartRows = "Row 1 (R)  (1) A, (1)B")
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        assertEquals(2, result.rows[0].steps.sumOf { it.count })
+        assertEquals(PdfStep(1, "A"), result.rows[0].steps[0])
+        assertEquals(PdfStep(1, "B"), result.rows[0].steps[1])
+    }
+
+    @Test
+    fun `parse handles space in both positions in step token`() {
+        // Token: "( 1) A" — space before digit and after )
+        val pages = minimalPages(wordChartRows = "Row 1 (R)  ( 1) A, (1)B")
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        assertEquals(2, result.rows[0].steps.sumOf { it.count })
+        assertEquals(PdfStep(1, "A"), result.rows[0].steps[0])
+        assertEquals(PdfStep(1, "B"), result.rows[0].steps[1])
+    }
+
+    @Test
+    fun `parse handles multiple spaces before two-letter color code`() {
+        // Token: "(2)  AB" — multiple spaces between ) and two-letter code
+        val pages = minimalPages(wordChartRows = "Row 1 (R)  (2)  AB, (1)C")
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        assertEquals(3, result.rows[0].steps.sumOf { it.count })
+        assertEquals(PdfStep(2, "AB"), result.rows[0].steps[0])
+        assertEquals(PdfStep(1, "C"), result.rows[0].steps[1])
+    }
+
+    @Test
+    fun `parse handles mix of whitespace and normal tokens in same row`() {
+        // Models the actual Row 11 content from DiagonalFlagLargeLighterCoverPeyote.pdf:
+        // "( 1)B, (1)A, (1)B,  (1) A,  ( 1) B, ( 1)A, (1)B, (1)A,  (1) B,  ( 1) A, ( 1)B, (1)A"
+        // 12 tokens present, 7 of which would be silently skipped by the old regex.
+        // With the fix, all 12 tokens parse and yield 12 beads.
+        val rowContent = "( 1)B, (1)A, (1)B,  (1) A,  ( 1) B, ( 1)A, (1)B, (1)A,  (1) B,  ( 1) A, ( 1)B, (1)A"
+        val pages = minimalPages(wordChartRows = "Row 1 (R)  $rowContent")
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        assertEquals(12, result.rows[0].steps.sumOf { it.count })
+    }
+
     // ── error cases ───────────────────────────────────────────────────────────
 
     @Test
