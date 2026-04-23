@@ -152,6 +152,9 @@ fun OrderDetailScreen(
                 )
             }
         } else {
+            // TODO: Move this sort into OrderDetailViewModel (sortedBy { it.beadCode }) so the
+            // ordering contract is testable without Compose infrastructure, consistent with
+            // LowStockViewModel and ProjectDetailViewModel.
             val sortedItems = currentOrder.items.sortedBy { it.beadCode }
             LazyColumn(
                 modifier = Modifier

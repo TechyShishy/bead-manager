@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -732,5 +733,66 @@ class ProjectDetailViewModelTest {
         coVerify { projectImageRepository.deleteCover("p1") }
         coVerify { projectRepository.updateProject(project.copy(imageUrl = null)) }
         assertTrue(vm.imageUploadState.value is ImageUploadState.Idle)
+    }
+
+    @Test
+    fun `beads StateFlow emits entries sorted by beadCode ascending`() = runTest {
+        // colorMapping values are intentionally in reverse alphabetical order to prove
+        // the ViewModel applies sortedBy rather than relying on map iteration order.
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf(
+                "DB-0010" to "DB-0010",
+                "DB-0003" to "DB-0003",
+                "DB-0007" to "DB-0007",
+            ),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns emptyList()
+        }
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
+        val vm = ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+            projectImageRepository,
+            generateProjectPreviewUseCase,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.projectRows.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        var result: List<com.techyshishy.beadmanager.data.model.ProjectBeadEntry> = emptyList()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.beads.collect { result = it }
+        }
+        advanceUntilIdle()
+
+        assertEquals(listOf("DB-0003", "DB-0007", "DB-0010"), result.map { it.beadCode })
     }
 }

@@ -41,6 +41,7 @@ class LowStockViewModel @Inject constructor(
                 )
             }
             .filter { it.isLowStock }
+            .sortedBy { it.code }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val selectedCodes: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())

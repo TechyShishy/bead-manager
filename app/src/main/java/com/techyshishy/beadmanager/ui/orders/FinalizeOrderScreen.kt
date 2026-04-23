@@ -261,7 +261,9 @@ private fun FinalizedViewContent(
 
     // byVendor and totals.byVendor are both derived from the same items; their key sets
     // are guaranteed identical, making the totals.byVendor.getValue(vendorKey) calls safe.
-    val byVendor = remember(items) { items.groupBy { it.vendorKey } }
+    val byVendor = remember(items) {
+        items.groupBy { it.vendorKey }.mapValues { (_, v) -> v.sortedBy { it.beadCode } }
+    }
     val vendorKeys = remember(byVendor) { byVendor.keys.toList() }
 
     // Pre-compute the absolute LazyColumn index for each vendor's sticky header.

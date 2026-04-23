@@ -113,7 +113,7 @@ class ProjectDetailViewModel @Inject constructor(
             .filter { it.startsWith("DB") && it !in fromGridCodes }
             .distinct()
             .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
-        fromGrid + colorMappingOnly
+        (fromGrid + colorMappingOnly).sortedBy { it.beadCode }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
