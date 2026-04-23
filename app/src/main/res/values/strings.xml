@@ -141,6 +141,7 @@
     <!-- %1$d = satisfied count, %2$d = total count -->
     <string name="sat_bar_partial">%1$d of %2$d bead types stocked</string>
 
+    <string name="import_in_progress_title">Importing…</string>
     <string name="import_failed_title">Import failed</string>
     <string name="import_failed_not_gzip">File does not appear to be a valid RGP project.</string>
     <string name="import_failed_invalid_json">RGP file is corrupt or unreadable.</string>

@@ -1,18 +1,25 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import android.net.Uri
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.domain.CreateBlankProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
+import com.techyshishy.beadmanager.domain.ImportResult
 import com.techyshishy.beadmanager.domain.ImportRgpProjectUseCase
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -84,5 +91,92 @@ class ProjectsViewModelTest {
         vm.toggleSortKey(ProjectSortKey.GRID_SIZE) // GRID_SIZE DESCENDING (its default)
         assertEquals(ProjectSortKey.GRID_SIZE, vm.sortOrder.value.key)
         assertEquals(SortDirection.DESCENDING, vm.sortOrder.value.direction)
+    }
+
+    @Test
+    fun `isImporting is true while RGP import is suspended`() = runTest {
+        val deferred = CompletableDeferred<ImportResult>()
+        val rgpUseCase = mockk<ImportRgpProjectUseCase> {
+            coEvery { import(any()) } coAnswers { deferred.await() }
+        }
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectsStream() } returns flowOf(emptyList())
+        }
+        val vm = ProjectsViewModel(
+            projectRepository,
+            mockk<InventoryRepository>(relaxed = true) { every { inventoryStream() } returns flowOf(emptyMap()) },
+            mockk<PreferencesRepository>(relaxed = true) { every { globalLowStockThreshold } returns flowOf(5.0) },
+            mockk<CreateBlankProjectUseCase>(relaxed = true),
+            rgpUseCase,
+            mockk<ImportPdfProjectUseCase>(relaxed = true),
+        )
+
+        vm.importFromRgp(mockk<Uri>())
+        assertTrue("isImporting should be true while use case is suspended", vm.isImporting.value)
+
+        deferred.complete(ImportResult.Success("pid", "name"))
+        advanceUntilIdle()
+        assertFalse("isImporting should be false after import completes", vm.isImporting.value)
+    }
+
+    @Test
+    fun `isImporting is false after RGP import success`() = runTest {
+        val rgpUseCase = mockk<ImportRgpProjectUseCase> {
+            coEvery { import(any()) } returns ImportResult.Success("pid", "name")
+        }
+        val vm = ProjectsViewModel(
+            mockk<ProjectRepository>(relaxed = true) { every { projectsStream() } returns flowOf(emptyList()) },
+            mockk<InventoryRepository>(relaxed = true) { every { inventoryStream() } returns flowOf(emptyMap()) },
+            mockk<PreferencesRepository>(relaxed = true) { every { globalLowStockThreshold } returns flowOf(5.0) },
+            mockk<CreateBlankProjectUseCase>(relaxed = true),
+            rgpUseCase,
+            mockk<ImportPdfProjectUseCase>(relaxed = true),
+        )
+
+        vm.importFromRgp(mockk<Uri>())
+        advanceUntilIdle()
+        assertFalse("isImporting should be false after successful import", vm.isImporting.value)
+    }
+
+    @Test
+    fun `isImporting is false after RGP import failure`() = runTest {
+        val rgpUseCase = mockk<ImportRgpProjectUseCase> {
+            coEvery { import(any()) } returns ImportResult.Failure.NotGzip
+        }
+        val vm = ProjectsViewModel(
+            mockk<ProjectRepository>(relaxed = true) { every { projectsStream() } returns flowOf(emptyList()) },
+            mockk<InventoryRepository>(relaxed = true) { every { inventoryStream() } returns flowOf(emptyMap()) },
+            mockk<PreferencesRepository>(relaxed = true) { every { globalLowStockThreshold } returns flowOf(5.0) },
+            mockk<CreateBlankProjectUseCase>(relaxed = true),
+            rgpUseCase,
+            mockk<ImportPdfProjectUseCase>(relaxed = true),
+        )
+
+        vm.importFromRgp(mockk<Uri>())
+        advanceUntilIdle()
+        assertFalse("isImporting should be false after failed import", vm.isImporting.value)
+    }
+
+    @Test
+    fun `isImporting is true while PDF import is suspended`() = runTest {
+        val deferred = CompletableDeferred<ImportResult>()
+        val pdfUseCase = mockk<ImportPdfProjectUseCase> {
+            coEvery { import(any()) } coAnswers { deferred.await() }
+        }
+        val vm = ProjectsViewModel(
+            mockk<ProjectRepository>(relaxed = true) { every { projectsStream() } returns flowOf(emptyList()) },
+            mockk<InventoryRepository>(relaxed = true) { every { inventoryStream() } returns flowOf(emptyMap()) },
+            mockk<PreferencesRepository>(relaxed = true) { every { globalLowStockThreshold } returns flowOf(5.0) },
+            mockk<CreateBlankProjectUseCase>(relaxed = true),
+            mockk<ImportRgpProjectUseCase>(relaxed = true),
+            pdfUseCase,
+        )
+
+        vm.importFromPdf(mockk<Uri>())
+        assertTrue("isImporting should be true while PDF use case is suspended", vm.isImporting.value)
+
+        deferred.complete(ImportResult.Success("pid", "name"))
+        advanceUntilIdle()
+        assertFalse("isImporting should be false after PDF import completes", vm.isImporting.value)
     }
 }

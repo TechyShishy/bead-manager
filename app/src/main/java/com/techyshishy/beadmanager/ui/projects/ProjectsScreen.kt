@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +41,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -58,6 +61,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
@@ -65,6 +69,7 @@ import com.techyshishy.beadmanager.data.model.ProjectSatisfaction
 import com.techyshishy.beadmanager.domain.ImportResult
 import coil3.compose.AsyncImage
 import java.text.DateFormat
+import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +82,7 @@ fun ProjectsScreen(
     val projects by viewModel.projects.collectAsState()
     val beadSatisfaction by viewModel.beadSatisfaction.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
+    val isImporting by viewModel.isImporting.collectAsState()
 
     val displayedProjects = remember(projects, beadCodeFilter) {
         if (beadCodeFilter == null) projects
@@ -120,7 +126,10 @@ fun ProjectsScreen(
                 },
                 actions = {
                     if (beadCodeFilter == null) {
-                        IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
+                        IconButton(
+                            onClick = { filePicker.launch(arrayOf("*/*")) },
+                            enabled = !isImporting,
+                        ) {
                             Icon(
                                 Icons.Outlined.FileOpen,
                                 contentDescription = stringResource(R.string.import_from_file),
@@ -248,6 +257,37 @@ fun ProjectsScreen(
             error = error,
             onDismiss = { importError = null },
         )
+    }
+
+    if (isImporting) {
+        val importingLabel = stringResource(R.string.import_in_progress_title)
+        BasicAlertDialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false,
+            ),
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 6.dp,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(importingLabel)
+                    CircularProgressIndicator(
+                        modifier = Modifier.semantics {
+                            contentDescription = importingLabel
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

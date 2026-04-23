@@ -84,6 +84,9 @@ class ProjectsViewModel @Inject constructor(
     private val _importResult = MutableSharedFlow<ImportResult>()
     val importResult: SharedFlow<ImportResult> = _importResult.asSharedFlow()
 
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
+
     init {
         // Whenever the project list changes, reload beads for all projects.
         // Grid rows come from the repository's in-memory cache (ConcurrentHashMap) after the
@@ -156,15 +159,27 @@ class ProjectsViewModel @Inject constructor(
 
     fun importFromRgp(uri: Uri) {
         viewModelScope.launch {
-            val result = importRgpProjectUseCase.import(uri)
-            _importResult.emit(result)
+            _isImporting.value = true
+            try {
+                val result = importRgpProjectUseCase.import(uri)
+                _isImporting.value = false
+                _importResult.emit(result)
+            } finally {
+                _isImporting.value = false
+            }
         }
     }
 
     fun importFromPdf(uri: Uri) {
         viewModelScope.launch {
-            val result = importPdfProjectUseCase.import(uri)
-            _importResult.emit(result)
+            _isImporting.value = true
+            try {
+                val result = importPdfProjectUseCase.import(uri)
+                _isImporting.value = false
+                _importResult.emit(result)
+            } finally {
+                _isImporting.value = false
+            }
         }
     }
 
