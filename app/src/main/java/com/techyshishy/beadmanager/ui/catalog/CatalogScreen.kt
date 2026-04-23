@@ -1,8 +1,10 @@
 package com.techyshishy.beadmanager.ui.catalog
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,14 +54,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -134,6 +145,7 @@ fun CatalogScreen(
             onUnpin = { code -> viewModel.unpinBead(code) },
             onClearAll = { viewModel.clearAllPins() },
             onToggleStockOnly = { viewModel.toggleStockOnly() },
+            onReorder = { newOrder -> viewModel.reorderPins(newOrder) },
         )
         TextField(
             value = searchFieldValue,
@@ -280,9 +292,11 @@ private fun BeadGridItem(
  *
  * Each pinned bead is shown as a large circular image; tapping it navigates to the bead's
  * detail pane. A small close button overlaid in the top-right corner unpins that bead.
- * "In stock only" filters the catalog grid to beads with non-zero inventory; "Clear all"
- * dismisses all pins and hides the strip.
+ * Long-pressing a swatch and dragging horizontally reorders it; releasing commits the new
+ * order via [onReorder]. "In stock only" filters the catalog grid to beads with non-zero
+ * inventory; "Clear all" dismisses all pins and hides the strip.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PinComparisonStrip(
     pinnedBeads: List<BeadWithInventory>,
@@ -291,9 +305,30 @@ private fun PinComparisonStrip(
     onUnpin: (String) -> Unit,
     onClearAll: () -> Unit,
     onToggleStockOnly: () -> Unit,
+    onReorder: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (pinnedBeads.isEmpty()) return
+
+    // Local mutable ordering drives rendering during and between drag gestures.
+    // Synced from parent whenever no drag is in flight.
+    val localOrder = remember { mutableStateListOf<String>() }
+    var draggedIndex by remember { mutableIntStateOf(-1) }
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    var itemWidthPx by remember { mutableIntStateOf(80) }  // fallback; measured on first layout
+    var dragStartOrder by remember { mutableStateOf(emptyList<String>()) }
+
+    // Sync localOrder from parent whenever a drag is not active. This lets Firestore snapshots
+    // (from other devices) refresh the order without disrupting an in-flight gesture.
+    val parentCodes = pinnedBeads.map { it.code }
+    LaunchedEffect(parentCodes) {
+        if (draggedIndex == -1) {
+            localOrder.clear()
+            localOrder.addAll(parentCodes)
+        }
+    }
+
+    val lookup = remember(pinnedBeads) { pinnedBeads.associateBy { it.code } }
 
     Column(modifier = modifier) {
         LazyRow(
@@ -301,13 +336,69 @@ private fun PinComparisonStrip(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(pinnedBeads, key = { it.code }) { bead ->
+            itemsIndexed(localOrder, key = { _, code -> code }) { index, code ->
+                val bead = lookup[code] ?: return@itemsIndexed
                 val hexColor = remember(bead.catalogEntry.bead.hex) {
                     runCatching {
                         Color(bead.catalogEntry.bead.hex.toColorInt())
                     }.getOrDefault(Color.Gray)
                 }
-                Box(modifier = Modifier.size(80.dp)) {
+                val isDragged = index == draggedIndex
+                // rememberUpdatedState provides the current index to the stable pointerInput
+                // coroutine (keyed on Unit) so a second drag on a moved swatch reads the
+                // correct position rather than the index captured at first composition.
+                val currentIndexState = rememberUpdatedState(index)
+
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .zIndex(if (isDragged) 1f else 0f)
+                        .onSizeChanged { itemWidthPx = it.width }
+                        .graphicsLayer {
+                            scaleX = if (isDragged) 1.15f else 1f
+                            scaleY = if (isDragged) 1.15f else 1f
+                            translationX = if (isDragged) dragOffsetX else 0f
+                            shadowElevation = if (isDragged) 8f else 0f
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    draggedIndex = currentIndexState.value
+                                    dragStartOrder = localOrder.toList()
+                                    dragOffsetX = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragOffsetX += dragAmount.x
+                                    // Swap with neighbour once dragged past half an item width.
+                                    val halfItem = itemWidthPx / 2f
+                                    val active = draggedIndex
+                                    if (active < 0) return@detectDragGesturesAfterLongPress
+                                    if (dragOffsetX > halfItem && active < localOrder.lastIndex) {
+                                        localOrder.add(active + 1, localOrder.removeAt(active))
+                                        draggedIndex = active + 1
+                                        dragOffsetX -= itemWidthPx.toFloat()
+                                    } else if (dragOffsetX < -halfItem && active > 0) {
+                                        localOrder.add(active - 1, localOrder.removeAt(active))
+                                        draggedIndex = active - 1
+                                        dragOffsetX += itemWidthPx.toFloat()
+                                    }
+                                },
+                                onDragEnd = {
+                                    draggedIndex = -1
+                                    dragOffsetX = 0f
+                                    onReorder(localOrder.toList())
+                                },
+                                onDragCancel = {
+                                    draggedIndex = -1
+                                    dragOffsetX = 0f
+                                    // Restore the order as it was at drag-start, not persisting.
+                                    localOrder.clear()
+                                    localOrder.addAll(dragStartOrder)
+                                },
+                            )
+                        },
+                ) {
                     AsyncImage(
                         model = bead.catalogEntry.bead.imageUrl,
                         contentDescription = bead.code,
@@ -315,7 +406,7 @@ private fun PinComparisonStrip(
                             .size(72.dp)
                             .clip(CircleShape)
                             .align(Alignment.Center)
-                            .clickable { onBeadSelected(bead.code) },
+                            .clickable(enabled = !isDragged) { onBeadSelected(bead.code) },
                         placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
                         error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
                     )

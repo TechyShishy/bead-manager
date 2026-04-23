@@ -295,6 +295,11 @@ class CatalogViewModel @Inject constructor(
         viewModelScope.launch { pinsSource.setPinnedCodes(codes) }
     }
 
+    fun reorderPins(newOrder: List<String>) {
+        pinnedCodes.value = newOrder
+        viewModelScope.launch { pinsSource.setPinnedCodes(newOrder) }
+    }
+
     fun toggleStockOnly() {
         stockOnlyFilter.value = !stockOnlyFilter.value
     }

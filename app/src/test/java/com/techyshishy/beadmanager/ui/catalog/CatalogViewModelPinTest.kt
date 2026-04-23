@@ -5,6 +5,7 @@ import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,7 +23,11 @@ class CatalogViewModelPinTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private fun makeViewModel(): CatalogViewModel {
+    private fun makeViewModel(
+        pinsSource: FirestoreCatalogPinsSource = mockk(relaxed = true) {
+            every { pinnedCodesStream() } returns flowOf(emptyList())
+        },
+    ): CatalogViewModel {
         val catalogRepository = mockk<CatalogRepository> {
             every { getAllBeadsWithVendors() } returns flowOf(emptyList())
             every { allBeadsLookup() } returns flowOf(emptyMap())
@@ -33,9 +38,6 @@ class CatalogViewModelPinTest {
         }
         val preferencesRepository = mockk<PreferencesRepository> {
             every { globalLowStockThreshold } returns flowOf(5.0)
-        }
-        val pinsSource = mockk<FirestoreCatalogPinsSource>(relaxed = true) {
-            every { pinnedCodesStream() } returns flowOf(emptyList())
         }
         return CatalogViewModel(catalogRepository, inventoryRepository, preferencesRepository, pinsSource)
     }
@@ -122,5 +124,19 @@ class CatalogViewModelPinTest {
         vm.pinAll(emptyList())
 
         assertTrue(vm.pinnedCodes.value.isEmpty())
+    }
+
+    @Test
+    fun `reorderPins updates pinnedCodes to new order`() = runTest {
+        val pinsSource = mockk<FirestoreCatalogPinsSource>(relaxed = true) {
+            every { pinnedCodesStream() } returns flowOf(emptyList())
+        }
+        val vm = makeViewModel(pinsSource)
+        vm.pinAll(listOf("DB0001", "DB0002", "DB0003"))
+
+        vm.reorderPins(listOf("DB0003", "DB0001", "DB0002"))
+
+        assertEquals(listOf("DB0003", "DB0001", "DB0002"), vm.pinnedCodes.value)
+        coVerify { pinsSource.setPinnedCodes(listOf("DB0003", "DB0001", "DB0002")) }
     }
 }
