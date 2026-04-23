@@ -47,6 +47,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     val currentThreshold by viewModel.globalLowStockThreshold.collectAsState()
     val vendorPriority by viewModel.vendorPriorityOrder.collectAsState()
     val buyUpEnabled by viewModel.buyUpEnabled.collectAsState()
+    val trayCardMaxGrams by viewModel.trayCardMaxGrams.collectAsState()
 
     Scaffold(
         topBar = {
@@ -93,6 +94,11 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             LowStockThresholdRow(
                 currentGrams = currentThreshold,
                 onCommit = { viewModel.setGlobalLowStockThreshold(it) },
+            )
+
+            TrayCardMaxGramsRow(
+                currentGrams = trayCardMaxGrams,
+                onCommit = { viewModel.setTrayCardMaxGrams(it) },
             )
         }
     }
@@ -267,6 +273,71 @@ private fun LowStockThresholdRow(
                 },
             supportingText = if (isError) {
                 { Text(stringResource(R.string.settings_threshold_error)) }
+            } else null,
+        )
+    }
+}
+
+@Composable
+private fun TrayCardMaxGramsRow(
+    currentGrams: Double,
+    onCommit: (Double) -> Unit,
+) {
+    var text by remember(currentGrams) {
+        mutableStateOf(BigDecimal.valueOf(currentGrams).stripTrailingZeros().toPlainString())
+    }
+    var isError by remember { mutableStateOf(false) }
+    var justCommittedViaIme by remember { mutableStateOf(false) }
+
+    fun tryCommit() {
+        val parsed = text.toDoubleOrNull()
+        if (parsed != null && parsed in 1.0..50.0) {
+            isError = false
+            onCommit(parsed)
+        } else {
+            isError = true
+        }
+    }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(
+            text = stringResource(R.string.tray_card_max_grams),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = stringResource(R.string.tray_card_max_grams_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                isError = false
+            },
+            label = { Text(stringResource(R.string.settings_tray_card_label)) },
+            isError = isError,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = {
+                justCommittedViaIme = true
+                tryCommit()
+            }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged {
+                    if (!it.isFocused) {
+                        if (!justCommittedViaIme) tryCommit()
+                        justCommittedViaIme = false
+                    }
+                },
+            supportingText = if (isError) {
+                { Text(stringResource(R.string.settings_tray_card_error)) }
             } else null,
         )
     }

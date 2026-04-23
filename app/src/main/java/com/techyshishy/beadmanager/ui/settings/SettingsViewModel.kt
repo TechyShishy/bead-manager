@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_BUY_UP_ENABLED
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD
+import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_TRAY_CARD_MAX_GRAMS
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository.Companion.DEFAULT_VENDOR_PRIORITY_ORDER
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +38,10 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.buyUpEnabled
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_BUY_UP_ENABLED)
 
+    val trayCardMaxGrams: StateFlow<Double> =
+        preferencesRepository.trayCardMaxGrams
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_TRAY_CARD_MAX_GRAMS)
+
     fun setGlobalLowStockThreshold(grams: Double) {
         viewModelScope.launch {
             preferencesRepository.setGlobalLowStockThreshold(grams)
@@ -52,6 +57,12 @@ class SettingsViewModel @Inject constructor(
     fun setBuyUpEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setBuyUpEnabled(enabled)
+        }
+    }
+
+    fun setTrayCardMaxGrams(grams: Double) {
+        viewModelScope.launch {
+            preferencesRepository.setTrayCardMaxGrams(grams)
         }
     }
 }

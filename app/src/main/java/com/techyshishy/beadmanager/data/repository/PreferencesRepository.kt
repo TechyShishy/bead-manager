@@ -45,6 +45,8 @@ class PreferencesRepository @Inject constructor(
             stringPreferencesKey("vendor_priority_order")
         private val KEY_BUY_UP_ENABLED =
             booleanPreferencesKey("buy_up_enabled")
+        private val KEY_TRAY_CARD_MAX_GRAMS =
+            doublePreferencesKey("tray_card_max_grams")
         private val KEY_MIGRATION_FLAT_PROJECT_TO_GRID_V1 =
             booleanPreferencesKey("migration_flat_project_to_grid_v1_done")
         private val KEY_MIGRATION_INLINE_ROWS_V1 =
@@ -52,6 +54,7 @@ class PreferencesRepository @Inject constructor(
         const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
         val DEFAULT_VENDOR_PRIORITY_ORDER: List<String> = listOf("fmg", "ac")
         const val DEFAULT_BUY_UP_ENABLED = true
+        const val DEFAULT_TRAY_CARD_MAX_GRAMS = 10.0
     }
 
     /**
@@ -89,6 +92,10 @@ class PreferencesRepository @Inject constructor(
                                     vendorPriorityOrder = prefs[KEY_VENDOR_PRIORITY_ORDER]
                                         ?: DEFAULT_VENDOR_PRIORITY_ORDER.joinToString(","),
                                     buyUpEnabled = prefs[KEY_BUY_UP_ENABLED] ?: DEFAULT_BUY_UP_ENABLED,
+                                    trayCardMaxGrams = (
+                                        prefs[KEY_TRAY_CARD_MAX_GRAMS]
+                                            ?: DEFAULT_TRAY_CARD_MAX_GRAMS
+                                    ).coerceIn(1.0, 50.0),
                                 ),
                             )
                         } catch (e: Exception) {
@@ -183,6 +190,24 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_BUY_UP_ENABLED] = enabled }
         auth.currentUser?.uid?.let { uid ->
             firestoreSource.setPreferences(uid, mapOf("buyUpEnabled" to enabled))
+        }
+    }
+
+    val trayCardMaxGrams: Flow<Double> = authUidFlow.flatMapLatest { uid ->
+        if (uid == null) {
+            dataStore.data.map { prefs -> prefs[KEY_TRAY_CARD_MAX_GRAMS] ?: DEFAULT_TRAY_CARD_MAX_GRAMS }
+        } else {
+            firestoreSource.preferencesStream(uid).map { entry ->
+                entry?.trayCardMaxGrams ?: DEFAULT_TRAY_CARD_MAX_GRAMS
+            }
+        }
+    }
+
+    suspend fun setTrayCardMaxGrams(grams: Double) {
+        val coerced = grams.coerceIn(1.0, 50.0)
+        dataStore.edit { prefs -> prefs[KEY_TRAY_CARD_MAX_GRAMS] = coerced }
+        auth.currentUser?.uid?.let { uid ->
+            firestoreSource.setPreferences(uid, mapOf("trayCardMaxGrams" to coerced))
         }
     }
 

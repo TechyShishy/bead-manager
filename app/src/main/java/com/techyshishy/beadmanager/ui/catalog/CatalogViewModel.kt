@@ -35,7 +35,7 @@ import javax.inject.Inject
 class CatalogViewModel @Inject constructor(
     catalogRepository: CatalogRepository,
     private val inventoryRepository: InventoryRepository,
-    preferencesRepository: PreferencesRepository,
+    private val preferencesRepository: PreferencesRepository,
     private val pinsSource: FirestoreCatalogPinsSource,
 ) : ViewModel() {
 
@@ -339,15 +339,17 @@ class CatalogViewModel @Inject constructor(
      *
      * Bead codes are sorted by their numeric DB suffix (ascending), matching the
      * DB-number sort used elsewhere in the catalog. Only beads with a quantity
-     * greater than 0 g and less than 10 g are included. Emits [TrayCardEvent.EmptyInventory] if
-     * no codes match that range, and [TrayCardEvent.Error] on I/O failure.
+     * greater than 0 g and less than the configured tray card maximum are included.
+     * Emits [TrayCardEvent.EmptyInventory] if no codes match that range, and
+     * [TrayCardEvent.Error] on I/O failure.
      */
     fun exportTrayCard(context: Context) {
         viewModelScope.launch {
+            val maxGrams = preferencesRepository.trayCardMaxGrams.first()
             val codes = inventoryRepository.inventoryStream()
                 .first()
                 .entries
-                .filter { (code, entry) -> code.isNotEmpty() && entry.quantityGrams > 0.0 && entry.quantityGrams < TRAY_SLOT_MAX_GRAMS }
+                .filter { (code, entry) -> code.isNotEmpty() && entry.quantityGrams > 0.0 && entry.quantityGrams < maxGrams }
                 .map { (code, _) -> code }
                 .sortedBy { code -> code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }
             if (codes.isEmpty()) {

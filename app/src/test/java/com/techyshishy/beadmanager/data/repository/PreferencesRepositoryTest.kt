@@ -264,12 +264,14 @@ class PreferencesRepositoryTest {
         val thresholdKey = doublePreferencesKey("global_low_stock_threshold_grams")
         val vendorKey = stringPreferencesKey("vendor_priority_order")
         val buyUpKey = booleanPreferencesKey("buy_up_enabled")
+        val trayCardKey = doublePreferencesKey("tray_card_max_grams")
 
         // DataStore holds custom values that should be forwarded to Firestore
         val prefs = mockk<Preferences>(relaxed = true) {
             every { get(thresholdKey) } returns 9.0
             every { get(vendorKey) } returns "ac,fmg"
             every { get(buyUpKey) } returns false
+            every { get(trayCardKey) } returns 25.0
         }
         every { mockDataStore.data } returns flowOf(prefs)
 
@@ -284,6 +286,7 @@ class PreferencesRepositoryTest {
                     globalLowStockThresholdGrams = 9.0,
                     vendorPriorityOrder = "ac,fmg",
                     buyUpEnabled = false,
+                    trayCardMaxGrams = 25.0,
                 ),
             )
         }
@@ -296,5 +299,57 @@ class PreferencesRepositoryTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { firestoreSource.bootstrapIfAbsent(any(), any()) }
+    }
+
+    // ---- trayCardMaxGrams ---------------------------------------------------
+
+    @Test
+    fun `trayCardMaxGrams reads DataStore value when signed out`() = runTest {
+        val key = doublePreferencesKey("tray_card_max_grams")
+        every { mockDataStore.data } returns flowOf(mutablePreferencesOf(key to 20.0))
+        val repo = makeRepo()
+        fireSignOut()
+
+        val values = repo.trayCardMaxGrams.take(1).toList()
+
+        assertEquals(20.0, values.single(), 0.001)
+    }
+
+    @Test
+    fun `trayCardMaxGrams emits Firestore value when signed in`() = runTest {
+        every { firestoreSource.preferencesStream("uid1") } returns
+            flowOf(PreferencesEntry(trayCardMaxGrams = 15.0))
+        val repo = makeRepo()
+        fireSignIn("uid1")
+
+        val values = repo.trayCardMaxGrams.take(1).toList()
+
+        assertEquals(15.0, values.single(), 0.001)
+    }
+
+    @Test
+    fun `setTrayCardMaxGrams delegates to firestoreSource when signed in`() = runTest {
+        val repo = makeRepo()
+        fireSignIn("uid1")
+
+        repo.setTrayCardMaxGrams(25.0)
+        advanceUntilIdle()
+
+        coVerify {
+            firestoreSource.setPreferences("uid1", match { it["trayCardMaxGrams"] == 25.0 })
+        }
+        coVerify { mockDataStore.updateData(any()) }
+    }
+
+    @Test
+    fun `setTrayCardMaxGrams writes DataStore and skips Firestore when signed out`() = runTest {
+        val repo = makeRepo()
+        fireSignOut()
+
+        repo.setTrayCardMaxGrams(20.0)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { firestoreSource.setPreferences(any(), any()) }
+        coVerify { mockDataStore.updateData(any()) }
     }
 }

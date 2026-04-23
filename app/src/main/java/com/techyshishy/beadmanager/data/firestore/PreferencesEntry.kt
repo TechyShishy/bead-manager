@@ -21,5 +21,6 @@ data class PreferencesEntry(
     /** Comma-delimited vendor key ordering, e.g. "fmg,ac". First entry is preferred. */
     val vendorPriorityOrder: String = "fmg,ac",
     val buyUpEnabled: Boolean = true,
+    val trayCardMaxGrams: Double = 10.0,
     @ServerTimestamp val lastUpdated: Timestamp? = null,
 )
