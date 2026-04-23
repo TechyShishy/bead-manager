@@ -16,6 +16,9 @@ internal const val TRAY_CELL_HEIGHT_PT = 27
 internal const val TRAY_PAGE_WIDTH_PT = TRAY_COLS * TRAY_CELL_WIDTH_PT
 internal const val TRAY_PAGE_HEIGHT_PT = TRAY_ROWS_PER_PAGE * TRAY_CELL_HEIGHT_PT
 
+// Maximum quantity a single test-tube tray slot can hold.
+internal const val TRAY_SLOT_MAX_GRAMS = 10.0
+
 /**
  * Number of pages required to lay out [totalCodes] bead codes in a 10×5 tray card grid.
  *

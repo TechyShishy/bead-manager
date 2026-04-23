@@ -338,15 +338,17 @@ class CatalogViewModel @Inject constructor(
      * [trayCardEvent] so the screen can present the system share sheet or show an error.
      *
      * Bead codes are sorted by their numeric DB suffix (ascending), matching the
-     * DB-number sort used elsewhere in the catalog. Emits [TrayCardEvent.EmptyInventory] if
-     * the inventory contains no codes, and [TrayCardEvent.Error] on I/O failure.
+     * DB-number sort used elsewhere in the catalog. Only beads with a quantity
+     * greater than 0 g and less than 10 g are included. Emits [TrayCardEvent.EmptyInventory] if
+     * no codes match that range, and [TrayCardEvent.Error] on I/O failure.
      */
     fun exportTrayCard(context: Context) {
         viewModelScope.launch {
             val codes = inventoryRepository.inventoryStream()
                 .first()
-                .keys
-                .filter { it.isNotEmpty() }
+                .entries
+                .filter { (code, entry) -> code.isNotEmpty() && entry.quantityGrams > 0.0 && entry.quantityGrams < TRAY_SLOT_MAX_GRAMS }
+                .map { (code, _) -> code }
                 .sortedBy { code -> code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }
             if (codes.isEmpty()) {
                 _trayCardEvent.emit(TrayCardEvent.EmptyInventory)

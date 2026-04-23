@@ -265,6 +265,6 @@
     <!-- Tray card export -->
     <string name="export_tray_card">Export Tray Card</string>
     <string name="more_options">More options</string>
-    <string name="tray_card_empty_inventory">No inventory to export</string>
+    <string name="tray_card_empty_inventory">No beads between 0 and 10 g to export</string>
     <string name="tray_card_export_error">Export failed</string>
 </resources>
