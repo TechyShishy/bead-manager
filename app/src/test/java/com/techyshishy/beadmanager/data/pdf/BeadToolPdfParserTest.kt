@@ -351,6 +351,131 @@ class BeadToolPdfParserTest {
         assertEquals("Row 1 must not be a single (5)A loom step", false, result.rows[0].steps == listOf(PdfStep(5, "A")))
     }
 
+    // ── PatternsByAliia legend-block stripping (#87) ─────────────────────────
+
+    /**
+     * Constructs a two-page input that mirrors the DiagonalFlagLarge structure:
+     * a row with a trailing comma ends page N, the full legend block follows, then
+     * the continuation tokens and the next row header begin on page N+1.
+     *
+     * [beforeBeads] / [afterBeads] are step-token strings (without the row-header
+     * prefix).  The legend block always has 3 color entries.
+     */
+    private fun legendBoundaryPages(
+        rowId: Int = 40,
+        direction: String = "L",
+        beforeBeads: String,
+        afterBeads: String,
+        legendCounter: String = "3 of 4",
+        nextRowId: Int = 41,
+        nextRowDirection: String = "R",
+        nextRowBeads: String = "(1)A",
+    ): List<String> = listOf(
+        "lighter_cover_test\nCreated by PatternsByAliia\nPeyote stitch\nColors: 3\nBeads: 100\n",
+        // Row 1 must be present or extractRowBlock returns null.
+        "Row 1 (L) (1)A\n" +
+            "Row $rowId ($direction)  $beforeBeads,\n" +
+            "${legendCounter}Bead Legend\n" +
+            "Chart #:A\nDB-704\nCount:694\n" +
+            "Chart #:B\nDB-351\nCount:969\n" +
+            "Chart #:C\nDB-183\nCount:365\n" +
+            "Word Chart\n\n",
+        "$afterBeads\n" +
+            "Row $nextRowId ($nextRowDirection)  $nextRowBeads\n",
+    )
+
+    @Test
+    fun `parse strips legend block and joins row continuation across page boundary`() {
+        // Mirrors DiagonalFlagLarge row 40: 12 beads before the boundary (trailing comma),
+        // 14 beads as continuation on the next page → should total 26 beads.
+        val before = List(12) { "(1)A" }.joinToString(", ")
+        val after = List(14) { "(1)B" }.joinToString(", ")
+        val result = parser.parse(legendBoundaryPages(beforeBeads = before, afterBeads = after))
+
+        assertEquals(3, result.rows.size)
+        val row40 = result.rows.first { it.id == 40 }
+        assertEquals(
+            "row 40 should have 12+14=26 beads; legend block must be stripped before continuation join",
+            26,
+            row40.steps.sumOf { it.count },
+        )
+    }
+
+    @Test
+    fun `parse strips legend block with different page counter (variable N of M)`() {
+        // Counter "2 of 5" — confirm the regex isn't hardcoded to "3 of 4".
+        val before = List(8) { "(1)A" }.joinToString(", ")
+        val after = List(8) { "(1)B" }.joinToString(", ")
+        val result = parser.parse(
+            legendBoundaryPages(beforeBeads = before, afterBeads = after, legendCounter = "2 of 5"),
+        )
+
+        assertEquals(3, result.rows.size)
+        assertEquals(16, result.rows.first { it.id == 40 }.steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parse preserves surrounding rows at correct counts when legend block is stripped`() {
+        // Verifies that rows on either side of the boundary are not corrupted.
+        val pages = listOf(
+            "lighter_cover_test\nCreated by PatternsByAliia\nPeyote stitch\n",
+            "Row 1 (L)  (2)A\n" +
+                "Row 39 (R)  (5)A\n" +
+                "Row 40 (L)  (1)A, (1)B,\n" +
+                "3 of 4Bead Legend\n" +
+                "Chart #:A\nDB-704\nCount:694\n" +
+                "Chart #:B\nDB-351\nCount:969\n" +
+                "Chart #:C\nDB-183\nCount:365\n" +
+                "Word Chart\n\n",
+            "(1)C, (1)D\n" +
+                "Row 41 (R)  (3)B\n",
+        )
+        val result = parser.parse(pages)
+        assertEquals(4, result.rows.size)
+        assertEquals(2, result.rows.first { it.id == 1 }.steps.sumOf { it.count })
+        assertEquals(5, result.rows.first { it.id == 39 }.steps.sumOf { it.count })
+        assertEquals(4, result.rows.first { it.id == 40 }.steps.sumOf { it.count })
+        assertEquals(3, result.rows.first { it.id == 41 }.steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parse handles legend block where row ends without trailing comma (no-comma path)`() {
+        // Exercises the joinContinuationLines lookahead branch (rather than the
+        // trailing-comma branch).  The page-N segment ends without a comma; the
+        // continuation on page N+1 begins directly with a step token.  After
+        // stripLegendBlocks removes the legend block the lookahead `\n+(?=\(\s*\d+\s*\)\s*\w)`
+        // must fire to stitch the continuation to the row.
+        val pages = listOf(
+            "lighter_cover_test\nCreated by PatternsByAliia\nPeyote stitch\n",
+            "Row 1 (L)  (1)A\n" +
+                "Row 41 (R)  (1)A, (1)B, (1)A, (1)B\n" +
+                "3 of 4Bead Legend\n" +
+                "Chart #:A\nDB-351\nCount:929\n" +
+                "Chart #:B\nDB-704\nCount:624\n" +
+                "Chart #:C\nDB-696\nCount:475\n" +
+                "Word Chart\n\n",
+            "(1)A, (1)B, (1)A, (1)B\n" +
+                "Row 42 (L)  (2)C\n",
+        )
+        val result = parser.parse(pages)
+        assertEquals(3, result.rows.size)
+        // 4 + 4 = 8 beads total for row 41
+        assertEquals(8, result.rows.first { it.id == 41 }.steps.sumOf { it.count })
+        assertEquals(2, result.rows.first { it.id == 42 }.steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parse is unaffected when no legend block is present`() {
+        // Regression: ordinary single-page pattern must parse identically.
+        val pages = minimalPages(
+            wordChartRows = "Row 1 (L) (5)A\nRow 2 (R) (5)B",
+        )
+        val result = parser.parse(pages)
+        assertEquals(2, result.rows.size)
+        assertEquals(5, result.rows[0].steps.sumOf { it.count })
+        assertEquals(5, result.rows[1].steps.sumOf { it.count })
+    }
+
     // ── whitespace-variant step tokens (#88) ─────────────────────────────────
 
     @Test

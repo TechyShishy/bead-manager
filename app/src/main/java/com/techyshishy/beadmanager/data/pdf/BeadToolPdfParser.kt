@@ -43,19 +43,23 @@ class BeadToolPdfParser @Inject constructor() {
         val isolated = isolatePeyoteSection(stripped)
         val sectionText = isolated ?: stripped
         val cleaned = cleanText(sectionText)
-        val continued = joinContinuationLines(cleaned)
+        val legendStripped = stripLegendBlocks(cleaned)
+        val continued = joinContinuationLines(legendStripped)
         Log.d(TAG, "BeadTool pipeline: allText=${allText.length}ch stripped=${stripped.length}ch " +
             "section=${sectionText.length}ch (isolated=${isolated != null}) " +
-            "cleaned=${cleaned.length}ch continued=${continued.length}ch")
+            "cleaned=${cleaned.length}ch legendStripped=${legendStripped.length}ch " +
+            "continued=${continued.length}ch")
         Log.d(TAG, "BeadTool 'Row 1' presence: allText=${allText.contains("Row 1")} " +
             "stripped=${stripped.contains("Row 1")} " +
             "section=${sectionText.contains("Row 1")} " +
             "cleaned=${cleaned.contains("Row 1")} " +
+            "legendStripped=${legendStripped.contains("Row 1")} " +
             "continued=${continued.contains("Row 1")}")
         diagnostics?.beadToolStrippedText = stripped
         diagnostics?.beadToolSectionText = sectionText
         diagnostics?.beadToolSectionIsolated = isolated != null
         diagnostics?.beadToolCleanedText = cleaned
+        diagnostics?.beadToolLegendStrippedText = legendStripped
         diagnostics?.beadToolContinuedText = continued
         val rowBlock = extractRowBlock(continued)
         diagnostics?.beadToolRowBlockFound = rowBlock != null
@@ -117,6 +121,29 @@ class BeadToolPdfParser @Inject constructor() {
         text
             .replace(Regex("""\*\*\*.*\*\*\*"""), "")
             .replace(Regex("""Word Chart \((?:Peyote|Loom)\)"""), "")
+
+    /**
+     * Removes the `N of MBead Legend … Word Chart` footer block injected mid-stream
+     * at page boundaries in PatternsByAliia lighter-cover PDFs.
+     *
+     * BeadTool 4 renders a bead legend at the bottom of certain pages. In the
+     * PatternsByAliia lighter-cover format this block appears *inside* a row
+     * continuation — the row's trailing comma precedes it on the same page, and
+     * the continuation tokens follow it on the next page. If not stripped here,
+     * `joinContinuationLines` attaches the legend text to the row and orphans the
+     * continuation, producing a row with fewer beads than expected.
+     *
+     * The match is deliberately narrow:
+     * - `\d+ of \d+Bead Legend` anchors to the concatenated page-counter artifact
+     * - `(?:.*\n)*?` lazily matches the variable-count body lines (Chart #, DB code,
+     *   Count) without crossing the `Word Chart` terminator
+     * - `Word Chart\n*` consumes the terminator and any trailing blank lines
+     */
+    private fun stripLegendBlocks(text: String): String =
+        text.replace(
+            Regex("""\d+ of \d+Bead Legend\n(?:.*\n)*?Word Chart\n*"""),
+            "",
+        )
 
     /**
      * Joins continuation lines so each row occupies exactly one line.
