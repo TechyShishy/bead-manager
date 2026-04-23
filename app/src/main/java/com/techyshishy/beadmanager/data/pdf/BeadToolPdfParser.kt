@@ -84,12 +84,19 @@ class BeadToolPdfParser @Inject constructor() {
      *
      * Also strips form feed bytes (\u000C) that pdfbox inserts at page
      * boundaries; leaving them in breaks the row-block regex continuity.
+     *
+     * The header regex matches only the header line itself — no prefix.
+     * A greedy `[^\n]*\n?` prefix was previously used to absorb the title
+     * line preceding the header, but it also silently consumed continuation
+     * bead tokens (e.g. `(1)U`) that happen to land on the line immediately
+     * before the header in multi-page tapestry exports. The "Page N of M"
+     * strip (which runs second) handles the title/page-number line.
      */
     private fun stripPageHeaders(text: String): String =
         text
             .replace("\u000C", "")
             .replace(
-                Regex("""[^\n]*\n?\n?Created with BeadTool 4 - www\.beadtool\.net\n?\n?"""),
+                Regex("""Created with BeadTool 4 - www\.beadtool\.net\n?"""),
                 "",
             )
             .replace(Regex("""[^\n]* ?Page [0-9]+(?: of [0-9]+)?\n"""), "")
@@ -158,10 +165,15 @@ class BeadToolPdfParser @Inject constructor() {
      * stitched to the preceding row line.
      *
      * Ported verbatim from the rowguide TypeScript reference implementation.
+     *
+     * A negative lookahead `(?!Row )` guards the trailing-comma branch: a
+     * comma at the end of a row whose successor is a new `Row N` header
+     * must not trigger the join (the row truly ends at the page boundary
+     * with no continuation token after the header).
      */
     private fun joinContinuationLines(text: String): String =
         text
-            .replace(Regex(""",\n+"""), ", ")
+            .replace(Regex(""",\n+(?!Row )"""), ", ")
             .replace(Regex("""\n+(?=\(\s*\d+\s*\)\s*\w)"""), ", ")
 
     // ── Row block extraction ──────────────────────────────────────────────────

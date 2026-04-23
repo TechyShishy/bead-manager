@@ -552,6 +552,108 @@ class BeadToolPdfParserTest {
         assertEquals(12, result.rows[0].steps.sumOf { it.count })
     }
 
+    // ── Springsong tapestry page boundary (#89) ──────────────────────────────
+
+    /**
+     * Builds a multi-page BeadTool 4 tapestry simulation where [rowId] straddles
+     * a page boundary.
+     *
+     * Page structure:
+     * - Page 0: title (Row 1 anchor required by extractRowBlock)
+     * - Page 1: Row 1 anchor + start of [rowId], ending with [beforeBeads] and
+     *   optionally a [continuationToken] on the line immediately before the
+     *   BeadTool 4 header
+     * - Page 2: Row [rowId+1] content, serving as the next separate row
+     *
+     * Simplified: omits the "Pattern  Page N of M" title line that precedes the
+     * BeadTool 4 header in real PDFs. The two-strip interaction (BeadTool4 header
+     * strip + Page-N-of-M strip) is exercised by `parse strips Created with
+     * BeadTool 4 footers`.
+     */
+    private fun springBoundaryPages(
+        rowId: Int = 24,
+        beforeBeads: String,
+        continuationToken: String? = null,
+        nextRowId: Int = rowId + 1,
+        nextRowBeads: String = List(5) { "(1)N" }.joinToString(", "),
+    ): List<String> {
+        val page1 = buildString {
+            append("Row 1 (L)  (1)A\n")
+            append("Row $rowId (L)  $beforeBeads,\n")
+            if (continuationToken != null) append("$continuationToken\n")
+            append("Created with BeadTool 4 - www.beadtool.net\n")
+        }
+        val page2 = "Row $nextRowId (R)  $nextRowBeads\n"
+        return listOf("Springsong\nCreated by Artist\n", page1, page2)
+    }
+
+    @Test
+    fun `parse preserves continuation token on line before BeadTool 4 header`() {
+        // Models Springsong row 24: last continuation bead (1)U sits on the line
+        // immediately before the per-page BeadTool 4 header. The old [^\n]*\n?
+        // prefix in stripPageHeaders consumed that token along with the header.
+        // After the fix, (1)U must be preserved and joined into row 24.
+        val before = List(41) { "(1)N" }.joinToString(", ")  // 41 beads before boundary
+        val result = parser.parse(
+            springBoundaryPages(
+                beforeBeads = before,
+                continuationToken = "(1)U",   // the 42nd bead — was silently dropped
+                nextRowBeads = List(42) { "(1)N" }.joinToString(", "),
+            ),
+        )
+        assertEquals(3, result.rows.size)
+        assertEquals(
+            "row 24 must include the continuation token from before the BeadTool 4 header",
+            42,
+            result.rows.first { it.id == 24 }.steps.sumOf { it.count },
+        )
+        assertEquals(42, result.rows.first { it.id == 25 }.steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parse does not merge next row when trailing comma is followed directly by row header`() {
+        // Edge case: row ends at page boundary with no continuation token before
+        // the BeadTool 4 header. The comma-join in joinContinuationLines must not
+        // stitch Row N+1's header onto Row N.
+        val before = List(40) { "(1)N" }.joinToString(", ")  // row has 40 beads
+        val result = parser.parse(
+            springBoundaryPages(
+                beforeBeads = before,
+                continuationToken = null,
+                nextRowBeads = List(42) { "(1)N" }.joinToString(", "),
+            ),
+        )
+        assertEquals(3, result.rows.size)
+        assertEquals(40, result.rows.first { it.id == 24 }.steps.sumOf { it.count })
+        assertEquals(42, result.rows.first { it.id == 25 }.steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parse handles multiple page boundaries in a single tapestry`() {
+        // Simulates three consecutive page boundaries, each dropping one continuation
+        // token before the BeadTool 4 header — modelling Springsong's 10 boundaries.
+        val pages = listOf(
+            "Springsong\nCreated by Artist\n",
+            "Row 1 (L)  (1)A\n" +
+                "Row 24 (L)  ${List(41) { "(1)N" }.joinToString(", ")},\n" +
+                "(1)U\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+            "Row 25 (R)  ${List(41) { "(1)N" }.joinToString(", ")},\n" +
+                "(1)V\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+            "Row 26 (L)  ${List(41) { "(1)N" }.joinToString(", ")},\n" +
+                "(1)W\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+            "Row 27 (R)  ${List(42) { "(1)N" }.joinToString(", ")}\n",
+        )
+        val result = parser.parse(pages)
+        assertEquals(5, result.rows.size)
+        assertEquals(42, result.rows.first { it.id == 24 }.steps.sumOf { it.count })
+        assertEquals(42, result.rows.first { it.id == 25 }.steps.sumOf { it.count })
+        assertEquals(42, result.rows.first { it.id == 26 }.steps.sumOf { it.count })
+        assertEquals(42, result.rows.first { it.id == 27 }.steps.sumOf { it.count })
+    }
+
     // ── error cases ───────────────────────────────────────────────────────────
 
     @Test
