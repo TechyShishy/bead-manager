@@ -261,4 +261,10 @@
     <string name="add_restock_to_existing_order_confirm">Add the selected low-stock beads to this order?</string>
     <string name="no_restock_eligible_orders">No existing orders.\n\nTap New restock order to create one.</string>
     <string name="low_stock_append_nothing_added">All selected beads are already at or above threshold.</string>
+
+    <!-- Tray card export -->
+    <string name="export_tray_card">Export Tray Card</string>
+    <string name="more_options">More options</string>
+    <string name="tray_card_empty_inventory">No inventory to export</string>
+    <string name="tray_card_export_error">Export failed</string>
 </resources>

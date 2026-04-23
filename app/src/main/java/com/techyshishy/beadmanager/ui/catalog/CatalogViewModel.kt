@@ -1,5 +1,9 @@
 package com.techyshishy.beadmanager.ui.catalog
 
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.FirestoreCatalogPinsSource
@@ -8,24 +12,35 @@ import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class CatalogViewModel @Inject constructor(
     catalogRepository: CatalogRepository,
-    inventoryRepository: InventoryRepository,
+    private val inventoryRepository: InventoryRepository,
     preferencesRepository: PreferencesRepository,
     private val pinsSource: FirestoreCatalogPinsSource,
 ) : ViewModel() {
+
+    private val _trayCardEvent = MutableSharedFlow<TrayCardEvent>(extraBufferCapacity = 1)
+    val trayCardEvent: SharedFlow<TrayCardEvent> = _trayCardEvent.asSharedFlow()
 
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
@@ -317,4 +332,51 @@ class CatalogViewModel @Inject constructor(
     fun toggleEnoughOnHand() {
         enoughOnHandEnabled.value = !enoughOnHandEnabled.value
     }
+
+    /**
+     * Generates a tray card PDF from the current inventory and emits a [TrayCardEvent] via
+     * [trayCardEvent] so the screen can present the system share sheet or show an error.
+     *
+     * Bead codes are sorted by their numeric DB suffix (ascending), matching the
+     * DB-number sort used elsewhere in the catalog. Emits [TrayCardEvent.EmptyInventory] if
+     * the inventory contains no codes, and [TrayCardEvent.Error] on I/O failure.
+     */
+    fun exportTrayCard(context: Context) {
+        viewModelScope.launch {
+            val codes = inventoryRepository.inventoryStream()
+                .first()
+                .keys
+                .filter { it.isNotEmpty() }
+                .sortedBy { code -> code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }
+            if (codes.isEmpty()) {
+                _trayCardEvent.emit(TrayCardEvent.EmptyInventory)
+                return@launch
+            }
+            val event = withContext(Dispatchers.IO) {
+                try {
+                    val dir = File(context.cacheDir, "tray-cards").apply { mkdirs() }
+                    val file = File(dir, "tray-card.pdf")
+                    generateTrayCard(codes, file)
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                    TrayCardEvent.Success(uri)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("CatalogViewModel", "exportTrayCard failed", e)
+                    TrayCardEvent.Error
+                }
+            }
+            _trayCardEvent.emit(event)
+        }
+    }
+}
+
+sealed class TrayCardEvent {
+    data class Success(val uri: Uri) : TrayCardEvent()
+    data object EmptyInventory : TrayCardEvent()
+    data object Error : TrayCardEvent()
 }

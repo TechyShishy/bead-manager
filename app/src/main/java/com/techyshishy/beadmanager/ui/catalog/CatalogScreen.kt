@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.ui.catalog
 
+import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,15 +38,20 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -72,6 +79,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
@@ -99,6 +107,28 @@ fun CatalogScreen(
     val enoughOnHandTargetGrams by viewModel.enoughOnHandTargetGrams.collectAsState()
     val enoughOnHandEnabled by viewModel.enoughOnHandEnabled.collectAsState()
     var showFilter by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val trayCardEmptyMsg = stringResource(R.string.tray_card_empty_inventory)
+    val trayCardErrorMsg = stringResource(R.string.tray_card_export_error)
+    LaunchedEffect(viewModel) {
+        viewModel.trayCardEvent.collect { event ->
+            when (event) {
+                is TrayCardEvent.Success -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, event.uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, null))
+                }
+                TrayCardEvent.EmptyInventory -> snackbarHostState.showSnackbar(trayCardEmptyMsg)
+                TrayCardEvent.Error -> snackbarHostState.showSnackbar(trayCardErrorMsg)
+            }
+        }
+    }
     // No remember key — LaunchedEffect handles external resets; a query key would reset
     // cursor position on every keystroke during normal typing.
     var searchFieldValue by remember { mutableStateOf(TextFieldValue(query)) }
@@ -137,6 +167,7 @@ fun CatalogScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         PinComparisonStrip(
             pinnedBeads = pinnedBeads,
@@ -172,16 +203,38 @@ fun CatalogScreen(
             placeholder = { Text(stringResource(R.string.search_beads)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
-                BadgedBox(
-                    badge = {
-                        if (activeFilterCount > 0) Badge { Text("$activeFilterCount") }
-                    },
-                ) {
-                    IconButton(onClick = { showFilter = true }) {
-                        Icon(
-                            Icons.Default.FilterList,
-                            contentDescription = stringResource(R.string.filter),
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BadgedBox(
+                        badge = {
+                            if (activeFilterCount > 0) Badge { Text("$activeFilterCount") }
+                        },
+                    ) {
+                        IconButton(onClick = { showFilter = true }) {
+                            Icon(
+                                Icons.Default.FilterList,
+                                contentDescription = stringResource(R.string.filter),
+                            )
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.more_options),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.export_tray_card)) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    viewModel.exportTrayCard(context)
+                                },
+                            )
+                        }
                     }
                 }
             },
@@ -224,6 +277,12 @@ fun CatalogScreen(
             }
         }
     }
+
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+    )
+    } // end Box
 
     if (showFilter) {
         FilterSheet(viewModel = viewModel, onDismiss = { showFilter = false })
