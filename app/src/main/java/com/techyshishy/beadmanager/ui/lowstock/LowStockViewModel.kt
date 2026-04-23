@@ -15,11 +15,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
-// TODO: LowStockViewModel and CatalogViewModel both subscribe to getAllBeadsWithVendors()
-// independently, resulting in two Room cursor registrations when both tabs are visited.
-// A shared StateFlow source in CatalogRepository (or a higher-level VM) could eliminate
-// the duplication.
-
 @HiltViewModel
 class LowStockViewModel @Inject constructor(
     catalogRepository: CatalogRepository,

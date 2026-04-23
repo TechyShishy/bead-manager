@@ -41,11 +41,17 @@ class CatalogRepository @Inject constructor(
             .map { list -> list.associateBy { it.code } }
             .stateIn(appScope, SharingStarted.Lazily, emptyMap())
 
+    // Single shared observer for beads with all their vendor links. Same rationale as
+    // beadsLookupFlow: catalog is immutable post-seeding, so Lazily + no-restart is correct.
+    private val allBeadsWithVendorsFlow: StateFlow<List<BeadWithVendors>> =
+        beadDao.getAllBeadsWithVendors()
+            .stateIn(appScope, SharingStarted.Lazily, emptyList())
+
+    fun getAllBeadsWithVendors(): Flow<List<BeadWithVendors>> = allBeadsWithVendorsFlow
+
     // One-shot cache for suspend callers (FinalizeOrderUseCase, ImportRgpProjectUseCase).
     // Safe to cache forever: catalog is immutable after CatalogSeeder.seedIfNeeded() completes.
     @Volatile private var beadsMapCache: Map<String, BeadEntity>? = null
-    fun getAllBeadsWithVendors(): Flow<List<BeadWithVendors>> =
-        beadDao.getAllBeadsWithVendors()
 
     fun getBeadWithVendors(code: String): Flow<BeadWithVendors?> =
         beadDao.getBeadWithVendors(code)
