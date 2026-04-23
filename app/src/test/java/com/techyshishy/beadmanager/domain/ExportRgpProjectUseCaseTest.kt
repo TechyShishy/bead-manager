@@ -6,9 +6,11 @@ import android.provider.OpenableColumns
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.rgp.parseRgp
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -44,6 +46,9 @@ class ExportRgpProjectUseCaseTest {
         project: ProjectEntry?,
         rows: List<ProjectRgpRow> = minimalRows,
         outputStream: java.io.OutputStream? = ByteArrayOutputStream(),
+        projectImageRepository: ProjectImageRepository = mockk {
+            coEvery { downloadCoverBytes(any()) } returns null
+        },
     ): ExportRgpProjectUseCase {
         val projectRepository: ProjectRepository = mockk {
             every { projectStream(project?.projectId ?: "missing-id") } returns flowOf(project)
@@ -57,6 +62,7 @@ class ExportRgpProjectUseCaseTest {
         return ExportRgpProjectUseCase(
             contentResolver = contentResolver,
             projectRepository = projectRepository,
+            projectImageRepository = projectImageRepository,
         )
     }
 
@@ -70,6 +76,7 @@ class ExportRgpProjectUseCaseTest {
         val useCase = ExportRgpProjectUseCase(
             contentResolver = mockk(),
             projectRepository = projectRepository,
+            projectImageRepository = mockk(),
         )
         val result = useCase.export("missing-id", uri)
         assertEquals(ExportResult.Failure.NotFound, result)
@@ -85,6 +92,7 @@ class ExportRgpProjectUseCaseTest {
         val useCase = ExportRgpProjectUseCase(
             contentResolver = mockk(),
             projectRepository = projectRepository,
+            projectImageRepository = mockk(),
         )
         val result = useCase.export("flat-id", uri)
         assertEquals(ExportResult.Failure.NoGrid, result)
@@ -110,6 +118,7 @@ class ExportRgpProjectUseCaseTest {
         val useCase = ExportRgpProjectUseCase(
             contentResolver = contentResolver,
             projectRepository = projectRepository,
+            projectImageRepository = mockk { coEvery { downloadCoverBytes(any()) } returns null },
         )
         val result = useCase.export("fab-id", uri)
         assertTrue("Expected Success for FAB project with beads but got $result", result is ExportResult.Success)
@@ -157,6 +166,7 @@ class ExportRgpProjectUseCaseTest {
         val useCase = ExportRgpProjectUseCase(
             contentResolver = contentResolver,
             projectRepository = projectRepository,
+            projectImageRepository = mockk { coEvery { downloadCoverBytes(any()) } returns null },
         )
         val result = useCase.export(project.projectId, uri)
         assertEquals(ExportResult.Failure.IoError, result)
@@ -169,5 +179,64 @@ class ExportRgpProjectUseCaseTest {
         val useCase = buildUseCase(project, outputStream = out)
         useCase.export(project.projectId, uri)
         assertTrue("Expected output stream to contain bytes", out.size() > 0)
+    }
+
+    // ── image embedding ───────────────────────────────────────────────────────
+
+    @Test
+    fun `embeds base64 image in output when project has imageUrl and download succeeds`() = runTest {
+        val imageBytes = "hello cover".toByteArray()
+        val project = minimalProject().copy(imageUrl = "https://example.com/cover.jpg")
+        val projectImageRepository: ProjectImageRepository = mockk {
+            coEvery { downloadCoverBytes(project.projectId) } returns imageBytes
+        }
+        val out = ByteArrayOutputStream()
+        val useCase = buildUseCase(project, outputStream = out, projectImageRepository = projectImageRepository)
+        val result = useCase.export(project.projectId, uri)
+        assertTrue("Expected Success", result is ExportResult.Success)
+        val parsed = parseRgp(ByteArrayInputStream(out.toByteArray()))
+        val expected = java.util.Base64.getEncoder().encodeToString(imageBytes)
+        assertEquals(expected, parsed.image)
+    }
+
+    @Test
+    fun `skips download and omits image field when project has no imageUrl`() = runTest {
+        val project = minimalProject()  // imageUrl is null by default
+        val projectImageRepository: ProjectImageRepository = mockk()
+        val out = ByteArrayOutputStream()
+        val useCase = buildUseCase(project, outputStream = out, projectImageRepository = projectImageRepository)
+        val result = useCase.export(project.projectId, uri)
+        assertTrue("Expected Success", result is ExportResult.Success)
+        coVerify(exactly = 0) { projectImageRepository.downloadCoverBytes(any()) }
+        val parsed = parseRgp(ByteArrayInputStream(out.toByteArray()))
+        assertTrue("Expected image field to be absent", parsed.image == null)
+    }
+
+    @Test
+    fun `returns Success without image field when download throws`() = runTest {
+        val project = minimalProject().copy(imageUrl = "https://example.com/cover.jpg")
+        val projectImageRepository: ProjectImageRepository = mockk {
+            coEvery { downloadCoverBytes(any()) } throws RuntimeException("network error")
+        }
+        val out = ByteArrayOutputStream()
+        val useCase = buildUseCase(project, outputStream = out, projectImageRepository = projectImageRepository)
+        val result = useCase.export(project.projectId, uri)
+        assertTrue("Expected Success despite download failure", result is ExportResult.Success)
+        val parsed = parseRgp(ByteArrayInputStream(out.toByteArray()))
+        assertTrue("Expected image field to be absent on download failure", parsed.image == null)
+    }
+
+    @Test
+    fun `omits image field when imageUrl is set but download returns null`() = runTest {
+        val project = minimalProject().copy(imageUrl = "https://example.com/cover.jpg")
+        val projectImageRepository: ProjectImageRepository = mockk {
+            coEvery { downloadCoverBytes(project.projectId) } returns null
+        }
+        val out = ByteArrayOutputStream()
+        val useCase = buildUseCase(project, outputStream = out, projectImageRepository = projectImageRepository)
+        val result = useCase.export(project.projectId, uri)
+        assertTrue("Expected Success", result is ExportResult.Success)
+        assertTrue("Expected image field absent when download returns null",
+            parseRgp(ByteArrayInputStream(out.toByteArray())).image == null)
     }
 }

@@ -58,6 +58,22 @@ class ProjectImageRepository @Inject constructor(
     }
 
     /**
+     * Downloads the cover image bytes for [projectId] from Firebase Storage.
+     *
+     * Returns null if the project has no cover object (`ERROR_OBJECT_NOT_FOUND`).
+     * Download is capped at 5 MB; if the object exceeds that limit Firebase throws and the
+     * exception propagates to the caller. All other [StorageException] codes (network,
+     * permission, quota) are also rethrown.
+     */
+    suspend fun downloadCoverBytes(projectId: String): ByteArray? {
+        return try {
+            coverRef(projectId).getBytes(5 * 1024 * 1024).await()
+        } catch (e: StorageException) {
+            if (e.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND) null else throw e
+        }
+    }
+
+    /**
      * Deletes the cover image for [projectId]. Silently succeeds if no image exists.
      * All other [StorageException] codes (permission, network, etc.) are rethrown so the
      * caller can surface them to the user.

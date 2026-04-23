@@ -47,7 +47,12 @@ internal fun djb2(s: String): Int {
  * via [GZIPOutputStream.finish] before this function returns, but [stream] itself is
  * **not closed** — the caller retains ownership and must close it (e.g., via `use`).
  */
-fun writeRgp(stream: OutputStream, project: ProjectEntry, rows: List<ProjectRgpRow>) {
+fun writeRgp(
+    stream: OutputStream,
+    project: ProjectEntry,
+    rows: List<ProjectRgpRow>,
+    image: String? = null,
+) {
     val rgpProject = RgpProject(
         // Mask the sign bit so the id is always non-negative; djb2 can produce negative
         // values due to 32-bit overflow when the project ID is long enough to wrap.
@@ -65,6 +70,7 @@ fun writeRgp(stream: OutputStream, project: ProjectEntry, rows: List<ProjectRgpR
         position = project.position.takeIf { it.isNotEmpty() },
         markedSteps = project.markedSteps.takeIf { it.isNotEmpty() },
         markedRows = project.markedRows.takeIf { it.isNotEmpty() },
+        image = image,
     )
     val json = writerJson.encodeToString(RgpProject.serializer(), rgpProject)
     val gzip = GZIPOutputStream(stream)

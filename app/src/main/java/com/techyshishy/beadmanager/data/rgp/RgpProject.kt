@@ -29,8 +29,13 @@ data class RgpRow(
  * Files exported by pxlpxl omit them. They default to null so files without them
  * deserialize cleanly; callers map null to empty collections as needed.
  *
- * Other fields (`firstLastAppearanceMap`, `image`) are silently dropped by
- * `ignoreUnknownKeys = true` in the parser and are not captured here.
+ * [image] holds a base64-encoded PNG of the project cover when present. Bead Manager
+ * writes it on export when a cover image exists; consuming tools (rowguide, pxlpxl) that
+ * support the field display it automatically. Files without the field deserialize cleanly
+ * because it defaults to null.
+ *
+ * Other fields (`firstLastAppearanceMap`) are silently dropped by `ignoreUnknownKeys = true`
+ * in the parser and are not captured here.
  */
 @Serializable
 data class RgpProject(
@@ -41,4 +46,5 @@ data class RgpProject(
     val position: Map<String, Int>? = null,
     val markedSteps: Map<String, Map<String, Int>>? = null,
     val markedRows: Map<String, Int>? = null,
+    val image: String? = null,
 )

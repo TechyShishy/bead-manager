@@ -3,13 +3,16 @@ package com.techyshishy.beadmanager.domain
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.rgp.synthesizeStripeRows
 import com.techyshishy.beadmanager.data.rgp.writeRgp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.Base64
 import javax.inject.Inject
 
 sealed class ExportResult {
@@ -38,6 +41,7 @@ sealed class ExportResult {
 class ExportRgpProjectUseCase @Inject constructor(
     private val contentResolver: ContentResolver,
     private val projectRepository: ProjectRepository,
+    private val projectImageRepository: ProjectImageRepository,
 ) {
     suspend fun export(projectId: String, uri: Uri): ExportResult {
         val project = projectRepository.projectStream(projectId).first()
@@ -50,9 +54,19 @@ class ExportRgpProjectUseCase @Inject constructor(
 
         return try {
             withContext(Dispatchers.IO) {
+                // Attempt to embed the cover image. Best-effort: any exception is caught and
+                // the export continues without the image field.
+                val imageBase64: String? = if (project.imageUrl != null) {
+                    runCatching {
+                        projectImageRepository.downloadCoverBytes(projectId)
+                            ?.let { bytes -> Base64.getEncoder().encodeToString(bytes) }
+                    }.onFailure { if (it is CancellationException) throw it }
+                     .getOrNull()
+                } else null
+
                 val stream = contentResolver.openOutputStream(uri)
                     ?: throw IOException("Content resolver returned null stream for $uri")
-                stream.use { writeRgp(it, project, effectiveRows) }
+                stream.use { writeRgp(it, project, effectiveRows, imageBase64) }
                 val displayName = contentResolver
                     .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                     ?.use { cursor ->

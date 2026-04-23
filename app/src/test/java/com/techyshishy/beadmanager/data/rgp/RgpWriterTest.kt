@@ -121,6 +121,25 @@ class RgpWriterTest {
         assertTrue("markedRows should be absent/null when empty", parsed.markedRows == null)
     }
 
+    @Test
+    fun `image field round-trips when provided`() {
+        val project = projectEntry(colorMapping = mapOf("A" to "DB0001"))
+        val rows = makeRows(1 to listOf(Triple(1, 1, "A")))
+        val encoded = "aGVsbG8="  // base64 of "hello"
+        val out = ByteArrayOutputStream()
+        writeRgp(out, project, rows, image = encoded)
+        val parsed = parseRgp(ByteArrayInputStream(out.toByteArray()))
+        assertEquals(encoded, parsed.image)
+    }
+
+    @Test
+    fun `image field is absent from output when null`() {
+        val project = projectEntry(colorMapping = mapOf("A" to "DB0001"))
+        val rows = makeRows(1 to listOf(Triple(1, 1, "A")))
+        val parsed = writeThenParse(project, rows)
+        assertTrue("image should be absent/null when not provided", parsed.image == null)
+    }
+
     // ── djb2 determinism ─────────────────────────────────────────────────────
 
     @Test
