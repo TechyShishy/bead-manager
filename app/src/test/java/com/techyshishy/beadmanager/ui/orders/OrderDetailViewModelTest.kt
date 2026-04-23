@@ -3,6 +3,8 @@ package com.techyshishy.beadmanager.ui.orders
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.BeadWithVendors
 import com.techyshishy.beadmanager.data.db.VendorLinkEntity
+import com.techyshishy.beadmanager.data.firestore.OrderEntry
+import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
@@ -171,5 +173,36 @@ class OrderDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(entity, viewModel.beadLookup.value["DB0001"])
+    }
+
+    @Test
+    fun `sortedItems emits order items sorted by bead code ascending`() = runTest {
+        val items = listOf(
+            OrderItemEntry(beadCode = "DB0050"),
+            OrderItemEntry(beadCode = "DB0010"),
+            OrderItemEntry(beadCode = "DB0030"),
+        )
+        val orderEntry = OrderEntry(orderId = "order1", items = items)
+        val orderRepository = mockk<OrderRepository> {
+            every { orderStream("order1") } returns flowOf(orderEntry)
+        }
+        val catalogRepository = mockk<CatalogRepository> {
+            every { getAllBeadsWithVendors() } returns flowOf(emptyList())
+        }
+        val preferencesRepository = mockk<PreferencesRepository> {
+            every { vendorPriorityOrder } returns flowOf(emptyList())
+        }
+
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository)
+        viewModel.initialize("order1")
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.sortedItems.collect {}
+        }
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("DB0010", "DB0030", "DB0050"),
+            viewModel.sortedItems.value.map { it.beadCode },
+        )
     }
 }

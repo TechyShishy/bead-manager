@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
-import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import java.math.BigDecimal
@@ -81,6 +80,7 @@ fun OrderDetailScreen(
     LaunchedEffect(orderId) { viewModel.initialize(orderId) }
 
     val order by viewModel.order.collectAsState()
+    val sortedItems by viewModel.sortedItems.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
     val beadColorNames by viewModel.beadColorNames.collectAsState()
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
@@ -137,8 +137,7 @@ fun OrderDetailScreen(
             }
         },
     ) { innerPadding ->
-        val currentOrder = order
-        if (currentOrder == null || currentOrder.items.isEmpty()) {
+        if (sortedItems.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -152,10 +151,6 @@ fun OrderDetailScreen(
                 )
             }
         } else {
-            // TODO: Move this sort into OrderDetailViewModel (sortedBy { it.beadCode }) so the
-            // ordering contract is testable without Compose infrastructure, consistent with
-            // LowStockViewModel and ProjectDetailViewModel.
-            val sortedItems = currentOrder.items.sortedBy { it.beadCode }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()

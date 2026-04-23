@@ -44,6 +44,10 @@ class OrderDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val sortedItems: StateFlow<List<OrderItemEntry>> = order
+        .map { it?.items?.sortedBy { item -> item.beadCode } ?: emptyList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val allBeadsWithVendors = catalogRepository
         .getAllBeadsWithVendors()
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
