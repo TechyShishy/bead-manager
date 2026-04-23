@@ -113,7 +113,22 @@ class ProjectDetailViewModel @Inject constructor(
             .filter { it.startsWith("DB") && it !in fromGridCodes }
             .distinct()
             .map { code -> ProjectBeadEntry(beadCode = code, targetGrams = 0.0) }
-        (fromGrid + colorMappingOnly).sortedBy { it.beadCode }
+        // Build a lookup from bead code → original bead code via the palette key reverse mapping.
+        // When multiple palette keys converge on the same current bead code with different
+        // originals, the first palette key with a recorded original (by map iteration order)
+        // wins. The policy is intentional: any recorded original is a valid representative
+        // since all affected slots share the same current code in the UI.
+        val beadCodeToOriginal: Map<String, String> = buildMap {
+            entry.colorMapping.entries.forEach { (key, code) ->
+                if (!containsKey(code)) {
+                    val orig = entry.originalColorMapping[key]
+                    if (orig != null && orig != code) put(code, orig)
+                }
+            }
+        }
+        (fromGrid + colorMappingOnly)
+            .map { bead -> bead.copy(originalBeadCode = beadCodeToOriginal[bead.beadCode]) }
+            .sortedBy { it.beadCode }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -351,7 +366,10 @@ class ProjectDetailViewModel @Inject constructor(
     /**
      * Replaces all [ProjectEntry.colorMapping] entries whose value is [oldCode] with [newCode].
      * A no-op when [oldCode] == [newCode] or when [oldCode] is not present in the mapping.
-     * Writes via [ProjectRepository.updateProject]; does not emit any event on completion.
+     *
+     * On the first swap of a palette key, writes [oldCode] into [ProjectEntry.originalColorMapping]
+     * for that key. Subsequent swaps of an already-recorded key do not alter the original.
+     * Both maps are written atomically in a single [ProjectRepository.updateProject] call.
      */
     fun swapBead(oldCode: String, newCode: String) {
         if (oldCode == newCode) return
@@ -360,8 +378,18 @@ class ProjectDetailViewModel @Inject constructor(
             if (v == oldCode) newCode else v
         }
         if (updated == currentProject.colorMapping) return
+        // Record the original code for each affected palette key not already tracked.
+        val changedKeys = currentProject.colorMapping
+            .filterValues { it == oldCode }
+            .keys
+        val updatedOriginal = currentProject.originalColorMapping +
+            changedKeys
+                .filter { it !in currentProject.originalColorMapping }
+                .associateWith { oldCode }
         viewModelScope.launch {
-            projectRepository.updateProject(currentProject.copy(colorMapping = updated))
+            projectRepository.updateProject(
+                currentProject.copy(colorMapping = updated, originalColorMapping = updatedOriginal)
+            )
         }
     }
 

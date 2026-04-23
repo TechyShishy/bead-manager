@@ -21,11 +21,17 @@ import com.google.firebase.firestore.ServerTimestamp
  * written atomically with the grid so callers can determine whether a grid exists without
  * loading the subcollection.
  *
- * [rowCount]      — total number of rows stored in the grid subcollection. 0 for projects with
- *                   no imported grid.
- * [colorMapping]  — maps palette letter keys (e.g. "A", "AB") to either a Miyuki Delica
- *                   catalog code (e.g. "DB0001") or a hex color string (e.g. "#ff0000ff").
- *                   Hex entries are not actionable for inventory.
+ * [rowCount]             — total number of rows stored in the grid subcollection. 0 for
+ *                          projects with no imported grid.
+ * [colorMapping]         — maps palette letter keys (e.g. "A", "AB") to either a Miyuki Delica
+ *                          catalog code (e.g. "DB0001") or a hex color string (e.g. "#ff0000ff").
+ *                          Hex entries are not actionable for inventory.
+ * [originalColorMapping] — maps the same palette letter keys to the catalog code that was
+ *                          present at the time of the first swap. Written once per key — never
+ *                          overwritten by subsequent swaps. Empty map for projects where no
+ *                          swap has ever occurred; a missing key means that palette slot was
+ *                          never changed. Existing Firestore documents without this field
+ *                          deserialize cleanly with the empty-map default.
  * [position]      — rowguide progress cursor. Keys are "row" and "step"; values are
  *                   0-based indices into the row list.
  * [markedSteps]   — rowguide per-step completion marks. Outer key is the row [id] as a
@@ -41,6 +47,7 @@ data class ProjectEntry(
     val notes: String? = null,
     val rowCount: Int = 0,
     val colorMapping: Map<String, String> = emptyMap(),
+    val originalColorMapping: Map<String, String> = emptyMap(),
     val position: Map<String, Int> = emptyMap(),
     val markedSteps: Map<String, Map<String, Int>> = emptyMap(),
     val markedRows: Map<String, Int> = emptyMap(),

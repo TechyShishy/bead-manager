@@ -446,7 +446,10 @@ class ProjectDetailViewModelTest {
 
         coVerify {
             projectRepository.updateProject(
-                project.copy(colorMapping = mapOf("A" to "DB0123", "B" to "DB0123", "C" to "DB0001"))
+                project.copy(
+                    colorMapping = mapOf("A" to "DB0123", "B" to "DB0123", "C" to "DB0001"),
+                    originalColorMapping = mapOf("A" to "DB0168", "B" to "DB0168"),
+                )
             )
         }
     }
@@ -546,7 +549,10 @@ class ProjectDetailViewModelTest {
 
         coVerify {
             projectRepository.updateProject(
-                project.copy(colorMapping = mapOf("DB0001" to "DB0999"))
+                project.copy(
+                    colorMapping = mapOf("DB0001" to "DB0999"),
+                    originalColorMapping = mapOf("DB0001" to "DB0001"),
+                )
             )
         }
     }
@@ -794,5 +800,167 @@ class ProjectDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("DB-0003", "DB-0007", "DB-0010"), result.map { it.beadCode })
+    }
+
+    private fun buildVm(projectRepository: ProjectRepository): ProjectDetailViewModel {
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+        return ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+        )
+    }
+
+    @Test
+    fun `swapBead records original code in originalColorMapping on first swap`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0168", "B" to "DB0001"),
+            originalColorMapping = emptyMap(),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.swapBead("DB0168", "DB0999")
+        advanceUntilIdle()
+
+        coVerify {
+            projectRepository.updateProject(
+                project.copy(
+                    colorMapping = mapOf("A" to "DB0999", "B" to "DB0001"),
+                    originalColorMapping = mapOf("A" to "DB0168"),
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `swapBead does not overwrite originalColorMapping on second swap`() = runTest {
+        // "A" was previously swapped from DB0168 -> DB0999; original is already recorded.
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0999"),
+            originalColorMapping = mapOf("A" to "DB0168"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.swapBead("DB0999", "DB0042")
+        advanceUntilIdle()
+
+        // colorMapping updated, but originalColorMapping still maps "A" to DB0168, not DB0999.
+        coVerify {
+            projectRepository.updateProject(
+                project.copy(
+                    colorMapping = mapOf("A" to "DB0042"),
+                    originalColorMapping = mapOf("A" to "DB0168"),
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `beads StateFlow populates originalBeadCode from originalColorMapping`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0002"),
+            originalColorMapping = mapOf("A" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns emptyList()
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.projectRows.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        var result: List<com.techyshishy.beadmanager.data.model.ProjectBeadEntry> = emptyList()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.beads.collect { result = it }
+        }
+        advanceUntilIdle()
+
+        assertEquals(1, result.size)
+        assertEquals("DB0002", result[0].beadCode)
+        assertEquals("DB0001", result[0].originalBeadCode)
+    }
+
+    @Test
+    fun `beads StateFlow uses first palette key original when two keys share the same current code`() = runTest {
+        // Both "A" (DB0168 -> DB0999) and "B" (DB0042 -> DB0999) now map to DB0999.
+        // The ViewModel must deterministically pick one original; it must not crash or
+        // exhibit non-deterministic behavior. We verify that exactly one non-null original
+        // is produced and that it is one of the two valid candidates.
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0999", "B" to "DB0999"),
+            originalColorMapping = mapOf("A" to "DB0168", "B" to "DB0042"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns emptyList()
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.projectRows.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        var result: List<com.techyshishy.beadmanager.data.model.ProjectBeadEntry> = emptyList()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.beads.collect { result = it }
+        }
+        advanceUntilIdle()
+
+        // DB0999 appears only once in the bead list (two keys, same code).
+        assertEquals(1, result.size)
+        assertEquals("DB0999", result[0].beadCode)
+        // "A" is the first key in the LinkedHashMap, so DB0168 wins deterministically.
+        assertEquals("DB0168", result[0].originalBeadCode)
     }
 }

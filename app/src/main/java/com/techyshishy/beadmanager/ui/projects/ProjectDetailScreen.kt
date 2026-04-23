@@ -516,6 +516,13 @@ private fun ProjectBeadRow(
                     color = if (effectiveDeficit > 0.0) MaterialTheme.colorScheme.onSurfaceVariant
                             else MaterialTheme.colorScheme.tertiary,
                 )
+                if (bead.originalBeadCode != null) {
+                    Text(
+                        text = stringResource(R.string.bead_original_code, bead.originalBeadCode),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             IconButton(onClick = onReplace) {
