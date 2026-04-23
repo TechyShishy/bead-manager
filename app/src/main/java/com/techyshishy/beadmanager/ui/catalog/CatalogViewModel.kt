@@ -48,6 +48,10 @@ class CatalogViewModel @Inject constructor(
     }
     val stockOnlyFilter: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
+    // Set by AdaptiveScaffold when the catalog opens in swap-picker mode. null = not in swap mode.
+    val enoughOnHandTargetGrams: MutableStateFlow<Double?> = MutableStateFlow(null)
+    val enoughOnHandEnabled: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
     val colorGroups: StateFlow<List<String>> = catalogRepository.allBeadsLookup()
         .map { beadMap ->
             beadMap.values
@@ -85,12 +89,20 @@ class CatalogViewModel @Inject constructor(
         codes.mapNotNull { lookup[it] }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val enoughOnHandFilter: StateFlow<Pair<Double?, Boolean>> = combine(
+        enoughOnHandTargetGrams,
+        enoughOnHandEnabled,
+    ) { targetGrams, enabled -> targetGrams to enabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null to false)
+
     val beads: StateFlow<List<BeadWithInventory>> = combine(
         allBeadsWithInventory,
         searchQuery,
         filterState,
         stockOnlyFilter,
-    ) { allBeads, query, filter, stockOnly ->
+        enoughOnHandFilter,
+    ) { allBeads, query, filter, stockOnly, enoughOnHand ->
+        val (enoughTargetGrams, enoughEnabled) = enoughOnHand
         val numericKey: (BeadWithInventory) -> Int = { item ->
             item.code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE
         }
@@ -122,9 +134,14 @@ class CatalogViewModel @Inject constructor(
 
                 val matchesStockOnly = !stockOnly || item.isOwned
 
+                val matchesEnoughOnHand = !enoughEnabled || enoughTargetGrams == null || run {
+                    val owned = item.inventory?.quantityGrams ?: 0.0
+                    if (enoughTargetGrams == 0.0) owned > 0.0 else owned >= enoughTargetGrams
+                }
+
                 matchesQuery && matchesColorGroup && matchesGlassGroup &&
                     matchesFinish && matchesDyed && matchesGalvanized && matchesPlating &&
-                    matchesOwned && matchesStockOnly
+                    matchesOwned && matchesStockOnly && matchesEnoughOnHand
             }
             .let { filtered ->
                 val asc = filter.sortDirection == SortDirection.ASCENDING
@@ -248,7 +265,10 @@ class CatalogViewModel @Inject constructor(
         }
     }
 
-    fun clearFilters() { filterState.value = FilterState() }
+    fun clearFilters() {
+        filterState.value = FilterState()
+        enoughOnHandEnabled.value = false
+    }
 
     // --- Comparison pin actions ---
 
@@ -277,5 +297,19 @@ class CatalogViewModel @Inject constructor(
 
     fun toggleStockOnly() {
         stockOnlyFilter.value = !stockOnlyFilter.value
+    }
+
+    fun setEnoughOnHandContext(targetGrams: Double) {
+        enoughOnHandTargetGrams.value = targetGrams
+        enoughOnHandEnabled.value = false
+    }
+
+    fun clearEnoughOnHandFilter() {
+        enoughOnHandTargetGrams.value = null
+        enoughOnHandEnabled.value = false
+    }
+
+    fun toggleEnoughOnHand() {
+        enoughOnHandEnabled.value = !enoughOnHandEnabled.value
     }
 }

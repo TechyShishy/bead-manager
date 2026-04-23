@@ -39,6 +39,8 @@ fun FilterSheet(
     val filter by viewModel.filterState.collectAsState()
     val colorGroups by viewModel.colorGroups.collectAsState()
     val glassGroups by viewModel.glassGroups.collectAsState()
+    val enoughOnHandTargetGrams by viewModel.enoughOnHandTargetGrams.collectAsState()
+    val enoughOnHandEnabled by viewModel.enoughOnHandEnabled.collectAsState()
     val finishes = CatalogSeeder.ALL_FINISHES
     val dyedValues = CatalogSeeder.ALL_DYED_VALUES
     val galvanizedValues = CatalogSeeder.ALL_GALVANIZED_VALUES
@@ -90,6 +92,13 @@ fun FilterSheet(
                 onClick = { viewModel.toggleOwnedOnly() },
                 label = { Text(stringResource(R.string.owned_only)) },
             )
+            if (enoughOnHandTargetGrams != null) {
+                FilterChip(
+                    selected = enoughOnHandEnabled,
+                    onClick = { viewModel.toggleEnoughOnHand() },
+                    label = { Text(stringResource(R.string.catalog_enough_in_stock)) },
+                )
+            }
 
             FilterSection(
                 title = stringResource(R.string.color_group),

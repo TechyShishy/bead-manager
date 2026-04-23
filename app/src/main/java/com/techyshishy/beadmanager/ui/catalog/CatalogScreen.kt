@@ -85,6 +85,8 @@ fun CatalogScreen(
     val filter by viewModel.filterState.collectAsState()
     val pinnedBeads by viewModel.pinnedBeads.collectAsState()
     val stockOnlyFilter by viewModel.stockOnlyFilter.collectAsState()
+    val enoughOnHandTargetGrams by viewModel.enoughOnHandTargetGrams.collectAsState()
+    val enoughOnHandEnabled by viewModel.enoughOnHandEnabled.collectAsState()
     var showFilter by remember { mutableStateOf(false) }
     // No remember key — LaunchedEffect handles external resets; a query key would reset
     // cursor position on every keystroke during normal typing.
@@ -98,7 +100,8 @@ fun CatalogScreen(
         filter.glassGroups.size +
         filter.finishes.size +
         (if (filter.ownedOnly) 1 else 0) +
-        (if (filter.sortBy != SortBy.DB_NUMBER) 1 else 0)
+        (if (filter.sortBy != SortBy.DB_NUMBER) 1 else 0) +
+        (if (enoughOnHandTargetGrams != null && enoughOnHandEnabled) 1 else 0)
     // On phones NavigationSuiteScaffold places the nav bar below content, so the content area
     // is already above the system nav bar and we must not add redundant bottom insets.
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600

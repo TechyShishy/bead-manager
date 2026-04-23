@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -122,6 +123,16 @@ fun AdaptiveScaffold() {
     // True when the current order detail was opened via redirect from the Projects tab;
     // back navigation should return to Projects rather than staying in Orders.
     var allOrdersCameFromProjects by rememberSaveable { mutableStateOf(false) }
+
+    // Clear swap-picker state when the user navigates away from PROJECTS via the tab bar.
+    // This handles the escape path not covered by the explicit exit callbacks (back, X, confirm).
+    LaunchedEffect(currentTab) {
+        if (currentTab != AppTab.PROJECTS && projectsCatalogPickerMode) {
+            projectsCatalogPickerMode = false
+            projectsCatalogSwapTargetCode = null
+            catalogViewModel.clearEnoughOnHandFilter()
+        }
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -250,6 +261,7 @@ fun AdaptiveScaffold() {
                         projectsCatalogPickerMode -> {
                             projectsCatalogPickerMode = false
                             projectsCatalogSwapTargetCode = null
+                            catalogViewModel.clearEnoughOnHandFilter()
                         }
                         ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
                         projectInfoMode -> projectInfoMode = false
@@ -280,6 +292,7 @@ fun AdaptiveScaffold() {
                                         onClick = {
                                             projectsCatalogPickerMode = false
                                             projectsCatalogSwapTargetCode = null
+                                            catalogViewModel.clearEnoughOnHandFilter()
                                         },
                                     ) {
                                         Icon(
@@ -314,6 +327,7 @@ fun AdaptiveScaffold() {
                                         }
                                         projectsCatalogPickerMode = false
                                         projectsCatalogSwapTargetCode = null
+                                        catalogViewModel.clearEnoughOnHandFilter()
                                     },
                                 )
                             }
@@ -374,6 +388,9 @@ fun AdaptiveScaffold() {
                             onReplaceBeadFromCatalog = { oldCode ->
                                 projectsCatalogSwapTargetCode = oldCode
                                 projectsCatalogPickerMode = true
+                                val targetGrams = projectDetailVm.beads.value
+                                    .find { it.beadCode == oldCode }?.targetGrams ?: 0.0
+                                catalogViewModel.setEnoughOnHandContext(targetGrams)
                             },
                             onPinAllToComparison = { codes ->
                                 catalogViewModel.pinAll(codes)
