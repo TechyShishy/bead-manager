@@ -19,11 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.FileOpen
@@ -403,7 +405,7 @@ private fun ProjectRow(
             .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProjectThumbnail(project = project)
+        ProjectThumbnail(project = project, showAllOriginalBadge = project.isAllOriginalColors)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -441,6 +443,7 @@ private fun ProjectRow(
 private fun ProjectThumbnail(
     project: ProjectEntry,
     modifier: Modifier = Modifier,
+    showAllOriginalBadge: Boolean = false,
 ) {
     Box(
         modifier = modifier
@@ -461,6 +464,26 @@ private fun ProjectThumbnail(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+        if (showAllOriginalBadge) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(2.dp)
+                    .size(18.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = stringResource(R.string.all_original_colors),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }

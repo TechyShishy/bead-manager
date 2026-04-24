@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.data.firestore
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.ServerTimestamp
 
 /**
@@ -52,4 +53,19 @@ data class ProjectEntry(
     val markedSteps: Map<String, Map<String, Int>> = emptyMap(),
     val markedRows: Map<String, Int> = emptyMap(),
     val imageUrl: String? = null,
-)
+) {
+    /**
+     * True when all palette keys recorded in [originalColorMapping] are still at their original
+     * values in the current [colorMapping]. Vacuously true when [originalColorMapping] is empty
+     * (no swaps have ever been made). If a key recorded in [originalColorMapping] is no longer
+     * present in [colorMapping], that slot is treated as changed and this returns false.
+     *
+     * This is a computed property — it has no backing field. [@get:Exclude] prevents Firebase's
+     * CustomClassMapper from including it during Firestore serialization.
+     */
+    @get:Exclude
+    val isAllOriginalColors: Boolean
+        get() = originalColorMapping.all { (key, original) ->
+            colorMapping[key] == original
+        }
+}
