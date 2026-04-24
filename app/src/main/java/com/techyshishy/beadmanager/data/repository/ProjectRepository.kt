@@ -57,6 +57,9 @@ class ProjectRepository @Inject constructor(
     suspend fun updateProject(entry: ProjectEntry) =
         source.updateProject(entry)
 
+    suspend fun setProjectImageUrl(projectId: String, imageUrl: String) =
+        source.setProjectImageUrl(projectId, imageUrl)
+
     suspend fun deleteColorMappingEntries(projectId: String, keys: Set<String>) =
         source.deleteColorMappingEntries(projectId, keys)
 

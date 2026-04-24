@@ -17,13 +17,17 @@ import com.techyshishy.beadmanager.data.pdf.PdfProject
 import com.techyshishy.beadmanager.data.pdf.PdfTextExtractor
 import com.techyshishy.beadmanager.data.pdf.XlsmPdfParser
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 class ImportPdfProjectUseCase @Inject constructor(
     private val contentResolver: ContentResolver,
     private val catalogRepository: CatalogRepository,
     private val projectRepository: ProjectRepository,
+    private val projectImageRepository: ProjectImageRepository,
+    private val generateProjectPreview: GenerateProjectPreviewUseCase,
     private val beadToolParser: BeadToolPdfParser,
     private val xlsmParser: XlsmPdfParser,
     private val colorKeyExtractor: BeadToolColorKeyExtractor,
@@ -116,6 +120,16 @@ class ImportPdfProjectUseCase @Inject constructor(
                 .onSuccess { Log.d(TAG, "Partial project $projectId cleaned up") }
                 .onFailure { Log.e(TAG, "Cleanup of partial project $projectId failed", it) }
             return ImportResult.Failure.WriteError
+        }
+        // Best-effort cover image generation from the imported grid. Any exception other than
+        // CancellationException is swallowed — the import result is Success regardless.
+        runCatching {
+            val bytes = generateProjectPreview.render(projectRows, pdfProject.colorMapping, catalogMap)
+            val imageUrl = projectImageRepository.uploadCoverBytes(projectId, bytes)
+            projectRepository.setProjectImageUrl(projectId, imageUrl)
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "Cover image generation failed — import result unaffected", it)
         }
         Log.d(TAG, "Import succeeded: name='$projectName', projectId=$projectId")
         // In debug builds write a diagnostics report even on success so that

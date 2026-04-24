@@ -97,6 +97,18 @@ class FirestoreProjectSource @Inject constructor(
     }
 
     /**
+     * Updates only the [imageUrl] field of the project document.
+     *
+     * Uses [DocumentReference.update] rather than [SetOptions.merge] so that only the
+     * single field is touched — no other fields (including [ProjectEntry.createdAt]) are
+     * affected. Safe to call concurrently with other merge-writes on the same document.
+     */
+    suspend fun setProjectImageUrl(projectId: String, imageUrl: String) {
+        val uid = requireUid()
+        projectsRef(uid).document(projectId).update("imageUrl", imageUrl).await()
+    }
+
+    /**
      * Deletes specific keys from the `colorMapping` field using targeted `FieldValue.delete()`
      * paths. This is required because `set(pojo, SetOptions.merge())` builds a leaf-level field
      * mask — absent keys are simply omitted from the mask and left untouched on the server, so

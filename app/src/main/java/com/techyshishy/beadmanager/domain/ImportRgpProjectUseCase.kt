@@ -2,23 +2,32 @@ package com.techyshishy.beadmanager.domain
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.util.Log
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.rgp.RgpParseException
 import com.techyshishy.beadmanager.data.rgp.parseRgp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.Base64
 import javax.inject.Inject
 
 class ImportRgpProjectUseCase @Inject constructor(
     private val contentResolver: ContentResolver,
     private val catalogRepository: CatalogRepository,
     private val projectRepository: ProjectRepository,
+    private val projectImageRepository: ProjectImageRepository,
+    private val generateProjectPreview: GenerateProjectPreviewUseCase,
 ) {
+    companion object {
+        private const val TAG = "RgpImport"
+    }
     suspend fun import(uri: Uri): ImportResult {
         // 1. Parse — fail fast before touching any Firestore state.
         //    openInputStream and gzip decompression/JSON decode are IO-bound; run on IO dispatcher.
@@ -77,6 +86,21 @@ class ImportRgpProjectUseCase @Inject constructor(
         } catch (e: Exception) {
             runCatching { projectRepository.deleteProject(projectId) }
             return ImportResult.Failure.WriteError
+        }
+        // Best-effort cover image generation. Any exception other than CancellationException
+        // is swallowed — the import result is Success regardless. For RGP files that carry an
+        // embedded cover image, the encoded bytes are used directly, skipping the render step.
+        runCatching {
+            val bytes = if (rgpProject.image != null) {
+                Base64.getDecoder().decode(rgpProject.image)
+            } else {
+                generateProjectPreview.render(projectRows, rgpProject.colorMapping, catalogMap)
+            }
+            val imageUrl = projectImageRepository.uploadCoverBytes(projectId, bytes)
+            projectRepository.setProjectImageUrl(projectId, imageUrl)
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "Cover image generation failed — import result unaffected", it)
         }
         return ImportResult.Success(projectId = projectId, name = rgpProject.name)
     }

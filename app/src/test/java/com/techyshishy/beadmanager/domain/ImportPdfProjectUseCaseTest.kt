@@ -15,6 +15,7 @@ import com.techyshishy.beadmanager.data.pdf.PdfRow
 import com.techyshishy.beadmanager.data.pdf.PdfStep
 import com.techyshishy.beadmanager.data.pdf.XlsmPdfParser
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.pdf.PdfTextExtractor
 import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsWriter
@@ -55,12 +56,15 @@ class ImportPdfProjectUseCaseTest {
     private fun successProjectRepo(): ProjectRepository = mockk {
         coEvery { createProject(any()) } returns "proj-123"
         coEvery { writeProjectGrid("proj-123", any()) } returns Unit
+        coEvery { setProjectImageUrl(any(), any()) } returns Unit
     }
 
     private fun buildUseCase(
         textExtractor: PdfTextExtractor = this.textExtractor(),
         catalog: CatalogRepository = catalogWith(),
         projectRepository: ProjectRepository = successProjectRepo(),
+        projectImageRepository: ProjectImageRepository = mockk(relaxed = true),
+        generatePreview: GenerateProjectPreviewUseCase = mockk(relaxed = true),
         beadToolParser: BeadToolPdfParser = mockk(),
         xlsmParser: XlsmPdfParser = mockk(),
         colorKeyExtractor: BeadToolColorKeyExtractor = mockk(),
@@ -70,6 +74,8 @@ class ImportPdfProjectUseCaseTest {
         contentResolver = contentResolver,
         catalogRepository = catalog,
         projectRepository = projectRepository,
+        projectImageRepository = projectImageRepository,
+        generateProjectPreview = generatePreview,
         beadToolParser = beadToolParser,
         xlsmParser = xlsmParser,
         colorKeyExtractor = colorKeyExtractor,
@@ -450,5 +456,56 @@ class ImportPdfProjectUseCaseTest {
         val result = buildXlsmSuccessUseCase(throwingResolver).import(uri)
         assertTrue("Expected Success but got $result", result is ImportResult.Success)
         assertEquals("Imported Project", (result as ImportResult.Success).name)
+    }
+
+    // ── cover image generation tests ──────────────────────────────────────────
+
+    @Test
+    fun `PDF import renders grid and uploads cover on success`() = runTest {
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns xlsmProject }
+        val renderedBytes = byteArrayOf(7, 8, 9)
+        val previewUseCase: GenerateProjectPreviewUseCase = mockk {
+            coEvery { render(any(), any(), any()) } returns renderedBytes
+        }
+        val imageRepo: ProjectImageRepository = mockk {
+            coEvery { uploadCoverBytes("proj-123", renderedBytes) } returns "https://cdn.example.com/pdf-cover"
+        }
+        val projectRepository: ProjectRepository = mockk {
+            coEvery { createProject(any()) } returns "proj-123"
+            coEvery { writeProjectGrid("proj-123", any()) } returns Unit
+            coEvery { setProjectImageUrl("proj-123", "https://cdn.example.com/pdf-cover") } returns Unit
+        }
+        val result = buildUseCase(
+            catalog = catalogWith("DB-0001", "DB-0002"),
+            projectRepository = projectRepository,
+            projectImageRepository = imageRepo,
+            generatePreview = previewUseCase,
+            beadToolParser = btParser,
+            xlsmParser = xParser,
+        ).import(uri)
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        coVerify(exactly = 1) { previewUseCase.render(any(), any(), any()) }
+        coVerify(exactly = 1) { imageRepo.uploadCoverBytes("proj-123", renderedBytes) }
+        coVerify(exactly = 1) { projectRepository.setProjectImageUrl("proj-123", "https://cdn.example.com/pdf-cover") }
+    }
+
+    @Test
+    fun `PDF cover render failure still returns Success`() = runTest {
+        val btParser: BeadToolPdfParser = mockk { every { parse(any(), any()) } throws PdfParseException.NoPatternFound() }
+        val xParser: XlsmPdfParser = mockk { every { parse(any(), any()) } returns xlsmProject }
+        val previewUseCase: GenerateProjectPreviewUseCase = mockk {
+            coEvery { render(any(), any(), any()) } throws RuntimeException("OOM during render")
+        }
+        val imageRepo: ProjectImageRepository = mockk(relaxed = true)
+        val result = buildUseCase(
+            catalog = catalogWith("DB-0001", "DB-0002"),
+            projectImageRepository = imageRepo,
+            generatePreview = previewUseCase,
+            beadToolParser = btParser,
+            xlsmParser = xParser,
+        ).import(uri)
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        coVerify(exactly = 0) { imageRepo.uploadCoverBytes(any(), any()) }
     }
 }

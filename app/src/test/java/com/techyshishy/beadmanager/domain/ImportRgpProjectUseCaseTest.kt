@@ -6,6 +6,7 @@ import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
+import com.techyshishy.beadmanager.data.repository.ProjectImageRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -18,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.util.Base64
 import java.util.zip.GZIPOutputStream
 
 class ImportRgpProjectUseCaseTest {
@@ -41,12 +43,17 @@ class ImportRgpProjectUseCaseTest {
      * Captures the [ProjectEntry] passed to [ProjectRepository.createProject] and the
      * [List<ProjectRgpRow>] passed to [ProjectRepository.writeProjectGrid] into the
      * supplied slots so tests can assert on both.
+     *
+     * [projectImageRepository] and [generatePreview] default to relaxed mocks so existing
+     * tests that do not care about cover generation continue to pass without changes.
      */
     private suspend fun runImport(
         json: String,
         catalog: CatalogRepository,
         capturedEntry: io.mockk.CapturingSlot<ProjectEntry>,
         capturedRows: io.mockk.CapturingSlot<List<ProjectRgpRow>>,
+        projectImageRepository: ProjectImageRepository = mockk(relaxed = true),
+        generatePreview: GenerateProjectPreviewUseCase = mockk(relaxed = true),
     ): ImportResult {
         val uri: Uri = mockk(relaxed = true)
         val contentResolver: ContentResolver = mockk {
@@ -55,11 +62,14 @@ class ImportRgpProjectUseCaseTest {
         val projectRepository: ProjectRepository = mockk {
             coEvery { createProject(capture(capturedEntry)) } returns "proj-123"
             coEvery { writeProjectGrid("proj-123", capture(capturedRows)) } returns Unit
+            coEvery { setProjectImageUrl(any(), any()) } returns Unit
         }
         return ImportRgpProjectUseCase(
             contentResolver = contentResolver,
             catalogRepository = catalog,
             projectRepository = projectRepository,
+            projectImageRepository = projectImageRepository,
+            generateProjectPreview = generatePreview,
         ).import(uri)
     }
 
@@ -189,9 +199,110 @@ class ImportRgpProjectUseCaseTest {
             contentResolver = contentResolver,
             catalogRepository = catalogWith("DB0001"),
             projectRepository = projectRepository,
+            projectImageRepository = mockk(relaxed = true),
+            generateProjectPreview = mockk(relaxed = true),
         ).import(uri)
 
         assertEquals(ImportResult.Failure.WriteError, result)
         coVerify(exactly = 1) { projectRepository.deleteProject("proj-orphan") }
+    }
+
+    // ── cover image generation tests ──────────────────────────────────────────
+
+    @Test
+    fun `embedded image field uploads bytes directly and skips grid render`() = runTest {
+        val imageBytes = byteArrayOf(1, 2, 3, 4, 5)
+        val imageBase64 = Base64.getEncoder().encodeToString(imageBytes)
+        val jsonWithImage = """
+            {
+              "id": 1,
+              "name": "Cover Pattern",
+              "rows": [{"id":1,"steps":[{"id":1,"count":2,"description":"A"}]}],
+              "colorMapping": {"A": "DB0001"},
+              "image": "$imageBase64"
+            }
+        """.trimIndent()
+        val capturedBytes = slot<ByteArray>()
+        val imageRepo: ProjectImageRepository = mockk {
+            coEvery { uploadCoverBytes("proj-cover", capture(capturedBytes)) } returns "https://cdn.example.com/cover"
+        }
+        val previewUseCase: GenerateProjectPreviewUseCase = mockk(relaxed = true)
+        val uri: Uri = mockk(relaxed = true)
+        val contentResolver: ContentResolver = mockk {
+            every { openInputStream(uri) } returns gzipStream(jsonWithImage)
+        }
+        val projectRepository: ProjectRepository = mockk {
+            coEvery { createProject(any()) } returns "proj-cover"
+            coEvery { writeProjectGrid("proj-cover", any()) } returns Unit
+            coEvery { setProjectImageUrl("proj-cover", "https://cdn.example.com/cover") } returns Unit
+        }
+        val result = ImportRgpProjectUseCase(
+            contentResolver = contentResolver,
+            catalogRepository = catalogWith("DB0001"),
+            projectRepository = projectRepository,
+            projectImageRepository = imageRepo,
+            generateProjectPreview = previewUseCase,
+        ).import(uri)
+
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        assertTrue(
+            "Uploaded bytes do not match embedded image bytes",
+            imageBytes.contentEquals(capturedBytes.captured),
+        )
+        coVerify(exactly = 1) { projectRepository.setProjectImageUrl("proj-cover", "https://cdn.example.com/cover") }
+        coVerify(exactly = 0) { previewUseCase.render(any(), any(), any()) }
+    }
+
+    @Test
+    fun `no embedded image renders grid and uploads cover`() = runTest {
+        val renderedBytes = byteArrayOf(10, 20, 30)
+        val previewUseCase: GenerateProjectPreviewUseCase = mockk {
+            coEvery { render(any(), any(), any()) } returns renderedBytes
+        }
+        val imageRepo: ProjectImageRepository = mockk {
+            coEvery { uploadCoverBytes("proj-grid", renderedBytes) } returns "https://cdn.example.com/rendered"
+        }
+        val uri: Uri = mockk(relaxed = true)
+        val contentResolver: ContentResolver = mockk {
+            every { openInputStream(uri) } returns gzipStream(fullGridJson)
+        }
+        val projectRepository: ProjectRepository = mockk {
+            coEvery { createProject(any()) } returns "proj-grid"
+            coEvery { writeProjectGrid("proj-grid", any()) } returns Unit
+            coEvery { setProjectImageUrl("proj-grid", "https://cdn.example.com/rendered") } returns Unit
+        }
+        val result = ImportRgpProjectUseCase(
+            contentResolver = contentResolver,
+            catalogRepository = catalogWith("DB0001", "DB0002"),
+            projectRepository = projectRepository,
+            projectImageRepository = imageRepo,
+            generateProjectPreview = previewUseCase,
+        ).import(uri)
+
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        coVerify(exactly = 1) { previewUseCase.render(any(), any(), any()) }
+        coVerify(exactly = 1) { imageRepo.uploadCoverBytes("proj-grid", renderedBytes) }
+        coVerify(exactly = 1) { projectRepository.setProjectImageUrl("proj-grid", "https://cdn.example.com/rendered") }
+    }
+
+    @Test
+    fun `cover render failure still returns Success`() = runTest {
+        val previewUseCase: GenerateProjectPreviewUseCase = mockk {
+            coEvery { render(any(), any(), any()) } throws RuntimeException("render failed")
+        }
+        val imageRepo: ProjectImageRepository = mockk(relaxed = true)
+        val capturedEntry = slot<ProjectEntry>()
+        val capturedRows = slot<List<ProjectRgpRow>>()
+        val result = runImport(
+            fullGridJson,
+            catalogWith("DB0001", "DB0002"),
+            capturedEntry,
+            capturedRows,
+            projectImageRepository = imageRepo,
+            generatePreview = previewUseCase,
+        )
+
+        assertTrue("Expected Success but got $result", result is ImportResult.Success)
+        coVerify(exactly = 0) { imageRepo.uploadCoverBytes(any(), any()) }
     }
 }
