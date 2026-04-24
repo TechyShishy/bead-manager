@@ -287,6 +287,13 @@ class CatalogViewModel @Inject constructor(
 
     // --- Comparison pin actions ---
 
+    fun pin(code: String) {
+        if (code in pinnedCodes.value) return
+        val updated = pinnedCodes.value + code
+        pinnedCodes.value = updated
+        viewModelScope.launch { pinsSource.setPinnedCodes(updated) }
+    }
+
     fun togglePin(code: String) {
         val updated = pinnedCodes.value.let { if (code in it) it - code else it + code }
         pinnedCodes.value = updated

@@ -391,6 +391,7 @@ fun AdaptiveScaffold() {
                                 val targetGrams = projectDetailVm.beads.value
                                     .find { it.beadCode == oldCode }?.targetGrams ?: 0.0
                                 catalogViewModel.setEnoughOnHandContext(targetGrams)
+                                catalogViewModel.pin(oldCode)
                             },
                             onPinAllToComparison = { codes ->
                                 catalogViewModel.pinAll(codes)

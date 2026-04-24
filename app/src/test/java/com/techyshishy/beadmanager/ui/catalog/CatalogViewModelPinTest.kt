@@ -127,6 +127,25 @@ class CatalogViewModelPinTest {
     }
 
     @Test
+    fun `pin adds unpinned bead to pinnedCodes`() = runTest {
+        val vm = makeViewModel()
+
+        vm.pin("DB0001")
+
+        assertEquals(listOf("DB0001"), vm.pinnedCodes.value)
+    }
+
+    @Test
+    fun `pin does not duplicate already-pinned bead`() = runTest {
+        val vm = makeViewModel()
+        vm.pin("DB0001")
+
+        vm.pin("DB0001")
+
+        assertEquals(listOf("DB0001"), vm.pinnedCodes.value)
+    }
+
+    @Test
     fun `reorderPins updates pinnedCodes to new order`() = runTest {
         val pinsSource = mockk<FirestoreCatalogPinsSource>(relaxed = true) {
             every { pinnedCodesStream() } returns flowOf(emptyList())
