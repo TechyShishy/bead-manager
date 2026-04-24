@@ -218,6 +218,9 @@
     <string name="pin_for_comparison">Pin for comparison</string>
     <string name="unpin_from_comparison">Unpin from comparison</string>
     <string name="unpin_bead_from_comparison">Remove %s from comparison</string>
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="remove_from_favorites">Remove from favorites</string>
+    <string name="favorites_only">Favorites only</string>
     <string name="comparison_strip_in_stock_only">In stock only</string>
     <string name="catalog_enough_in_stock">Enough in stock</string>
     <string name="comparison_strip_clear_all">Clear all</string>

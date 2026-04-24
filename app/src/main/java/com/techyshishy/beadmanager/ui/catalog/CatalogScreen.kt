@@ -141,6 +141,7 @@ fun CatalogScreen(
         filter.glassGroups.size +
         filter.finishes.size +
         (if (filter.ownedOnly) 1 else 0) +
+        (if (filter.favoritedOnly) 1 else 0) +
         (if (filter.sortBy != SortBy.DB_NUMBER) 1 else 0) +
         (if (enoughOnHandTargetGrams != null && enoughOnHandEnabled) 1 else 0)
     // On phones NavigationSuiteScaffold places the nav bar below content, so the content area

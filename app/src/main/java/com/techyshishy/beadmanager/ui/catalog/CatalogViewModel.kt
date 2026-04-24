@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.FirestoreCatalogPinsSource
+import com.techyshishy.beadmanager.data.firestore.FirestoreFavoritesSource
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
@@ -37,6 +38,7 @@ class CatalogViewModel @Inject constructor(
     private val inventoryRepository: InventoryRepository,
     private val preferencesRepository: PreferencesRepository,
     private val pinsSource: FirestoreCatalogPinsSource,
+    private val favoritesSource: FirestoreFavoritesSource,
 ) : ViewModel() {
 
     private val _trayCardEvent = MutableSharedFlow<TrayCardEvent>(extraBufferCapacity = 1)
@@ -50,6 +52,10 @@ class CatalogViewModel @Inject constructor(
     // optimistically to this flow first (instant UI feedback) then persist to Firestore.
     val pinnedCodes: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
 
+    // Favorites state. Kept in sync with Firestore via the favoritesSource stream.
+    // Toggle writes use arrayUnion/arrayRemove so concurrent device toggles are atomic.
+    val favoritedCodes: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
     init {
         // Keeps pinnedCodes in sync with the Firestore stream. On the originating device the
         // snapshot arrives after the optimistic local write, so the onEach update is a no-op.
@@ -60,7 +66,11 @@ class CatalogViewModel @Inject constructor(
         pinsSource.pinnedCodesStream()
             .onEach { codes -> pinnedCodes.value = codes }
             .launchIn(viewModelScope)
+        favoritesSource.favoritedCodesStream()
+            .onEach { codes -> favoritedCodes.value = codes }
+            .launchIn(viewModelScope)
     }
+
     val stockOnlyFilter: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     // Set by AdaptiveScaffold when the catalog opens in swap-picker mode. null = not in swap mode.
@@ -116,7 +126,17 @@ class CatalogViewModel @Inject constructor(
         filterState,
         stockOnlyFilter,
         enoughOnHandFilter,
-    ) { allBeads, query, filter, stockOnly, enoughOnHand ->
+        favoritedCodes,
+    ) { args ->
+        @Suppress("UNCHECKED_CAST")
+        val allBeads = args[0] as List<BeadWithInventory>
+        val query = args[1] as String
+        val filter = args[2] as FilterState
+        val stockOnly = args[3] as Boolean
+        @Suppress("UNCHECKED_CAST")
+        val enoughOnHand = args[4] as Pair<Double?, Boolean>
+        @Suppress("UNCHECKED_CAST")
+        val favCodes = args[5] as Set<String>
         val (enoughTargetGrams, enoughEnabled) = enoughOnHand
         val numericKey: (BeadWithInventory) -> Int = { item ->
             item.code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE
@@ -147,6 +167,8 @@ class CatalogViewModel @Inject constructor(
 
                 val matchesOwned = !filter.ownedOnly || item.isOwned
 
+                val matchesFavoritedOnly = !filter.favoritedOnly || item.code in favCodes
+
                 val matchesStockOnly = !stockOnly || item.isOwned
 
                 val matchesEnoughOnHand = !enoughEnabled || enoughTargetGrams == null || run {
@@ -156,7 +178,7 @@ class CatalogViewModel @Inject constructor(
 
                 matchesQuery && matchesColorGroup && matchesGlassGroup &&
                     matchesFinish && matchesDyed && matchesGalvanized && matchesPlating &&
-                    matchesOwned && matchesStockOnly && matchesEnoughOnHand
+                    matchesOwned && matchesFavoritedOnly && matchesStockOnly && matchesEnoughOnHand
             }
             .let { filtered ->
                 val asc = filter.sortDirection == SortDirection.ASCENDING
@@ -268,6 +290,10 @@ class CatalogViewModel @Inject constructor(
         filterState.value = filterState.value.copy(ownedOnly = !filterState.value.ownedOnly)
     }
 
+    fun toggleFavoritedOnly() {
+        filterState.value = filterState.value.copy(favoritedOnly = !filterState.value.favoritedOnly)
+    }
+
     fun setSortBy(sort: SortBy) {
         val current = filterState.value
         filterState.value = if (sort == current.sortBy) {
@@ -324,6 +350,21 @@ class CatalogViewModel @Inject constructor(
 
     fun toggleStockOnly() {
         stockOnlyFilter.value = !stockOnlyFilter.value
+    }
+
+    // --- Favorites actions ---
+
+    fun toggleFavorite(code: String) {
+        val currentlyFavorited = code in favoritedCodes.value
+        favoritedCodes.value = if (currentlyFavorited) {
+            favoritedCodes.value - code
+        } else {
+            favoritedCodes.value + code
+        }
+        viewModelScope.launch {
+            if (currentlyFavorited) favoritesSource.unfavorite(code)
+            else favoritesSource.favorite(code)
+        }
     }
 
     fun setEnoughOnHandContext(targetGrams: Double) {

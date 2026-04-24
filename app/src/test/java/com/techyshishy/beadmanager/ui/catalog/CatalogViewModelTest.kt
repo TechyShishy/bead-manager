@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.ui.catalog
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.BeadWithVendors
 import com.techyshishy.beadmanager.data.firestore.FirestoreCatalogPinsSource
+import com.techyshishy.beadmanager.data.firestore.FirestoreFavoritesSource
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
@@ -10,6 +11,7 @@ import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -51,6 +53,11 @@ class CatalogViewModelTest {
     private fun buildViewModel(
         entries: List<BeadWithVendors>,
         inventory: Map<String, InventoryEntry> = emptyMap(),
+        favoritesSource: FirestoreFavoritesSource = mockk {
+            every { favoritedCodesStream() } returns flowOf(emptySet())
+            coEvery { favorite(any()) } just Runs
+            coEvery { unfavorite(any()) } just Runs
+        },
     ): CatalogViewModel {
         val catalogRepository = mockk<CatalogRepository> {
             every { getAllBeadsWithVendors() } returns flowOf(entries)
@@ -67,7 +74,7 @@ class CatalogViewModelTest {
             every { pinnedCodesStream() } returns flowOf(emptyList())
             coEvery { setPinnedCodes(any()) } just Runs
         }
-        return CatalogViewModel(catalogRepository, inventoryRepository, preferencesRepository, pinsSource)
+        return CatalogViewModel(catalogRepository, inventoryRepository, preferencesRepository, pinsSource, favoritesSource)
     }
 
     @Test
@@ -180,5 +187,61 @@ class CatalogViewModelTest {
         assertEquals(false, vm.filterState.value.ownedOnly)
         assertEquals(false, vm.enoughOnHandEnabled.value)
         assertEquals(null, vm.enoughOnHandTargetGrams.value)
+    }
+
+    @Test
+    fun `favoritedOnly filter hides non-favorited beads`() = runTest {
+        val entries = listOf(
+            beadWithVendors("DB-0001"),
+            beadWithVendors("DB-0002"),
+        )
+        val vm = buildViewModel(entries)
+        val collected = mutableListOf<List<BeadWithInventory>>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.beads.collect { collected.add(it) }
+        }
+        vm.favoritedCodes.value = setOf("DB-0001")
+        vm.toggleFavoritedOnly()
+        advanceUntilIdle()
+        val filtered = collected.last()
+        assertEquals(listOf("DB-0001"), filtered.map { it.code })
+        job.cancel()
+    }
+
+    @Test
+    fun `toggleFavorite updates favoritedCodes optimistically and dispatches to Firestore`() = runTest {
+        val favoritesSource = mockk<FirestoreFavoritesSource> {
+            every { favoritedCodesStream() } returns flowOf(emptySet())
+            coEvery { favorite(any()) } just Runs
+            coEvery { unfavorite(any()) } just Runs
+        }
+        val vm = buildViewModel(emptyList(), favoritesSource = favoritesSource)
+        vm.toggleFavorite("DB-0001")
+        assertEquals(setOf("DB-0001"), vm.favoritedCodes.value)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { favoritesSource.favorite("DB-0001") }
+        vm.toggleFavorite("DB-0001")
+        assertEquals(emptySet<String>(), vm.favoritedCodes.value)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { favoritesSource.unfavorite("DB-0001") }
+    }
+
+    @Test
+    fun `favoritedOnly filter shows all beads when disabled`() = runTest {
+        val entries = listOf(
+            beadWithVendors("DB-0001"),
+            beadWithVendors("DB-0002"),
+        )
+        val vm = buildViewModel(entries)
+        val collected = mutableListOf<List<BeadWithInventory>>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.beads.collect { collected.add(it) }
+        }
+        vm.favoritedCodes.value = setOf("DB-0001")
+        vm.toggleFavoritedOnly()
+        vm.toggleFavoritedOnly()
+        advanceUntilIdle()
+        assertEquals(2, collected.last().size)
+        job.cancel()
     }
 }

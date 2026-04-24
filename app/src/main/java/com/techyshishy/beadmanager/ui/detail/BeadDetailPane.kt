@@ -27,7 +27,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -81,6 +83,8 @@ fun BeadDetailPane(
     onViewProjects: () -> Unit = {},
     isPinned: Boolean = false,
     onPinToggle: () -> Unit = {},
+    isFavorited: Boolean = false,
+    onFavoriteToggle: () -> Unit = {},
 ) {
     // LaunchedEffect ensures initialize() runs as a side effect, not during
     // composition, avoiding potential re-entrant snapshot state writes.
@@ -119,6 +123,15 @@ fun BeadDetailPane(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onFavoriteToggle) {
+                        Icon(
+                            if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = stringResource(
+                                if (isFavorited) R.string.remove_from_favorites
+                                else R.string.add_to_favorites
+                            ),
+                        )
+                    }
                     IconButton(onClick = onPinToggle) {
                         Icon(
                             if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
@@ -138,6 +151,15 @@ fun BeadDetailPane(
                     .padding(end = 4.dp),
                 horizontalArrangement = Arrangement.End,
             ) {
+                IconButton(onClick = onFavoriteToggle) {
+                    Icon(
+                        if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = stringResource(
+                            if (isFavorited) R.string.remove_from_favorites
+                            else R.string.add_to_favorites
+                        ),
+                    )
+                }
                 IconButton(onClick = onPinToggle) {
                     Icon(
                         if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,

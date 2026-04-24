@@ -22,6 +22,7 @@ data class FilterState(
     val galvanized: Set<String> = emptySet(),
     val plating: Set<String> = emptySet(),
     val ownedOnly: Boolean = false,
+    val favoritedOnly: Boolean = false,
     val sortBy: SortBy = SortBy.DB_NUMBER,
     val sortDirection: SortDirection = SortDirection.ASCENDING,
 )

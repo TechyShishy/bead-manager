@@ -92,6 +92,11 @@ fun FilterSheet(
                 onClick = { viewModel.toggleOwnedOnly() },
                 label = { Text(stringResource(R.string.owned_only)) },
             )
+            FilterChip(
+                selected = filter.favoritedOnly,
+                onClick = { viewModel.toggleFavoritedOnly() },
+                label = { Text(stringResource(R.string.favorites_only)) },
+            )
             if (enoughOnHandTargetGrams != null) {
                 FilterChip(
                     selected = enoughOnHandEnabled,

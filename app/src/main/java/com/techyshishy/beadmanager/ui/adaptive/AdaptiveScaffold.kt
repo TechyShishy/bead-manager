@@ -79,6 +79,7 @@ fun AdaptiveScaffold() {
 
     val catalogViewModel: CatalogViewModel = hiltViewModel()
     val pinnedCodes by catalogViewModel.pinnedCodes.collectAsState()
+    val favoritedCodes by catalogViewModel.favoritedCodes.collectAsState()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val projectsViewModel: ProjectsViewModel = hiltViewModel()
     val allOrdersViewModel: AllOrdersViewModel = hiltViewModel()
@@ -244,6 +245,8 @@ fun AdaptiveScaffold() {
                                 currentTab = AppTab.PROJECTS
                             },
                             onPinToggle = { catalogViewModel.togglePin(code) },
+                            isFavorited = code in favoritedCodes,
+                            onFavoriteToggle = { catalogViewModel.toggleFavorite(code) },
                         )
                     } else {
                         CatalogScreen(
