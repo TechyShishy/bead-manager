@@ -16,6 +16,7 @@ import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportResult
 import com.techyshishy.beadmanager.domain.ImportRgpProjectUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
@@ -43,15 +45,6 @@ class ProjectsViewModel @Inject constructor(
     private val _sortOrder = MutableStateFlow(ProjectSortOrder.DEFAULT)
     val sortOrder: StateFlow<ProjectSortOrder> = _sortOrder.asStateFlow()
 
-    val projects: StateFlow<List<ProjectEntry>> =
-        combine(
-            projectRepository.projectsStream(),
-            _sortOrder,
-        ) { list, order ->
-            list.sortedWith(order.comparator())
-        }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     /**
      * Bead requirements per project, keyed by projectId.
      *
@@ -62,13 +55,14 @@ class ProjectsViewModel @Inject constructor(
     private val _projectBeads = MutableStateFlow<Map<String, List<ProjectBeadEntry>>>(emptyMap())
 
     /**
-     * Satisfaction status per project: all-true = all beads met, any-false = deficit,
-     * `null` = no Delica beads or grid not yet loaded.
+     * Shared backing flow for per-project satisfaction. Factored out so both [beadSatisfaction]
+     * and [projects] can consume it without duplicating subscription chains.
      *
-     * Derived from live inventory + global threshold so it updates reactively as stock changes.
      * A 150 ms debounce absorbs inventory burst-sync events without unnecessary recomputation.
+     * Kept as a [StateFlow] (with an [emptyMap] initial value) so the [projects] combine does not
+     * stall waiting for inventory on the first tab visit.
      */
-    val beadSatisfaction: StateFlow<Map<String, ProjectSatisfaction?>> =
+    private val _satisfactionFlow: StateFlow<Map<String, ProjectSatisfaction?>> =
         combine(
             _projectBeads,
             inventoryRepository.inventoryStream(),
@@ -80,6 +74,24 @@ class ProjectsViewModel @Inject constructor(
         }
             .debounce(150L)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Satisfaction status per project: all-true = all beads met, any-false = deficit,
+     * `null` = no Delica beads or grid not yet loaded.
+     *
+     * Derived from live inventory + global threshold so it updates reactively as stock changes.
+     */
+    val beadSatisfaction: StateFlow<Map<String, ProjectSatisfaction?>> = _satisfactionFlow
+
+    val projects: StateFlow<List<ProjectEntry>> =
+        combine(
+            projectRepository.projectsStream(),
+            _sortOrder,
+            _satisfactionFlow,
+        ) { list, order, satisfaction ->
+            list.sortedWith(order.comparator(satisfaction))
+        }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _importResult = MutableSharedFlow<ImportResult>()
     val importResult: SharedFlow<ImportResult> = _importResult.asSharedFlow()

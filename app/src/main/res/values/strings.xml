@@ -135,6 +135,7 @@
     <string name="sort_name">Name</string>
     <string name="sort_bead_types">Bead Types</string>
     <string name="sort_grid_size">Grid Size</string>
+    <string name="sort_satisfaction">Satisfaction</string>
 
     <!-- Satisfaction bar content descriptions (TalkBack) -->
     <!-- %1$d = total bead types -->

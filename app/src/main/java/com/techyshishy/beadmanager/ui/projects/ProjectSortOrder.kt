@@ -1,6 +1,7 @@
 package com.techyshishy.beadmanager.ui.projects
 
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.model.ProjectSatisfaction
 
 enum class SortDirection { ASCENDING, DESCENDING }
 
@@ -9,6 +10,7 @@ enum class ProjectSortKey(val defaultDirection: SortDirection) {
     NAME(SortDirection.ASCENDING),
     BEAD_TYPES(SortDirection.DESCENDING),
     GRID_SIZE(SortDirection.DESCENDING),
+    SATISFACTION(SortDirection.ASCENDING),
 }
 
 /**
@@ -18,6 +20,8 @@ enum class ProjectSortKey(val defaultDirection: SortDirection) {
  * - [ProjectSortKey.CREATED_AT]: null [ProjectEntry.createdAt] → always after real timestamps.
  * - [ProjectSortKey.GRID_SIZE]: [ProjectEntry.rowCount] == 0 (no imported grid) → always after
  *   grid-backed projects.
+ * - [ProjectSortKey.SATISFACTION]: null satisfaction (no Delica beads / grid not yet loaded) →
+ *   always after projects with a computable satisfaction ratio.
  */
 data class ProjectSortOrder(
     val key: ProjectSortKey,
@@ -27,7 +31,9 @@ data class ProjectSortOrder(
         val DEFAULT = ProjectSortOrder(ProjectSortKey.CREATED_AT, SortDirection.DESCENDING)
     }
 
-    fun comparator(): Comparator<ProjectEntry> = when (key) {
+    fun comparator(
+        satisfaction: Map<String, ProjectSatisfaction?> = emptyMap(),
+    ): Comparator<ProjectEntry> = when (key) {
         ProjectSortKey.CREATED_AT -> Comparator { a, b ->
             val aTs = a.createdAt
             val bTs = b.createdAt
@@ -54,6 +60,23 @@ data class ProjectSortOrder(
                 b.rowCount == 0 -> -1
                 direction == SortDirection.DESCENDING -> b.rowCount.compareTo(a.rowCount)
                 else -> a.rowCount.compareTo(b.rowCount)
+            }
+        }
+        ProjectSortKey.SATISFACTION -> Comparator { a, b ->
+            val aSat = satisfaction[a.projectId]
+            val bSat = satisfaction[b.projectId]
+            when {
+                aSat == null && bSat == null -> 0
+                aSat == null -> 1   // null always last
+                bSat == null -> -1
+                else -> {
+                    // totalCount is always positive here: computeProjectSatisfaction returns null
+                    // for empty beadStatuses, so the null-sentinel branch above handles that path.
+                    val aRatio = (aSat.totalCount - aSat.deficitCount).toDouble() / aSat.totalCount
+                    val bRatio = (bSat.totalCount - bSat.deficitCount).toDouble() / bSat.totalCount
+                    val cmp = aRatio.compareTo(bRatio)
+                    if (direction == SortDirection.DESCENDING) -cmp else cmp
+                }
             }
         }
     }

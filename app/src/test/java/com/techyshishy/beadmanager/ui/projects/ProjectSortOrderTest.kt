@@ -2,6 +2,7 @@ package com.techyshishy.beadmanager.ui.projects
 
 import com.google.firebase.Timestamp
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.model.ProjectSatisfaction
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -157,6 +158,66 @@ class ProjectSortOrderTest {
         val p1 = project("a", rowCount = 0)
         val p2 = project("b", rowCount = 0)
         assertEquals(0, sort(ProjectSortKey.GRID_SIZE, SortDirection.DESCENDING).compare(p1, p2))
+    }
+
+    // ── SATISFACTION ─────────────────────────────────────────────────────────
+
+    /**
+     * Builds a [ProjectSatisfaction] with [total] beads and [deficit] of them unsatisfied.
+     * Returns a map entry keyed by [projectId] for direct use in `mapOf()`.
+     */
+    private fun satisfaction(
+        projectId: String,
+        total: Int,
+        deficit: Int,
+    ): Pair<String, ProjectSatisfaction?> =
+        projectId to ProjectSatisfaction(
+            (1..total).map { index -> index > deficit },
+        )
+
+    private fun sortSatisfaction(
+        direction: SortDirection,
+        satisfactionMap: Map<String, ProjectSatisfaction?>,
+    ) = ProjectSortOrder(ProjectSortKey.SATISFACTION, direction).comparator(satisfactionMap)
+
+    @Test
+    fun `SATISFACTION ASCENDING places lower-ratio project first`() {
+        val low = project("low")   // 1 of 5 satisfied → ratio 0.2
+        val high = project("high") // 4 of 5 satisfied → ratio 0.8
+        val sat = mapOf(satisfaction("low", total = 5, deficit = 4), satisfaction("high", total = 5, deficit = 1))
+        val sorted = listOf(high, low).sortedWith(sortSatisfaction(SortDirection.ASCENDING, sat))
+        assertEquals(listOf(low, high), sorted)
+    }
+
+    @Test
+    fun `SATISFACTION DESCENDING places higher-ratio project first`() {
+        val low = project("low")
+        val high = project("high")
+        val sat = mapOf(satisfaction("low", total = 5, deficit = 4), satisfaction("high", total = 5, deficit = 1))
+        val sorted = listOf(low, high).sortedWith(sortSatisfaction(SortDirection.DESCENDING, sat))
+        assertEquals(listOf(high, low), sorted)
+    }
+
+    @Test
+    fun `SATISFACTION places null satisfaction after non-null regardless of direction`() {
+        val withSat = project("a")
+        val noSat = project("b")
+        val sat = mapOf("a" to ProjectSatisfaction(listOf(true, false)), "b" to null)
+        val sortedAsc = listOf(noSat, withSat).sortedWith(sortSatisfaction(SortDirection.ASCENDING, sat))
+        val sortedDesc = listOf(noSat, withSat).sortedWith(sortSatisfaction(SortDirection.DESCENDING, sat))
+        assertEquals(listOf(withSat, noSat), sortedAsc)
+        assertEquals(listOf(withSat, noSat), sortedDesc)
+    }
+
+    @Test
+    fun `SATISFACTION treats equal ratios as equal`() {
+        val p1 = project("a")
+        val p2 = project("b")
+        val sat = mapOf(
+            "a" to ProjectSatisfaction(listOf(true, false)),
+            "b" to ProjectSatisfaction(listOf(true, false)),
+        )
+        assertEquals(0, sortSatisfaction(SortDirection.ASCENDING, sat).compare(p1, p2))
     }
 
     // ── Edge cases ───────────────────────────────────────────────────────────

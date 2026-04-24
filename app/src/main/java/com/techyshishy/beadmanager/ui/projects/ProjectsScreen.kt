@@ -505,4 +505,5 @@ private fun ProjectSortKey.label(): String = when (this) {
     ProjectSortKey.NAME -> stringResource(R.string.sort_name)
     ProjectSortKey.BEAD_TYPES -> stringResource(R.string.sort_bead_types)
     ProjectSortKey.GRID_SIZE -> stringResource(R.string.sort_grid_size)
+    ProjectSortKey.SATISFACTION -> stringResource(R.string.sort_satisfaction)
 }
