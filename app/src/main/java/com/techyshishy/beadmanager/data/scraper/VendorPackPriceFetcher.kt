@@ -9,6 +9,8 @@ import javax.inject.Singleton
  * Supported vendor keys: "ac" (Aura Crystals), "fmg" (Fire Mountain Gems).
  * Unsupported keys throw [UnsupportedOperationException]; callers should filter
  * to only supported vendors before calling [fetch].
+ *
+ * TODO(#95): Add BobPackPriceFetcher for Barrel of Beads ("bob") live price scraping.
  */
 @Singleton
 class VendorPackPriceFetcher @Inject constructor(

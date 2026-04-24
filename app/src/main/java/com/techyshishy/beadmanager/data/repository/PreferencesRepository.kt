@@ -51,8 +51,10 @@ class PreferencesRepository @Inject constructor(
             booleanPreferencesKey("migration_flat_project_to_grid_v1_done")
         private val KEY_MIGRATION_INLINE_ROWS_V1 =
             booleanPreferencesKey("migration_inline_rows_v1_done")
+        private val KEY_MIGRATION_BOB_VENDOR_V1 =
+            booleanPreferencesKey("migration_bob_vendor_v1_done")
         const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
-        val DEFAULT_VENDOR_PRIORITY_ORDER: List<String> = listOf("fmg", "ac")
+        val DEFAULT_VENDOR_PRIORITY_ORDER: List<String> = listOf("fmg", "bob", "ac")
         const val DEFAULT_BUY_UP_ENABLED = true
         const val DEFAULT_TRAY_CARD_MAX_GRAMS = 10.0
     }
@@ -225,5 +227,13 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setMigrationInlineRowsV1Done() {
         dataStore.edit { prefs -> prefs[KEY_MIGRATION_INLINE_ROWS_V1] = true }
+    }
+
+    val migrationBobVendorV1Done: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_MIGRATION_BOB_VENDOR_V1] ?: false
+    }
+
+    suspend fun setMigrationBobVendorV1Done() {
+        dataStore.edit { prefs -> prefs[KEY_MIGRATION_BOB_VENDOR_V1] = true }
     }
 }

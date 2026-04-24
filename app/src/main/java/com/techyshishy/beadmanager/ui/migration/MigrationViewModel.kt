@@ -34,6 +34,7 @@ class MigrationViewModel @Inject constructor(
             runOrderProjectIdsV1Migration()
             runFlatProjectToGridV1Migration()
             runInlineRowsToSubcollectionV1Migration()
+            runBobVendorMigration()
         }
     }
 
@@ -145,6 +146,32 @@ class MigrationViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Inline-rows migration failed; will retry on next launch", e)
+        }
+    }
+
+    /**
+     * Inserts "bob" (Barrel of Beads) into the stored vendor priority order for existing
+     * users whose saved order predates this vendor being registered. New installs use
+     * DEFAULT_VENDOR_PRIORITY_ORDER which already includes "bob", so this migration is a
+     * no-op for them once that default is written.
+     *
+     * Position: immediately after "fmg" when present, otherwise appended at the end.
+     */
+    private suspend fun runBobVendorMigration() {
+        try {
+            val done = preferencesRepository.migrationBobVendorV1Done.first()
+            if (!done) {
+                val current = preferencesRepository.vendorPriorityOrder.first()
+                if ("bob" !in current) {
+                    val fmgIndex = current.indexOf("fmg")
+                    val insertAt = if (fmgIndex >= 0) fmgIndex + 1 else current.size
+                    val updated = current.toMutableList().also { it.add(insertAt, "bob") }
+                    preferencesRepository.setVendorPriorityOrder(updated)
+                }
+                preferencesRepository.setMigrationBobVendorV1Done()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Bob vendor migration failed; will retry on next launch", e)
         }
     }
 

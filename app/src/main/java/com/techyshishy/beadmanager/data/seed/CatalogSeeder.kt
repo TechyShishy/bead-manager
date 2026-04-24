@@ -41,15 +41,15 @@ class CatalogSeeder @Inject constructor(
 ) {
 
     companion object {
-        private const val CATALOG_VERSION = 5
+        private const val CATALOG_VERSION = 6
         private const val CATALOG_ASSET = "delica-beads.json"
 
         private val KEY_CATALOG_VERSION = intPreferencesKey("catalog_version")
 
         val VENDOR_DISPLAY_NAMES: Map<String, String> = mapOf(
             "ac"  to "Aura Crystals",
+            "bob" to "Barrel of Beads",
             "fmg" to "Fire Mountain Gems",
-            // Third vendor will be added here — key must match JSON field name.
         )
 
         // Canonical values for each finish-related property; used to populate filter chips.
