@@ -94,7 +94,6 @@ class CatalogViewModelTest {
         assertEquals(3, result.size)
 
         vm.setEnoughOnHandContext(6.0)
-        vm.toggleEnoughOnHand()
         advanceUntilIdle()
 
         // DB-0001 (8g) and DB-0003 (6g) meet the 6g requirement; DB-0002 (3g) does not.
@@ -120,7 +119,6 @@ class CatalogViewModelTest {
         advanceUntilIdle()
 
         vm.setEnoughOnHandContext(5.0)
-        vm.toggleEnoughOnHand()
         advanceUntilIdle()
         assertEquals(listOf("DB-0001"), result.map { it.code })
 
@@ -148,7 +146,6 @@ class CatalogViewModelTest {
         advanceUntilIdle()
 
         vm.setEnoughOnHandContext(0.0)
-        vm.toggleEnoughOnHand()
         advanceUntilIdle()
 
         // Only DB-0001 has non-zero inventory; DB-0002 has none.
@@ -159,9 +156,29 @@ class CatalogViewModelTest {
     fun `clearFilters resets enoughOnHandEnabled but preserves enoughOnHandTargetGrams`() = runTest {
         val vm = buildViewModel(emptyList())
         vm.setEnoughOnHandContext(5.0)
-        vm.toggleEnoughOnHand()
         vm.clearFilters()
         assertEquals(false, vm.enoughOnHandEnabled.value)
+        assertEquals(false, vm.filterState.value.ownedOnly)
         assertEquals(5.0, vm.enoughOnHandTargetGrams.value)
+    }
+
+    @Test
+    fun `setEnoughOnHandContext auto-enables enoughOnHand and ownedOnly`() = runTest {
+        val vm = buildViewModel(emptyList())
+        vm.setEnoughOnHandContext(10.0)
+        assertEquals(true, vm.enoughOnHandEnabled.value)
+        assertEquals(true, vm.filterState.value.ownedOnly)
+        assertEquals(10.0, vm.enoughOnHandTargetGrams.value)
+    }
+
+    @Test
+    fun `clearEnoughOnHandFilter resets ownedOnly`() = runTest {
+        val vm = buildViewModel(emptyList())
+        vm.setEnoughOnHandContext(5.0)
+        assertEquals(true, vm.filterState.value.ownedOnly)
+        vm.clearEnoughOnHandFilter()
+        assertEquals(false, vm.filterState.value.ownedOnly)
+        assertEquals(false, vm.enoughOnHandEnabled.value)
+        assertEquals(null, vm.enoughOnHandTargetGrams.value)
     }
 }

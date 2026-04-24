@@ -328,12 +328,14 @@ class CatalogViewModel @Inject constructor(
 
     fun setEnoughOnHandContext(targetGrams: Double) {
         enoughOnHandTargetGrams.value = targetGrams
-        enoughOnHandEnabled.value = false
+        enoughOnHandEnabled.value = true
+        filterState.value = filterState.value.copy(ownedOnly = true)
     }
 
     fun clearEnoughOnHandFilter() {
         enoughOnHandTargetGrams.value = null
         enoughOnHandEnabled.value = false
+        filterState.value = filterState.value.copy(ownedOnly = false)
     }
 
     fun toggleEnoughOnHand() {
