@@ -5,7 +5,7 @@ package com.techyshishy.beadmanager.data.scraper
  *
  * [priceCents] is the Tier 1 (qty 1–14) unit price for FMG; the flat unit price for AC.
  * [tier2PriceCents], [tier3PriceCents], [tier4PriceCents] are FMG quantity-break prices;
- * null for AC (which has no tier discounts).
+ * null for AC and BoB (which use flat pricing with no tier discounts).
  * [available] reflects the vendor's current in-stock state.
  */
 data class ScrapedPack(

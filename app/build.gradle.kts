@@ -184,6 +184,7 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 
     // Testing — instrumented UI tests
     androidTestImplementation(platform(libs.androidx.compose.bom))
