@@ -70,7 +70,7 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
             strokeWidth = 0.5f
         }
         val textPaint = Paint().apply {
-            textSize = 10f
+            textSize = 12f
             isFakeBoldText = true
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
