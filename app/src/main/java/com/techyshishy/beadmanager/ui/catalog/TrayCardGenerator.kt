@@ -70,8 +70,9 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
             strokeWidth = 0.5f
         }
         val textPaint = Paint().apply {
-            textSize = 9f
+            textSize = 10f
             isFakeBoldText = true
+            textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
 
@@ -104,10 +105,10 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
                     (textPaint.textSize / 2f) - textPaint.descent()
                 val displayCode = truncateToFit(
                     codes[i],
-                    TRAY_CELL_WIDTH_PT - 4f, // 2f left pad (see drawText x offset) + 2f right margin
+                    TRAY_CELL_WIDTH_PT - 4f, // 2f margin on each side of centered text
                     textPaint::measureText,
                 )
-                canvas.drawText(displayCode, cellLeft + 2f, textBaseline, textPaint)
+                canvas.drawText(displayCode, cellLeft + TRAY_CELL_WIDTH_PT / 2f, textBaseline, textPaint)
             }
 
             document.finishPage(page)
