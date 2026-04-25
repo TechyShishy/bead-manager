@@ -121,6 +121,9 @@
     <string name="picker_add_bead_hint">Add bead to: %1$s</string>
     <string name="picker_swap_bead_hint">Swap bead in: %1$s</string>
     <string name="picker_cancel">Cancel</string>
+    <string name="swap_candidates_header">Candidates</string>
+    <string name="swap_candidate_current">Current</string>
+    <string name="swap_candidate_commit_hint">Tap to swap</string>
 
     <!-- Catalog → View Projects -->
     <string name="view_projects">View Projects</string>

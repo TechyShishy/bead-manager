@@ -27,8 +27,27 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.core.graphics.toColorInt
+import coil3.compose.AsyncImage
+import com.techyshishy.beadmanager.data.db.VendorLinkEntity
+import com.techyshishy.beadmanager.data.model.BeadWithInventory
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
@@ -81,6 +100,8 @@ fun AdaptiveScaffold() {
     val pinnedCodes by catalogViewModel.pinnedCodes.collectAsState()
     val favoritedCodes by catalogViewModel.favoritedCodes.collectAsState()
     val catalogBeads by catalogViewModel.beads.collectAsState()
+    val swapCandidateBeads by catalogViewModel.swapCandidateBeads.collectAsState()
+    val vendorPriorityOrder by catalogViewModel.vendorPriorityOrder.collectAsState()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val projectsViewModel: ProjectsViewModel = hiltViewModel()
     val allOrdersViewModel: AllOrdersViewModel = hiltViewModel()
@@ -133,6 +154,7 @@ fun AdaptiveScaffold() {
             projectsCatalogPickerMode = false
             projectsCatalogSwapTargetCode = null
             catalogViewModel.clearEnoughOnHandFilter()
+            catalogViewModel.clearSwapCandidates()
         }
     }
 
@@ -271,6 +293,7 @@ fun AdaptiveScaffold() {
                             projectsCatalogPickerMode = false
                             projectsCatalogSwapTargetCode = null
                             catalogViewModel.clearEnoughOnHandFilter()
+                            catalogViewModel.clearSwapCandidates()
                         }
                         ordersAddToOrderCodes != null -> ordersAddToOrderCodes = null
                         projectInfoMode -> projectInfoMode = false
@@ -302,6 +325,7 @@ fun AdaptiveScaffold() {
                                             projectsCatalogPickerMode = false
                                             projectsCatalogSwapTargetCode = null
                                             catalogViewModel.clearEnoughOnHandFilter()
+                                            catalogViewModel.clearSwapCandidates()
                                         },
                                     ) {
                                         Icon(
@@ -324,19 +348,39 @@ fun AdaptiveScaffold() {
                                     )
                                 }
                             }
-                            Box(modifier = Modifier.consumeWindowInsets(WindowInsets.statusBars)) {
+                            Box(
+                                modifier = Modifier
+                                    .consumeWindowInsets(WindowInsets.statusBars)
+                                    .weight(1f),
+                            ) {
                                 CatalogScreen(
                                     viewModel = catalogViewModel,
                                     onBeadSelected = { code ->
                                         val swapTarget = projectsCatalogSwapTargetCode
                                         if (swapTarget != null) {
-                                            projectDetailVm.swapBead(swapTarget, code)
+                                            catalogViewModel.addSwapCandidate(code)
                                         } else {
                                             projectDetailVm.addBead(code)
+                                            projectsCatalogPickerMode = false
+                                            projectsCatalogSwapTargetCode = null
+                                            catalogViewModel.clearEnoughOnHandFilter()
+                                            catalogViewModel.clearSwapCandidates()
                                         }
+                                    },
+                                )
+                            }
+                            val swapTarget = projectsCatalogSwapTargetCode
+                            if (isSwap && swapCandidateBeads.isNotEmpty() && swapTarget != null) {
+                                SwapCandidatePanel(
+                                    candidates = swapCandidateBeads,
+                                    currentCode = swapTarget,
+                                    vendorPriorityOrder = vendorPriorityOrder,
+                                    onCommit = { candidateCode ->
+                                        projectDetailVm.swapBead(swapTarget, candidateCode)
                                         projectsCatalogPickerMode = false
                                         projectsCatalogSwapTargetCode = null
                                         catalogViewModel.clearEnoughOnHandFilter()
+                                        catalogViewModel.clearSwapCandidates()
                                     },
                                 )
                             }
@@ -400,7 +444,7 @@ fun AdaptiveScaffold() {
                                 val targetGrams = projectDetailVm.beads.value
                                     .find { it.beadCode == oldCode }?.targetGrams ?: 0.0
                                 catalogViewModel.setEnoughOnHandContext(targetGrams)
-                                catalogViewModel.pin(oldCode)
+                                catalogViewModel.addSwapCandidate(oldCode)
                             },
                             onPinAllToComparison = { codes ->
                                 catalogViewModel.pinAll(codes)
@@ -539,4 +583,126 @@ fun AdaptiveScaffold() {
             }
         }
     }
+}
+
+@Composable
+private fun SwapCandidatePanel(
+    candidates: List<BeadWithInventory>,
+    currentCode: String?,
+    vendorPriorityOrder: List<String>,
+    onCommit: (String) -> Unit,
+) {
+    Surface(
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column {
+            Text(
+                text = stringResource(R.string.swap_candidates_header),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 4.dp),
+            )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(candidates, key = { it.code }) { candidate ->
+                    val isCurrent = candidate.code == currentCode
+                    val name = resolveBeadNameForDisplay(
+                        candidate.catalogEntry.vendorLinks,
+                        vendorPriorityOrder,
+                    )
+                    SwapCandidateCard(
+                        code = candidate.code,
+                        hex = candidate.catalogEntry.bead.hex,
+                        imageUrl = candidate.catalogEntry.bead.imageUrl,
+                        name = name,
+                        isCurrent = isCurrent,
+                        onCommit = if (isCurrent) null else { { onCommit(candidate.code) } },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwapCandidateCard(
+    code: String,
+    hex: String,
+    imageUrl: String,
+    name: String?,
+    isCurrent: Boolean,
+    onCommit: (() -> Unit)?,
+) {
+    val hexColor = remember(hex) {
+        runCatching { Color(hex.toColorInt()) }.getOrElse { Color.LightGray }
+    }
+    val accessibilityLabel = if (isCurrent) {
+        stringResource(R.string.swap_candidate_current)
+    } else {
+        stringResource(R.string.swap_candidate_commit_hint)
+    }
+    Card(
+        onClick = { onCommit?.invoke() },
+        enabled = onCommit != null,
+        border = BorderStroke(
+            width = if (isCurrent) 2.dp else 1.dp,
+            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCurrent) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        ),
+        modifier = Modifier
+            .width(72.dp)
+            .clearAndSetSemantics { contentDescription = "$code – $accessibilityLabel" },
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(6.dp),
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = code,
+                error = ColorPainter(hexColor),
+                placeholder = ColorPainter(hexColor),
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+            )
+            Text(
+                text = code,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (name != null) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private fun resolveBeadNameForDisplay(
+    vendorLinks: List<VendorLinkEntity>,
+    priorityOrder: List<String>,
+): String? {
+    val byVendor = vendorLinks.associateBy { it.vendorKey }
+    for (key in priorityOrder) {
+        val name = byVendor[key]?.beadName?.takeIf { it.isNotBlank() }
+        if (name != null) return name
+    }
+    return vendorLinks.firstOrNull { !it.beadName.isNullOrBlank() }?.beadName
 }

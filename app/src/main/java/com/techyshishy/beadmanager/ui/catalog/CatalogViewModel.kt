@@ -114,6 +114,27 @@ class CatalogViewModel @Inject constructor(
         codes.mapNotNull { lookup[it] }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // Swap candidate state — ephemeral, scoped to the swap-picker session.
+    // No Firestore backing: cleared when the picker closes.
+    val swapCandidateCodes: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
+
+    // Ordered list of swap candidate BeadWithInventory objects, with live inventory data.
+    val swapCandidateBeads: StateFlow<List<BeadWithInventory>> = combine(
+        allBeadsWithInventory,
+        swapCandidateCodes,
+    ) { allBeads, codes ->
+        val lookup = allBeads.associateBy { it.code }
+        codes.mapNotNull { lookup[it] }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val vendorPriorityOrder: StateFlow<List<String>> =
+        preferencesRepository.vendorPriorityOrder
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                PreferencesRepository.DEFAULT_VENDOR_PRIORITY_ORDER,
+            )
+
     private val enoughOnHandFilter: StateFlow<Pair<Double?, Boolean>> = combine(
         enoughOnHandTargetGrams,
         enoughOnHandEnabled,
@@ -346,6 +367,17 @@ class CatalogViewModel @Inject constructor(
     fun reorderPins(newOrder: List<String>) {
         pinnedCodes.value = newOrder
         viewModelScope.launch { pinsSource.setPinnedCodes(newOrder) }
+    }
+
+    // --- Swap candidate actions ---
+
+    fun addSwapCandidate(code: String) {
+        if (code in swapCandidateCodes.value) return
+        swapCandidateCodes.value = swapCandidateCodes.value + code
+    }
+
+    fun clearSwapCandidates() {
+        swapCandidateCodes.value = emptyList()
     }
 
     fun toggleStockOnly() {

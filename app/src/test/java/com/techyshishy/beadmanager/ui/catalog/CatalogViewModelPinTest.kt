@@ -42,6 +42,7 @@ class CatalogViewModelPinTest {
         }
         val preferencesRepository = mockk<PreferencesRepository> {
             every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(PreferencesRepository.DEFAULT_VENDOR_PRIORITY_ORDER)
         }
         return CatalogViewModel(catalogRepository, inventoryRepository, preferencesRepository, pinsSource, favoritesSource)
     }
@@ -162,4 +163,46 @@ class CatalogViewModelPinTest {
         assertEquals(listOf("DB0003", "DB0001", "DB0002"), vm.pinnedCodes.value)
         coVerify { pinsSource.setPinnedCodes(listOf("DB0003", "DB0001", "DB0002")) }
     }
+
+    // --- Swap candidate tests ---
+
+    @Test
+    fun `addSwapCandidate adds code to swapCandidateCodes`() = runTest {
+        val vm = makeViewModel()
+
+        vm.addSwapCandidate("DB0001")
+
+        assertEquals(listOf("DB0001"), vm.swapCandidateCodes.value)
+    }
+
+    @Test
+    fun `addSwapCandidate with duplicate code is a no-op`() = runTest {
+        val vm = makeViewModel()
+        vm.addSwapCandidate("DB0001")
+
+        vm.addSwapCandidate("DB0001")
+
+        assertEquals(listOf("DB0001"), vm.swapCandidateCodes.value)
+    }
+
+    @Test
+    fun `clearSwapCandidates resets swapCandidateCodes to empty`() = runTest {
+        val vm = makeViewModel()
+        vm.addSwapCandidate("DB0001")
+        vm.addSwapCandidate("DB0002")
+
+        vm.clearSwapCandidates()
+
+        assertTrue(vm.swapCandidateCodes.value.isEmpty())
+    }
+
+    @Test
+    fun `swapCandidateBeads is empty for codes not in the catalog`() = runTest {
+        val vm = makeViewModel()
+
+        vm.addSwapCandidate("UNKNOWN")
+
+        assertTrue(vm.swapCandidateBeads.value.isEmpty())
+    }
 }
+
