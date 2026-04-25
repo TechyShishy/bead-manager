@@ -93,6 +93,7 @@ fun BeadDetailPane(
     }
     val beadWithInventory by viewModel.bead.collectAsState()
     val globalThreshold by viewModel.globalThresholdGrams.collectAsState()
+    val beadName by viewModel.beadName.collectAsState()
     val isPhoneLayout = LocalConfiguration.current.screenWidthDp < 600
     val item = beadWithInventory ?: return
 
@@ -207,6 +208,7 @@ fun BeadDetailPane(
 
             Spacer(Modifier.height(8.dp))
 
+            beadName?.let { MetadataRow("Name", it) }
             MetadataRow("Color group", colorGroupList.joinToString(", "))
             MetadataRow("Glass group", bead.glassGroup)
             MetadataRow("Dyed", bead.dyed)
