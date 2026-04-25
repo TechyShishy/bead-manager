@@ -28,6 +28,24 @@ internal fun pageCount(totalCodes: Int): Int =
     if (totalCodes == 0) 0 else (totalCodes + TRAY_SLOTS_PER_PAGE - 1) / TRAY_SLOTS_PER_PAGE
 
 /**
+ * Returns [text] unchanged if it fits within [maxWidth] as measured by [measureText].
+ * Otherwise truncates from the right, appending `…`, until the result fits.
+ */
+internal fun truncateToFit(
+    text: String,
+    maxWidth: Float,
+    measureText: (String) -> Float,
+): String {
+    if (measureText(text) <= maxWidth) return text
+    val ellipsis = "\u2026"
+    var truncated = text
+    while (truncated.isNotEmpty() && measureText(truncated + ellipsis) > maxWidth) {
+        truncated = truncated.dropLast(1)
+    }
+    return truncated + ellipsis
+}
+
+/**
  * Generates a printable tray card PDF at [outputFile].
  *
  * Beads are laid out in a 10-column × 5-row grid. Each cell is 67 × 27 PDF points
@@ -52,7 +70,8 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
             strokeWidth = 0.5f
         }
         val textPaint = Paint().apply {
-            textSize = 7f
+            textSize = 9f
+            isFakeBoldText = true
             isAntiAlias = true
         }
 
@@ -83,7 +102,12 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
                 // Centre text vertically within the cell.
                 val textBaseline = cellTop + TRAY_CELL_HEIGHT_PT / 2f +
                     (textPaint.textSize / 2f) - textPaint.descent()
-                canvas.drawText(codes[i], cellLeft + 2f, textBaseline, textPaint)
+                val displayCode = truncateToFit(
+                    codes[i],
+                    TRAY_CELL_WIDTH_PT - 4f, // 2f left pad (see drawText x offset) + 2f right margin
+                    textPaint::measureText,
+                )
+                canvas.drawText(displayCode, cellLeft + 2f, textBaseline, textPaint)
             }
 
             document.finishPage(page)
