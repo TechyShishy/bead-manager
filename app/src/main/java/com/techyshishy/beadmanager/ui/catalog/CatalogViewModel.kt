@@ -380,6 +380,10 @@ class CatalogViewModel @Inject constructor(
         swapCandidateCodes.value = emptyList()
     }
 
+    fun removeSwapCandidate(code: String) {
+        swapCandidateCodes.value = swapCandidateCodes.value - code
+    }
+
     fun toggleStockOnly() {
         stockOnlyFilter.value = !stockOnlyFilter.value
     }

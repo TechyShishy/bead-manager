@@ -97,6 +97,11 @@ fun CatalogScreen(
     viewModel: CatalogViewModel,
     onBeadSelected: (String) -> Unit,
     gridState: LazyGridState = rememberLazyGridState(),
+    swapCandidates: List<BeadWithInventory>? = null,
+    swapCurrentCode: String? = null,
+    onCommitSwap: ((String) -> Unit)? = null,
+    onRemoveSwapCandidate: ((String) -> Unit)? = null,
+    onCancelSwapSession: (() -> Unit)? = null,
 ) {
     val beads by viewModel.beads.collectAsState()
     val sortBuckets by viewModel.sortBuckets.collectAsState()
@@ -170,15 +175,28 @@ fun CatalogScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        PinComparisonStrip(
-            pinnedBeads = pinnedBeads,
-            stockOnlyFilter = stockOnlyFilter,
-            onBeadSelected = onBeadSelected,
-            onUnpin = { code -> viewModel.unpinBead(code) },
-            onClearAll = { viewModel.clearAllPins() },
-            onToggleStockOnly = { viewModel.toggleStockOnly() },
-            onReorder = { newOrder -> viewModel.reorderPins(newOrder) },
-        )
+        if (swapCandidates != null) {
+            PinComparisonStrip(
+                pinnedBeads = swapCandidates,
+                stockOnlyFilter = false,
+                currentCode = swapCurrentCode,
+                onBeadSelected = { code -> onCommitSwap?.invoke(code) },
+                onUnpin = { code -> onRemoveSwapCandidate?.invoke(code) },
+                onClearAll = { onCancelSwapSession?.invoke() },
+                onToggleStockOnly = {},
+                onReorder = {},
+            )
+        } else {
+            PinComparisonStrip(
+                pinnedBeads = pinnedBeads,
+                stockOnlyFilter = stockOnlyFilter,
+                onBeadSelected = onBeadSelected,
+                onUnpin = { code -> viewModel.unpinBead(code) },
+                onClearAll = { viewModel.clearAllPins() },
+                onToggleStockOnly = { viewModel.toggleStockOnly() },
+                onReorder = { newOrder -> viewModel.reorderPins(newOrder) },
+            )
+        }
         TextField(
             value = searchFieldValue,
             onValueChange = { newValue ->
@@ -366,6 +384,7 @@ private fun PinComparisonStrip(
     onClearAll: () -> Unit,
     onToggleStockOnly: () -> Unit,
     onReorder: (List<String>) -> Unit,
+    currentCode: String? = null,
     modifier: Modifier = Modifier,
 ) {
     if (pinnedBeads.isEmpty()) return
@@ -404,6 +423,7 @@ private fun PinComparisonStrip(
                     }.getOrDefault(Color.Gray)
                 }
                 val isDragged = index == draggedIndex
+                val isCurrentCard = code == currentCode
                 // rememberUpdatedState provides the current index to the stable pointerInput
                 // coroutine (keyed on Unit) so a second drag on a moved swatch reads the
                 // correct position rather than the index captured at first composition.
@@ -412,6 +432,15 @@ private fun PinComparisonStrip(
                 Box(
                     modifier = Modifier
                         .size(80.dp)
+                        .then(
+                            if (isCurrentCard) {
+                                Modifier.border(
+                                    2.dp,
+                                    MaterialTheme.colorScheme.primary,
+                                    CircleShape,
+                                )
+                            } else Modifier,
+                        )
                         .zIndex(if (isDragged) 1f else 0f)
                         .onSizeChanged { itemWidthPx = it.width }
                         .graphicsLayer {
@@ -466,38 +495,42 @@ private fun PinComparisonStrip(
                             .size(72.dp)
                             .clip(CircleShape)
                             .align(Alignment.Center)
-                            .clickable(enabled = !isDragged) { onBeadSelected(bead.code) },
+                            .clickable(enabled = !isDragged && !isCurrentCard) { onBeadSelected(bead.code) },
                         placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
                         error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
                     )
                     CompositionLocalProvider(
                         LocalMinimumInteractiveComponentSize provides 0.dp,
                     ) {
-                        IconButton(
-                            onClick = { onUnpin(bead.code) },
-                            modifier = Modifier
-                                .size(24.dp)
-                                .align(Alignment.TopEnd),
-                        ) {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = stringResource(
-                                    R.string.unpin_bead_from_comparison,
-                                    bead.code,
-                                ),
-                                modifier = Modifier.size(16.dp),
-                            )
+                        if (!isCurrentCard) {
+                            IconButton(
+                                onClick = { onUnpin(bead.code) },
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .align(Alignment.TopEnd),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(
+                                        R.string.unpin_bead_from_comparison,
+                                        bead.code,
+                                    ),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
-            item(key = "stock_only_toggle") {
-                Spacer(Modifier.width(4.dp))
-                FilterChip(
-                    selected = stockOnlyFilter,
-                    onClick = onToggleStockOnly,
-                    label = { Text(stringResource(R.string.comparison_strip_in_stock_only)) },
-                )
+            if (currentCode == null) {
+                item(key = "stock_only_toggle") {
+                    Spacer(Modifier.width(4.dp))
+                    FilterChip(
+                        selected = stockOnlyFilter,
+                        onClick = onToggleStockOnly,
+                        label = { Text(stringResource(R.string.comparison_strip_in_stock_only)) },
+                    )
+                }
             }
             item(key = "clear_all") {
                 TextButton(onClick = onClearAll) {

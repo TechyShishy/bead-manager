@@ -204,5 +204,26 @@ class CatalogViewModelPinTest {
 
         assertTrue(vm.swapCandidateBeads.value.isEmpty())
     }
+
+    @Test
+    fun `removeSwapCandidate removes the specified code`() = runTest {
+        val vm = makeViewModel()
+        vm.addSwapCandidate("DB0001")
+        vm.addSwapCandidate("DB0002")
+
+        vm.removeSwapCandidate("DB0001")
+
+        assertEquals(listOf("DB0002"), vm.swapCandidateCodes.value)
+    }
+
+    @Test
+    fun `removeSwapCandidate on absent code is a no-op`() = runTest {
+        val vm = makeViewModel()
+        vm.addSwapCandidate("DB0001")
+
+        vm.removeSwapCandidate("DB0099")
+
+        assertEquals(listOf("DB0001"), vm.swapCandidateCodes.value)
+    }
 }
 

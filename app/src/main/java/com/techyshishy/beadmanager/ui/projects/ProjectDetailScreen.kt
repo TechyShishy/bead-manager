@@ -82,7 +82,7 @@ fun ProjectDetailScreen(
     onNavigateBack: () -> Unit,
     onAddToOrder: (selectedCodes: Set<String>) -> Unit,
     onAddBeadFromCatalog: () -> Unit,
-    onReplaceBeadFromCatalog: (oldCode: String) -> Unit,
+    onReplaceBeadFromCatalog: (oldCode: String, originalCode: String?) -> Unit,
     onPinAllToComparison: (List<String>) -> Unit,
     onViewInCatalog: (String) -> Unit,
     onViewProjectInfo: () -> Unit,
@@ -327,7 +327,7 @@ fun ProjectDetailScreen(
                         effectiveDeficit = effectiveDeficit,
                         isThresholdOnly = isThresholdOnly,
                         activeOrderStatus = activeOrderStatus[bead.beadCode],
-                        onReplace = { onReplaceBeadFromCatalog(bead.beadCode) },
+                        onReplace = { onReplaceBeadFromCatalog(bead.beadCode, bead.originalBeadCode) },
                         onDelete = ({ deleteTarget = bead }).takeUnless { isGridBacked && bead.targetGrams > 0.0 },
                         onViewInCatalog = { onViewInCatalog(bead.beadCode) },
                     )
