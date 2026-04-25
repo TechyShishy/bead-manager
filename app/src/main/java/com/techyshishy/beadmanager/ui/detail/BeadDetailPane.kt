@@ -125,7 +125,7 @@ fun BeadDetailPane(
                 detectHorizontalDragGestures(
                     onDragStart = { totalDrag = 0f },
                     onDragEnd = {
-                        val threshold = 100.dp.toPx()
+                        val threshold = 50.dp.toPx()
                         when {
                             totalDrag < -threshold -> latestOnNavigateNext?.invoke()
                             totalDrag > threshold -> latestOnNavigatePrev?.invoke()
