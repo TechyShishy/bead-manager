@@ -78,17 +78,24 @@ class BeadDetailViewModel @Inject constructor(
      * non-blank [com.techyshishy.beadmanager.data.db.VendorLinkEntity.beadName].
      * Emits `null` when no vendor link carries a name.
      *
-     * TODO: derive from combine(catalogRepository.getBeadWithVendors(beadCode), vendorPriorityOrder)
-     *  instead of from [bead], so name resolution does not recompute on every inventory or
-     *  threshold change.
+     * Derived directly from the catalog flow and vendor priority order — independent of the
+     * inventory and threshold streams — so it does not recompute on inventory or threshold changes.
      */
     val beadName: StateFlow<String?> =
-        combine(bead, vendorPriorityOrder) { beadWithInventory, priorityOrder ->
-            resolveBeadName(
-                vendorLinks = beadWithInventory?.catalogEntry?.vendorLinks ?: emptyList(),
-                priorityOrder = priorityOrder,
-            )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        beadCode
+            .flatMapLatest { code ->
+                if (code.isBlank()) return@flatMapLatest flowOf(null)
+                combine(
+                    catalogRepository.getBeadWithVendors(code),
+                    vendorPriorityOrder,
+                ) { beadWithVendors, priorityOrder ->
+                    resolveBeadName(
+                        vendorLinks = beadWithVendors?.vendorLinks ?: emptyList(),
+                        priorityOrder = priorityOrder,
+                    )
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private fun resolveBeadName(
         vendorLinks: List<VendorLinkEntity>,

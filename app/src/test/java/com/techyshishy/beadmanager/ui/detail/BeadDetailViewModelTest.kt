@@ -10,7 +10,9 @@ import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.ui.orders.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
+import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -165,5 +167,45 @@ class BeadDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Mystery Black", result)
+    }
+
+    @Test
+    fun `beadName does not re-emit when inventory changes`() = runTest {
+        val beadCode = "DB-010"
+        val beadWithVendors = BeadWithVendors(
+            bead = beadEntity(beadCode),
+            vendorLinks = listOf(vendorLink(vendorKey = "fmg", beadName = "Opaque Black")),
+        )
+        val inventoryFlow = MutableStateFlow<Map<String, InventoryEntry>>(emptyMap())
+
+        val catalogRepository = mockk<CatalogRepository> {
+            every { getBeadWithVendors(beadCode) } returns flowOf(beadWithVendors)
+        }
+        val inventoryRepository = mockk<InventoryRepository> {
+            every { inventoryStream() } returns inventoryFlow
+        }
+        val preferencesRepository = mockk<PreferencesRepository> {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "bob", "ac"))
+        }
+
+        val vm = BeadDetailViewModel(catalogRepository, inventoryRepository, preferencesRepository)
+        vm.initialize(beadCode)
+
+        val emissions = mutableListOf<String?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.beadName.collect { emissions.add(it) }
+        }
+        advanceUntilIdle()
+
+        val countBeforeInventoryChange = emissions.size
+        assert(countBeforeInventoryChange > 0) { "beadName must emit at least once before inventory change" }
+        assertEquals("Opaque Black", emissions.last())
+
+        // Mutate inventory — beadName must not produce any additional emissions
+        inventoryFlow.value = mapOf(beadCode to InventoryEntry(beadCode = beadCode, quantityGrams = 99.0))
+        advanceUntilIdle()
+
+        assertEquals(countBeforeInventoryChange, emissions.size)
     }
 }
