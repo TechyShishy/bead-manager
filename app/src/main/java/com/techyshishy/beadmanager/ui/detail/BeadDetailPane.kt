@@ -28,6 +28,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NavigateBefore
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -87,8 +89,8 @@ fun BeadDetailPane(
     onPinToggle: () -> Unit = {},
     isFavorited: Boolean = false,
     onFavoriteToggle: () -> Unit = {},
-    onSwipeLeft: (() -> Unit)? = null,
-    onSwipeRight: (() -> Unit)? = null,
+    onNavigateNext: (() -> Unit)? = null,
+    onNavigatePrev: (() -> Unit)? = null,
 ) {
     // LaunchedEffect ensures initialize() runs as a side effect, not during
     // composition, avoiding potential re-entrant snapshot state writes.
@@ -111,8 +113,8 @@ fun BeadDetailPane(
     }
     val colorGroupList = bead.colorGroup
 
-    val latestOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
-    val latestOnSwipeRight by rememberUpdatedState(onSwipeRight)
+    val latestOnNavigateNext by rememberUpdatedState(onNavigateNext)
+    val latestOnNavigatePrev by rememberUpdatedState(onNavigatePrev)
 
     Column(
         modifier = Modifier
@@ -125,8 +127,8 @@ fun BeadDetailPane(
                     onDragEnd = {
                         val threshold = 100.dp.toPx()
                         when {
-                            totalDrag < -threshold -> latestOnSwipeLeft?.invoke()
-                            totalDrag > threshold -> latestOnSwipeRight?.invoke()
+                            totalDrag < -threshold -> latestOnNavigateNext?.invoke()
+                            totalDrag > threshold -> latestOnNavigatePrev?.invoke()
                         }
                         totalDrag = 0f
                     },
@@ -204,16 +206,50 @@ fun BeadDetailPane(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
-            // Bead image / color swatch
-            AsyncImage(
-                model = bead.imageUrl,
-                contentDescription = bead.code,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f),
-                placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
-                error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
-            )
+            // Bead image / color swatch — flanked by prev/next arrows when navigating catalog
+            if (onNavigatePrev != null || onNavigateNext != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { onNavigatePrev?.invoke() },
+                        enabled = onNavigatePrev != null,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.NavigateBefore,
+                            contentDescription = stringResource(R.string.navigate_prev),
+                        )
+                    }
+                    AsyncImage(
+                        model = bead.imageUrl,
+                        contentDescription = bead.code,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(2f),
+                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                    )
+                    IconButton(
+                        onClick = { onNavigateNext?.invoke() },
+                        enabled = onNavigateNext != null,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.NavigateNext,
+                            contentDescription = stringResource(R.string.navigate_next),
+                        )
+                    }
+                }
+            } else {
+                AsyncImage(
+                    model = bead.imageUrl,
+                    contentDescription = bead.code,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f),
+                    placeholder = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                    error = androidx.compose.ui.graphics.painter.ColorPainter(hexColor),
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 

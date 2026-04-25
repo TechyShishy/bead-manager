@@ -251,8 +251,8 @@ fun AdaptiveScaffold() {
                             onPinToggle = { catalogViewModel.togglePin(code) },
                             isFavorited = code in favoritedCodes,
                             onFavoriteToggle = { catalogViewModel.toggleFavorite(code) },
-                            onSwipeLeft = nextCode?.let { next -> { catalogDetailCode = next } },
-                            onSwipeRight = prevCode?.let { prev -> { catalogDetailCode = prev } },
+                            onNavigateNext = nextCode?.let { next -> { catalogDetailCode = next } },
+                            onNavigatePrev = prevCode?.let { prev -> { catalogDetailCode = prev } },
                         )
                     } else {
                         CatalogScreen(
