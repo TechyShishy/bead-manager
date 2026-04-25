@@ -80,6 +80,7 @@ fun AdaptiveScaffold() {
     val catalogViewModel: CatalogViewModel = hiltViewModel()
     val pinnedCodes by catalogViewModel.pinnedCodes.collectAsState()
     val favoritedCodes by catalogViewModel.favoritedCodes.collectAsState()
+    val catalogBeads by catalogViewModel.beads.collectAsState()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val projectsViewModel: ProjectsViewModel = hiltViewModel()
     val allOrdersViewModel: AllOrdersViewModel = hiltViewModel()
@@ -222,6 +223,9 @@ fun AdaptiveScaffold() {
                         val detailVm: BeadDetailViewModel = hiltViewModel(
                             key = "catalog_detail_$code",
                         )
+                        val currentIndex = catalogBeads.indexOfFirst { it.code == code }
+                        val prevCode = if (currentIndex > 0) catalogBeads[currentIndex - 1].code else null
+                        val nextCode = if (currentIndex in 0 until catalogBeads.size - 1) catalogBeads[currentIndex + 1].code else null
                         BeadDetailPane(
                             beadCode = code,
                             viewModel = detailVm,
@@ -247,6 +251,8 @@ fun AdaptiveScaffold() {
                             onPinToggle = { catalogViewModel.togglePin(code) },
                             isFavorited = code in favoritedCodes,
                             onFavoriteToggle = { catalogViewModel.toggleFavorite(code) },
+                            onSwipeLeft = nextCode?.let { next -> { catalogDetailCode = next } },
+                            onSwipeRight = prevCode?.let { prev -> { catalogDetailCode = prev } },
                         )
                     } else {
                         CatalogScreen(

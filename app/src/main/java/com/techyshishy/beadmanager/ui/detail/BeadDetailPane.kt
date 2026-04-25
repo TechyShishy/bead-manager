@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,6 +87,8 @@ fun BeadDetailPane(
     onPinToggle: () -> Unit = {},
     isFavorited: Boolean = false,
     onFavoriteToggle: () -> Unit = {},
+    onSwipeLeft: (() -> Unit)? = null,
+    onSwipeRight: (() -> Unit)? = null,
 ) {
     // LaunchedEffect ensures initialize() runs as a side effect, not during
     // composition, avoiding potential re-entrant snapshot state writes.
@@ -107,10 +111,32 @@ fun BeadDetailPane(
     }
     val colorGroupList = bead.colorGroup
 
+    val latestOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
+    val latestOnSwipeRight by rememberUpdatedState(onSwipeRight)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(focusManager) { detectTapGestures { focusManager.clearFocus() } },
+            .pointerInput(focusManager) { detectTapGestures { focusManager.clearFocus() } }
+            .pointerInput(Unit) {
+                var totalDrag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onDragEnd = {
+                        val threshold = 100.dp.toPx()
+                        when {
+                            totalDrag < -threshold -> latestOnSwipeLeft?.invoke()
+                            totalDrag > threshold -> latestOnSwipeRight?.invoke()
+                        }
+                        totalDrag = 0f
+                    },
+                    onDragCancel = { totalDrag = 0f },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        totalDrag += dragAmount
+                    },
+                )
+            },
     ) {
         if (onNavigateBack != null) {
             TopAppBar(
