@@ -159,12 +159,6 @@ fun generateTrayCard(
             val codesOnPage = pageSliceEnd - pageSliceStart
             val cardsOnPage = (codesOnPage + TRAY_SLOTS_PER_CARD - 1) / TRAY_SLOTS_PER_CARD
 
-            // Draw cut guides: one at the top edge and one below each card present on the page.
-            for (cardIndex in 0..cardsOnPage) {
-                val guideY = marginTop + cardIndex * TRAY_CARD_HEIGHT_PT
-                canvas.drawLine(marginLeft, guideY, contentRight, guideY, cutGuidePaint)
-            }
-
             // Render all cells for every card on this page — borders always, text only for
             // occupied slots. This ensures the full 50-slot grid is visible even when the
             // last card on a page is only partially filled.
@@ -193,6 +187,15 @@ fun generateTrayCard(
                     )
                     canvas.drawText(displayCode, cellLeft + cellWidthPt / 2f, textBaseline, textPaint)
                 }
+            }
+
+            // Draw cut guides last so the dashed lines render on top of the solid cell
+            // borders. Cell borders share the same Y coordinates as the card boundaries,
+            // so drawing guides first would let the solid strokes paint over the dashes,
+            // making the guides invisible.
+            for (cardIndex in 0..cardsOnPage) {
+                val guideY = marginTop + cardIndex * TRAY_CARD_HEIGHT_PT
+                canvas.drawLine(marginLeft, guideY, contentRight, guideY, cutGuidePaint)
             }
 
             document.finishPage(page)
@@ -371,16 +374,6 @@ fun generateProjectCard(
         val page = document.startPage(pageInfo)
         val canvas = page.canvas
 
-        // Cut guides at the top and bottom edges of the single card.
-        canvas.drawLine(marginLeft, marginTop, contentRight, marginTop, cutGuidePaint)
-        canvas.drawLine(
-            marginLeft,
-            marginTop + TRAY_CARD_HEIGHT_PT,
-            contentRight,
-            marginTop + TRAY_CARD_HEIGHT_PT,
-            cutGuidePaint,
-        )
-
         for (slotIndex in 0 until TRAY_SLOTS_PER_CARD) {
             val (row, col) = slotRowCol(slotIndex)
             val cellLeft = marginLeft + col * cellWidthPt
@@ -395,6 +388,19 @@ fun generateProjectCard(
                 (textPaint.textSize / 2f) - textPaint.descent()
             canvas.drawText(label, cellLeft + cellWidthPt / 2f, textBaseline, textPaint)
         }
+
+        // Draw cut guides last so the dashed lines render on top of the solid cell
+        // borders. Cell borders share the same Y coordinates as the card boundaries,
+        // so drawing guides first would let the solid strokes paint over the dashes,
+        // making the guides invisible.
+        canvas.drawLine(marginLeft, marginTop, contentRight, marginTop, cutGuidePaint)
+        canvas.drawLine(
+            marginLeft,
+            marginTop + TRAY_CARD_HEIGHT_PT,
+            contentRight,
+            marginTop + TRAY_CARD_HEIGHT_PT,
+            cutGuidePaint,
+        )
 
         document.finishPage(page)
         outputFile.outputStream().use { document.writeTo(it) }
