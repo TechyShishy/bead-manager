@@ -133,7 +133,7 @@ fun CatalogScreen(
                         .build()
                     printManager.print(
                         printJobName,
-                        TrayCardPrintDocumentAdapter(context.applicationContext, event.codes),
+                        TrayCardPrintDocumentAdapter(context.applicationContext, event.codes, event.calibrationMm),
                         printAttributes,
                     )
                 }

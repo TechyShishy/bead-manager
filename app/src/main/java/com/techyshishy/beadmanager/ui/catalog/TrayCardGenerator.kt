@@ -21,12 +21,14 @@ internal const val TRAY_CARDS_PER_PAGE = 4
 internal const val TRAY_SLOTS_PER_CARD = TRAY_COLS * TRAY_ROWS_PER_CARD
 internal const val TRAY_SLOTS_PER_PAGE = TRAY_SLOTS_PER_CARD * TRAY_CARDS_PER_PAGE
 
+// Physical tray target: 10 cells must span this many mm on the printed page.
+internal const val TRAY_TARGET_WIDTH_MM = 235f
+
 // Cell dimensions in PDF points (1 pt = 1/72 in).
-// Width is calibrated from a physical test print: 10 cells at 65.3 pt measured 223 mm;
-// target is 235 mm (physical tray width), so the constant is scaled proportionally:
-// 65.3 × (235/223) ≈ 68.8 pt per cell, giving 688 pt ≈ 242.8 mm in the PDF.
-// At the ~3% printer-side residual scaling that survived the printable-area fix, this
-// prints to ≈ 235 mm on the physical tray.
+// TRAY_CELL_WIDTH_PT is the reference (uncalibrated) value derived from a test print on
+// one specific device/printer combination. Per-device calibration is applied at print time
+// by TrayCardPrintDocumentAdapter using the value stored in
+// PreferencesRepository.trayCardCalibrationMm. Default = 235 mm (no adjustment).
 // Height: 27 pt (= 9.525 mm). Not yet calibrated against a physical measurement.
 internal const val TRAY_CELL_WIDTH_PT = 68.8f
 internal const val TRAY_CELL_HEIGHT_PT = 27
@@ -78,25 +80,25 @@ internal fun truncateToFit(
 /**
  * Generates a printable tray card PDF at [outputFile].
  *
- * Pages are US Letter landscape (792 × 612 pt). Each page holds 4 tray card grids of
- * 10 cols × 5 rows, stacked vertically and centered on the page (~69.5 pt left/right margin,
- * ~36 pt top/bottom margin). Dashed horizontal cut guides are drawn at the top edge,
- * bottom edge, and between every card on the page. Cell dimensions are 65.3 × 27 pt
- * (≈ 23.04 × 9.53 mm), matching standard 50-slot test-tube bead trays.
+ * Pages are US Letter landscape (792 × 612 pt by default, or the printer's printable area
+ * when called from [TrayCardPrintDocumentAdapter]). Each page holds 4 tray card grids of
+ * 10 cols × 5 rows stacked vertically, centered on the page. Dashed horizontal cut guides
+ * are drawn at the top edge, bottom edge, and between every card on the page.
  *
- * The caller is responsible for providing [codes] in the desired order; this function
- * renders them as-is. An empty [codes] list produces a minimal empty PDF.
+ * [cellWidthPt] controls the width of each of the 10 columns in PDF points. Pass the
+ * calibrated value from [TrayCardPrintDocumentAdapter] to compensate for device-specific
+ * printer scaling. Defaults to [TRAY_CELL_WIDTH_PT] (the reference value).
  *
- * [pageWidthPt] and [pageHeightPt] define the canvas size in PDF points. Defaults to
- * US Letter landscape (792 × 612 pt). Pass the printable area reported by [PrintAttributes]
- * to generate a PDF whose dimensions exactly match the printer's printable area, eliminating
- * any framework-level fit-to-page scaling.
+ * [pageWidthPt] and [pageHeightPt] define the canvas size. Pass the printable area reported
+ * by [PrintAttributes] to generate a PDF sized exactly to the printer's usable area,
+ * eliminating framework-level fit-to-page scaling.
  */
 fun generateTrayCard(
     codes: List<String>,
     outputFile: File,
     pageWidthPt: Float = TRAY_PAGE_WIDTH_PT.toFloat(),
     pageHeightPt: Float = TRAY_PAGE_HEIGHT_PT.toFloat(),
+    cellWidthPt: Float = TRAY_CELL_WIDTH_PT,
 ) {
     val numPages = pageCount(codes.size)
 
@@ -123,9 +125,10 @@ fun generateTrayCard(
             pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
         }
 
-        val marginLeft = (pageWidthPt - TRAY_CARD_WIDTH_PT) / 2
+        val cardWidthPt = TRAY_COLS * cellWidthPt
+        val marginLeft = (pageWidthPt - cardWidthPt) / 2
         val marginTop = (pageHeightPt - TRAY_CARDS_PER_PAGE * TRAY_CARD_HEIGHT_PT) / 2
-        val contentRight = marginLeft + TRAY_CARD_WIDTH_PT
+        val contentRight = marginLeft + cardWidthPt
 
         for (pageIndex in 0 until numPages) {
             val pageInfo = PdfDocument.PageInfo.Builder(
@@ -160,9 +163,9 @@ fun generateTrayCard(
                 val col = slotInCard % TRAY_COLS
                 val row = slotInCard / TRAY_COLS
 
-                val cellLeft = marginLeft + col * TRAY_CELL_WIDTH_PT
+                val cellLeft = marginLeft + col * cellWidthPt
                 val cellTop = marginTop + cardIndex * TRAY_CARD_HEIGHT_PT + row * TRAY_CELL_HEIGHT_PT
-                val cellRight = cellLeft + TRAY_CELL_WIDTH_PT
+                val cellRight = cellLeft + cellWidthPt
                 val cellBottom = cellTop + TRAY_CELL_HEIGHT_PT
 
                 canvas.drawRect(cellLeft, cellTop, cellRight, cellBottom, borderPaint)
@@ -173,10 +176,10 @@ fun generateTrayCard(
                         (textPaint.textSize / 2f) - textPaint.descent()
                     val displayCode = truncateToFit(
                         codes[codeIndex],
-                        TRAY_CELL_WIDTH_PT - 4f, // 2f margin on each side of centered text
+                        cellWidthPt - 4f, // 2f margin on each side of centered text
                         textPaint::measureText,
                     )
-                    canvas.drawText(displayCode, cellLeft + TRAY_CELL_WIDTH_PT / 2f, textBaseline, textPaint)
+                    canvas.drawText(displayCode, cellLeft + cellWidthPt / 2f, textBaseline, textPaint)
                 }
             }
 
@@ -205,6 +208,12 @@ fun generateTrayCard(
 class TrayCardPrintDocumentAdapter(
     private val context: Context,
     private val codes: List<String>,
+    /**
+     * The measured width in mm of 10 printed cells from a previous test print on this
+     * device. Used to scale [TRAY_CELL_WIDTH_PT] so the output matches [TRAY_TARGET_WIDTH_MM].
+     * Default = [TRAY_TARGET_WIDTH_MM] (235 mm), meaning no scale adjustment is applied.
+     */
+    private val calibrationMm: Float = TRAY_TARGET_WIDTH_MM,
 ) : PrintDocumentAdapter() {
 
     // Populated in onLayout, read in onWrite. Both callbacks are invoked on the main thread
@@ -249,7 +258,8 @@ class TrayCardPrintDocumentAdapter(
                 return
             }
             val (pageWidthPt, pageHeightPt) = currentAttributes.printableAreaPt()
-            generateTrayCard(codes, tempFile, pageWidthPt, pageHeightPt)
+            val calibratedCellWidthPt = TRAY_CELL_WIDTH_PT * (TRAY_TARGET_WIDTH_MM / calibrationMm)
+            generateTrayCard(codes, tempFile, pageWidthPt, pageHeightPt, calibratedCellWidthPt)
             if (cancellationSignal.isCanceled) {
                 callback.onWriteCancelled()
                 return

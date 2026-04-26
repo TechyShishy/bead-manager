@@ -40,6 +40,10 @@
     <string name="tray_card_max_grams_description">Beads at or above this quantity are excluded from the tray card export. Match this to your physical tray slot capacity.</string>
     <string name="settings_tray_card_label">Max per slot (g)</string>
     <string name="settings_tray_card_error">Enter a value from 1 to 50 (grams)</string>
+    <string name="tray_card_calibration">Tray card width calibration</string>
+    <string name="tray_card_calibration_description">Print a test card, measure the width of all 10 cells from the left edge of the first cell to the right edge of the last, then enter the measurement here. The app adjusts cell width to hit 235 mm on your device and printer.</string>
+    <string name="settings_tray_card_calibration_label">Measured width (mm)</string>
+    <string name="settings_tray_card_calibration_error">Enter a value from 50 to 400 (mm)</string>
     <string name="low_stock_threshold_label">Low-stock threshold: %1$dg</string>
     <string name="using_global_default">Using global default</string>
     <string name="reset_to_global_default">Reset to global</string>

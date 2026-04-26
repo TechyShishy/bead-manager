@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.firebase.auth.FirebaseAuth
 import com.techyshishy.beadmanager.data.firestore.FirestorePreferencesSource
@@ -53,10 +54,19 @@ class PreferencesRepository @Inject constructor(
             booleanPreferencesKey("migration_inline_rows_v1_done")
         private val KEY_MIGRATION_BOB_VENDOR_V1 =
             booleanPreferencesKey("migration_bob_vendor_v1_done")
+        /**
+         * Measured width (mm) of 10 printed tray cells that the user entered as their
+         * calibration value. Stored per-device in local DataStore only (not Firestore-synced)
+         * because different Android devices drive the same printer differently.
+         * Default = 235 mm (the target width), meaning no scale adjustment is applied.
+         */
+        private val KEY_TRAY_CARD_CALIBRATION_MM =
+            floatPreferencesKey("tray_card_calibration_mm")
         const val DEFAULT_GLOBAL_LOW_STOCK_THRESHOLD = 5.0
         val DEFAULT_VENDOR_PRIORITY_ORDER: List<String> = listOf("fmg", "bob", "ac")
         const val DEFAULT_BUY_UP_ENABLED = true
         const val DEFAULT_TRAY_CARD_MAX_GRAMS = 10.0
+        const val DEFAULT_TRAY_CARD_CALIBRATION_MM = 235.0f
     }
 
     /**
@@ -235,5 +245,19 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setMigrationBobVendorV1Done() {
         dataStore.edit { prefs -> prefs[KEY_MIGRATION_BOB_VENDOR_V1] = true }
+    }
+
+    /**
+     * Device-local calibration: the width in mm that 10 tray cells measured on the last
+     * test print. The app multiplies [TRAY_CELL_WIDTH_PT] by (235 / this value) to
+     * compensate for device- and printer-specific scaling. Not synced to Firestore.
+     */
+    val trayCardCalibrationMm: Flow<Float> = dataStore.data.map { prefs ->
+        prefs[KEY_TRAY_CARD_CALIBRATION_MM] ?: DEFAULT_TRAY_CARD_CALIBRATION_MM
+    }
+
+    suspend fun setTrayCardCalibrationMm(mm: Float) {
+        val coerced = mm.coerceIn(50.0f, 400.0f)
+        dataStore.edit { prefs -> prefs[KEY_TRAY_CARD_CALIBRATION_MM] = coerced }
     }
 }

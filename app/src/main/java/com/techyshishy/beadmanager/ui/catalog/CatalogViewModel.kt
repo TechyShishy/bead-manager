@@ -424,6 +424,7 @@ class CatalogViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val maxGrams = preferencesRepository.trayCardMaxGrams.first()
+                val calibrationMm = preferencesRepository.trayCardCalibrationMm.first()
                 val codes = inventoryRepository.inventoryStream()
                     .first()
                     .entries
@@ -434,7 +435,7 @@ class CatalogViewModel @Inject constructor(
                     _trayCardEvent.emit(TrayCardEvent.EmptyInventory)
                     return@launch
                 }
-                _trayCardEvent.emit(TrayCardEvent.Print(codes))
+                _trayCardEvent.emit(TrayCardEvent.Print(codes, calibrationMm))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -446,7 +447,7 @@ class CatalogViewModel @Inject constructor(
 }
 
 sealed class TrayCardEvent {
-    data class Print(val codes: List<String>) : TrayCardEvent()
+    data class Print(val codes: List<String>, val calibrationMm: Float) : TrayCardEvent()
     data object EmptyInventory : TrayCardEvent()
     data object Error : TrayCardEvent()
 }
