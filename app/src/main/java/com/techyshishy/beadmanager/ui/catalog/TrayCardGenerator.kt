@@ -1,7 +1,6 @@
 package com.techyshishy.beadmanager.ui.catalog
 
 import android.content.Context
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.os.Bundle
@@ -95,8 +94,8 @@ internal fun slotRowCol(slotInCard: Int): Pair<Int, Int> {
  *
  * Pages are US Letter landscape (792 × 612 pt by default, or the printer's printable area
  * when called from [TrayCardPrintDocumentAdapter]). Each page holds 4 tray card grids of
- * 10 cols × 5 rows stacked vertically, centered on the page. Dashed horizontal cut guides
- * are drawn at the top edge, bottom edge, and between every card on the page.
+ * 10 cols × 5 rows stacked vertically, centered on the page. Bold cut lines are drawn at
+ * the top edge, bottom edge, and between every card on the page.
  *
  * [cellWidthPt] controls the width of each of the 10 columns in PDF points. Pass the
  * calibrated value from [TrayCardPrintDocumentAdapter] to compensate for device-specific
@@ -132,10 +131,9 @@ fun generateTrayCard(
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
-        val cutGuidePaint = Paint().apply {
+        val cutLinePaint = Paint().apply {
             style = Paint.Style.STROKE
-            strokeWidth = 0.5f
-            pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
+            strokeWidth = 1.5f
         }
 
         val cardWidthPt = TRAY_COLS * cellWidthPt
@@ -189,13 +187,11 @@ fun generateTrayCard(
                 }
             }
 
-            // Draw cut guides last so the dashed lines render on top of the solid cell
-            // borders. Cell borders share the same Y coordinates as the card boundaries,
-            // so drawing guides first would let the solid strokes paint over the dashes,
-            // making the guides invisible.
+            // Draw bold cut lines last so they paint over the thinner cell border strokes
+            // that share the same Y coordinates at each card boundary.
             for (cardIndex in 0..cardsOnPage) {
-                val guideY = marginTop + cardIndex * TRAY_CARD_HEIGHT_PT
-                canvas.drawLine(marginLeft, guideY, contentRight, guideY, cutGuidePaint)
+                val cutY = marginTop + cardIndex * TRAY_CARD_HEIGHT_PT
+                canvas.drawLine(marginLeft, cutY, contentRight, cutY, cutLinePaint)
             }
 
             document.finishPage(page)
@@ -332,7 +328,7 @@ internal fun paletteLabel(index: Int): String =
  * The page is US Letter landscape (792 × 612 pt by default, or the printer's printable area
  * when called from [ProjectCardPrintDocumentAdapter]). The card is a single 10×5 grid of
  * 50 slots centered on the page, each labeled with its palette letter (A–AX) in bold centered
- * text using south-then-east ordering (via [slotRowCol]). Dashed cut guides are drawn at the
+ * text using south-then-east ordering (via [slotRowCol]). Bold cut lines are drawn at the
  * top and bottom edges of the card.
  *
  * [cellWidthPt] and calibration semantics are identical to [generateTrayCard].
@@ -355,10 +351,9 @@ fun generateProjectCard(
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
-        val cutGuidePaint = Paint().apply {
+        val cutLinePaint = Paint().apply {
             style = Paint.Style.STROKE
-            strokeWidth = 0.5f
-            pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
+            strokeWidth = 1.5f
         }
 
         val cardWidthPt = TRAY_COLS * cellWidthPt
@@ -389,17 +384,15 @@ fun generateProjectCard(
             canvas.drawText(label, cellLeft + cellWidthPt / 2f, textBaseline, textPaint)
         }
 
-        // Draw cut guides last so the dashed lines render on top of the solid cell
-        // borders. Cell borders share the same Y coordinates as the card boundaries,
-        // so drawing guides first would let the solid strokes paint over the dashes,
-        // making the guides invisible.
-        canvas.drawLine(marginLeft, marginTop, contentRight, marginTop, cutGuidePaint)
+        // Draw bold cut lines last so they paint over the thinner cell border strokes
+        // that share the same Y coordinates at the card's top and bottom edges.
+        canvas.drawLine(marginLeft, marginTop, contentRight, marginTop, cutLinePaint)
         canvas.drawLine(
             marginLeft,
             marginTop + TRAY_CARD_HEIGHT_PT,
             contentRight,
             marginTop + TRAY_CARD_HEIGHT_PT,
-            cutGuidePaint,
+            cutLinePaint,
         )
 
         document.finishPage(page)
