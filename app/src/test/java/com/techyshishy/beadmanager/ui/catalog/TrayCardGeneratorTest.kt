@@ -76,4 +76,31 @@ class TrayCardGeneratorTest {
         val rightMargin = TRAY_PAGE_WIDTH_PT - TRAY_CARD_WIDTH_PT - TRAY_PAGE_MARGIN_LEFT_PT
         assertEquals(TRAY_PAGE_MARGIN_LEFT_PT, rightMargin, 0.01f)
     }
+
+    // ---- Slot ordering (south-then-east) ----
+
+    @Test
+    fun `slotRowCol slot 0 maps to row 0 col 0`() {
+        assertEquals(Pair(0, 0), slotRowCol(0))
+    }
+
+    @Test
+    fun `slotRowCol slot 1 maps to row 1 col 0`() {
+        assertEquals(Pair(1, 0), slotRowCol(1))
+    }
+
+    @Test
+    fun `slotRowCol slot 4 maps to row 4 col 0 — last slot of first column`() {
+        assertEquals(Pair(4, 0), slotRowCol(4))
+    }
+
+    @Test
+    fun `slotRowCol slot 5 maps to row 0 col 1 — first slot of second column`() {
+        assertEquals(Pair(0, 1), slotRowCol(5))
+    }
+
+    @Test
+    fun `slotRowCol slot 49 maps to row 4 col 9 — last slot of card`() {
+        assertEquals(Pair(4, 9), slotRowCol(49))
+    }
 }

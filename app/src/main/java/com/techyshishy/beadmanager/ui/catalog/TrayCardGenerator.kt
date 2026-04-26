@@ -78,6 +78,19 @@ internal fun truncateToFit(
 }
 
 /**
+ * Maps a slot index within a single card to its (row, col) position using
+ * south-then-east ordering: slots fill down each column before advancing east.
+ *
+ * slotIndex 0 → (row 0, col 0), 1 → (row 1, col 0), …, 4 → (row 4, col 0),
+ * 5 → (row 0, col 1), …, 49 → (row 4, col 9).
+ */
+internal fun slotRowCol(slotInCard: Int): Pair<Int, Int> {
+    val row = slotInCard % TRAY_ROWS_PER_CARD
+    val col = slotInCard / TRAY_ROWS_PER_CARD
+    return Pair(row, col)
+}
+
+/**
  * Generates a printable tray card PDF at [outputFile].
  *
  * Pages are US Letter landscape (792 × 612 pt by default, or the printer's printable area
@@ -160,8 +173,7 @@ fun generateTrayCard(
                 val codeIndex = pageSliceStart + slotIndex
                 val cardIndex = slotIndex / TRAY_SLOTS_PER_CARD
                 val slotInCard = slotIndex % TRAY_SLOTS_PER_CARD
-                val col = slotInCard % TRAY_COLS
-                val row = slotInCard / TRAY_COLS
+                val (row, col) = slotRowCol(slotInCard)
 
                 val cellLeft = marginLeft + col * cellWidthPt
                 val cellTop = marginTop + cardIndex * TRAY_CARD_HEIGHT_PT + row * TRAY_CELL_HEIGHT_PT
