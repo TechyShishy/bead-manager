@@ -274,9 +274,10 @@
     <string name="no_restock_eligible_orders">No existing orders.\n\nTap New restock order to create one.</string>
     <string name="low_stock_append_nothing_added">All selected beads are already at or above threshold.</string>
 
-    <!-- Tray card export -->
-    <string name="export_tray_card">Export Tray Card</string>
+    <!-- Tray card print -->
+    <string name="export_tray_card">Print Tray Card</string>
+    <string name="tray_card_print_job_name">Tray Card</string>
     <string name="more_options">More options</string>
-    <string name="tray_card_empty_inventory">No beads eligible for tray card export</string>
-    <string name="tray_card_export_error">Export failed</string>
+    <string name="tray_card_empty_inventory">No beads eligible for tray card print</string>
+    <string name="tray_card_export_error">Failed to prepare tray card</string>
 </resources>

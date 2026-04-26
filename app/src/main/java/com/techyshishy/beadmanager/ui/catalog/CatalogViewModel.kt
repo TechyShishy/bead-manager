@@ -1,9 +1,6 @@
 package com.techyshishy.beadmanager.ui.catalog
 
-import android.content.Context
-import android.net.Uri
 import android.util.Log
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.FirestoreCatalogPinsSource
@@ -14,7 +11,6 @@ import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,8 +24,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -420,53 +414,39 @@ class CatalogViewModel @Inject constructor(
     }
 
     /**
-     * Generates a tray card PDF from the current inventory and emits a [TrayCardEvent] via
-     * [trayCardEvent] so the screen can present the system share sheet or show an error.
+     * Collects the current inventory, filters to eligible bead codes, and emits
+     * [TrayCardEvent.Print] so the screen can launch Android's print dialog.
      *
-     * Bead codes are sorted by their numeric DB suffix (ascending), matching the
-     * DB-number sort used elsewhere in the catalog. Only beads with a quantity
-     * greater than 0 g and less than the configured tray card maximum are included.
-     * Emits [TrayCardEvent.EmptyInventory] if no codes match that range, and
-     * [TrayCardEvent.Error] on I/O failure.
+     * Only beads with a quantity greater than 0 g and less than the configured tray card
+     * maximum are included. Emits [TrayCardEvent.EmptyInventory] if nothing matches.
      */
-    fun exportTrayCard(context: Context) {
+    fun exportTrayCard() {
         viewModelScope.launch {
-            val maxGrams = preferencesRepository.trayCardMaxGrams.first()
-            val codes = inventoryRepository.inventoryStream()
-                .first()
-                .entries
-                .filter { (code, entry) -> code.isNotEmpty() && entry.quantityGrams > 0.0 && entry.quantityGrams < maxGrams }
-                .map { (code, _) -> code }
-                .sortedBy { code -> code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }
-            if (codes.isEmpty()) {
-                _trayCardEvent.emit(TrayCardEvent.EmptyInventory)
-                return@launch
-            }
-            val event = withContext(Dispatchers.IO) {
-                try {
-                    val dir = File(context.cacheDir, "tray-cards").apply { mkdirs() }
-                    val file = File(dir, "tray-card.pdf")
-                    generateTrayCard(codes, file)
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file,
-                    )
-                    TrayCardEvent.Success(uri)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e("CatalogViewModel", "exportTrayCard failed", e)
-                    TrayCardEvent.Error
+            try {
+                val maxGrams = preferencesRepository.trayCardMaxGrams.first()
+                val codes = inventoryRepository.inventoryStream()
+                    .first()
+                    .entries
+                    .filter { (code, entry) -> code.isNotEmpty() && entry.quantityGrams > 0.0 && entry.quantityGrams < maxGrams }
+                    .map { (code, _) -> code }
+                    .sortedBy { code -> code.filter { it.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE }
+                if (codes.isEmpty()) {
+                    _trayCardEvent.emit(TrayCardEvent.EmptyInventory)
+                    return@launch
                 }
+                _trayCardEvent.emit(TrayCardEvent.Print(codes))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("CatalogViewModel", "exportTrayCard failed", e)
+                _trayCardEvent.emit(TrayCardEvent.Error)
             }
-            _trayCardEvent.emit(event)
         }
     }
 }
 
 sealed class TrayCardEvent {
-    data class Success(val uri: Uri) : TrayCardEvent()
+    data class Print(val codes: List<String>) : TrayCardEvent()
     data object EmptyInventory : TrayCardEvent()
     data object Error : TrayCardEvent()
 }

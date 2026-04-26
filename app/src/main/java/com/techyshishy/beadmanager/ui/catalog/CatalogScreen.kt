@@ -1,6 +1,8 @@
 package com.techyshishy.beadmanager.ui.catalog
 
-import android.content.Intent
+import android.content.Context
+import android.print.PrintAttributes
+import android.print.PrintManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -118,16 +120,22 @@ fun CatalogScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val trayCardEmptyMsg = stringResource(R.string.tray_card_empty_inventory)
     val trayCardErrorMsg = stringResource(R.string.tray_card_export_error)
+    val printJobName = stringResource(R.string.tray_card_print_job_name)
     LaunchedEffect(viewModel) {
         viewModel.trayCardEvent.collect { event ->
             when (event) {
-                is TrayCardEvent.Success -> {
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, event.uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(intent, null))
+                is TrayCardEvent.Print -> {
+                    val printManager =
+                        context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                    val printAttributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.NA_LETTER.asLandscape())
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
+                    printManager.print(
+                        printJobName,
+                        TrayCardPrintDocumentAdapter(context.applicationContext, event.codes),
+                        printAttributes,
+                    )
                 }
                 TrayCardEvent.EmptyInventory -> snackbarHostState.showSnackbar(trayCardEmptyMsg)
                 TrayCardEvent.Error -> snackbarHostState.showSnackbar(trayCardErrorMsg)
@@ -250,7 +258,7 @@ fun CatalogScreen(
                                 text = { Text(stringResource(R.string.export_tray_card)) },
                                 onClick = {
                                     showOverflowMenu = false
-                                    viewModel.exportTrayCard(context)
+                                    viewModel.exportTrayCard()
                                 },
                             )
                         }

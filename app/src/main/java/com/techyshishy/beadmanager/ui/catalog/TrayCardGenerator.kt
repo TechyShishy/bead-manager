@@ -1,9 +1,18 @@
 package com.techyshishy.beadmanager.ui.catalog
 
+import android.content.Context
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
 import java.io.File
+import java.io.FileOutputStream
 
 internal const val TRAY_COLS = 10
 internal const val TRAY_ROWS_PER_CARD = 5
@@ -163,5 +172,65 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
         outputFile.outputStream().use { document.writeTo(it) }
     } finally {
         document.close()
+    }
+}
+
+/**
+ * [PrintDocumentAdapter] that renders the tray card grid via [generateTrayCard] and writes
+ * the result to the destination provided by the Android print framework.
+ *
+ * Always renders to US Letter landscape (792 × 612 pt). The [PrintManager] is initialised
+ * with `MediaSize.NA_LETTER.asLandscape()` and `Margins.NO_MARGINS` so the default matches
+ * the physical tray dimensions without any viewer-level fit-to-page scaling.
+ *
+ * [onWrite] is called on a background thread by the framework; no additional threading is
+ * needed.
+ */
+class TrayCardPrintDocumentAdapter(
+    private val context: Context,
+    private val codes: List<String>,
+) : PrintDocumentAdapter() {
+
+    override fun onLayout(
+        oldAttributes: PrintAttributes?,
+        newAttributes: PrintAttributes,
+        cancellationSignal: CancellationSignal,
+        callback: LayoutResultCallback,
+        extras: Bundle?,
+    ) {
+        if (cancellationSignal.isCanceled) {
+            callback.onLayoutCancelled()
+            return
+        }
+        val info = PrintDocumentInfo.Builder("tray-card.pdf")
+            .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+            .setPageCount(pageCount(codes.size).coerceAtLeast(1))
+            .build()
+        callback.onLayoutFinished(info, oldAttributes == null)
+    }
+
+    // Called on a background thread by the print framework.
+    override fun onWrite(
+        pages: Array<out PageRange>,
+        destination: ParcelFileDescriptor,
+        cancellationSignal: CancellationSignal,
+        callback: WriteResultCallback,
+    ) {
+        val tempFile = File(context.cacheDir, "tray-card-print-${System.nanoTime()}.pdf")
+        try {
+            generateTrayCard(codes, tempFile)
+            if (cancellationSignal.isCanceled) {
+                callback.onWriteCancelled()
+                return
+            }
+            FileOutputStream(destination.fileDescriptor).use { out ->
+                tempFile.inputStream().use { it.copyTo(out) }
+            }
+            callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        } catch (e: Exception) {
+            callback.onWriteFailed(e.message)
+        } finally {
+            tempFile.delete()
+        }
     }
 }
