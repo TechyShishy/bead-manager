@@ -13,6 +13,7 @@ import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.roundToInt
 
 internal const val TRAY_COLS = 10
 internal const val TRAY_ROWS_PER_CARD = 5
@@ -82,8 +83,18 @@ internal fun truncateToFit(
  *
  * The caller is responsible for providing [codes] in the desired order; this function
  * renders them as-is. An empty [codes] list produces a minimal empty PDF.
+ *
+ * [pageWidthPt] and [pageHeightPt] define the canvas size in PDF points. Defaults to
+ * US Letter landscape (792 × 612 pt). Pass the printable area reported by [PrintAttributes]
+ * to generate a PDF whose dimensions exactly match the printer's printable area, eliminating
+ * any framework-level fit-to-page scaling.
  */
-fun generateTrayCard(codes: List<String>, outputFile: File) {
+fun generateTrayCard(
+    codes: List<String>,
+    outputFile: File,
+    pageWidthPt: Float = TRAY_PAGE_WIDTH_PT.toFloat(),
+    pageHeightPt: Float = TRAY_PAGE_HEIGHT_PT.toFloat(),
+) {
     val numPages = pageCount(codes.size)
 
     val document = PdfDocument()
@@ -109,14 +120,14 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
             pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
         }
 
-        val marginLeft = TRAY_PAGE_MARGIN_LEFT_PT
-        val marginTop = TRAY_PAGE_MARGIN_TOP_PT.toFloat()
+        val marginLeft = (pageWidthPt - TRAY_CARD_WIDTH_PT) / 2
+        val marginTop = (pageHeightPt - TRAY_CARDS_PER_PAGE * TRAY_CARD_HEIGHT_PT) / 2
         val contentRight = marginLeft + TRAY_CARD_WIDTH_PT
 
         for (pageIndex in 0 until numPages) {
             val pageInfo = PdfDocument.PageInfo.Builder(
-                TRAY_PAGE_WIDTH_PT,
-                TRAY_PAGE_HEIGHT_PT,
+                pageWidthPt.roundToInt(),
+                pageHeightPt.roundToInt(),
                 pageIndex + 1,
             ).create()
             val page = document.startPage(pageInfo)
@@ -179,17 +190,23 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
  * [PrintDocumentAdapter] that renders the tray card grid via [generateTrayCard] and writes
  * the result to the destination provided by the Android print framework.
  *
- * Always renders to US Letter landscape (792 × 612 pt). The [PrintManager] is initialised
- * with `MediaSize.NA_LETTER.asLandscape()` and `Margins.NO_MARGINS` so the default matches
- * the physical tray dimensions without any viewer-level fit-to-page scaling.
+ * The PDF canvas is sized to the **printable area** reported by [PrintAttributes] in [onLayout],
+ * computed as media size minus hardware margins (both in PDF points). This ensures a 1:1 match
+ * between the generated PDF and the area the printer can actually use, which eliminates any
+ * framework-level fit-to-page scaling.
  *
- * [onWrite] is called on a background thread by the framework; no additional threading is
- * needed.
+ * [onWrite] is called on the main thread by the framework; it runs [generateTrayCard]
+ * synchronously. For typical inventories the generation is fast enough not to cause ANR;
+ * if that changes, move the heavy work to a background thread and call the callback from there.
  */
 class TrayCardPrintDocumentAdapter(
     private val context: Context,
     private val codes: List<String>,
 ) : PrintDocumentAdapter() {
+
+    // Populated in onLayout, read in onWrite. Both callbacks are invoked on the main thread
+    // so no synchronization is needed; the framework guarantees onLayout precedes onWrite.
+    private var currentAttributes: PrintAttributes? = null
 
     override fun onLayout(
         oldAttributes: PrintAttributes?,
@@ -202,14 +219,20 @@ class TrayCardPrintDocumentAdapter(
             callback.onLayoutCancelled()
             return
         }
+        // Return changed=true if the printable area actually changed so the framework
+        // re-requests onWrite with a correctly sized PDF. Color/resolution/duplex don't
+        // affect PDF content and are intentionally excluded from this check.
+        val changed = currentAttributes?.let { old ->
+            old.mediaSize != newAttributes.mediaSize || old.minMargins != newAttributes.minMargins
+        } ?: true
+        currentAttributes = newAttributes
         val info = PrintDocumentInfo.Builder("tray-card.pdf")
             .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
             .setPageCount(pageCount(codes.size).coerceAtLeast(1))
             .build()
-        callback.onLayoutFinished(info, oldAttributes == null)
+        callback.onLayoutFinished(info, changed)
     }
 
-    // Called on a background thread by the print framework.
     override fun onWrite(
         pages: Array<out PageRange>,
         destination: ParcelFileDescriptor,
@@ -218,7 +241,12 @@ class TrayCardPrintDocumentAdapter(
     ) {
         val tempFile = File(context.cacheDir, "tray-card-print-${System.nanoTime()}.pdf")
         try {
-            generateTrayCard(codes, tempFile)
+            if (cancellationSignal.isCanceled) {
+                callback.onWriteCancelled()
+                return
+            }
+            val (pageWidthPt, pageHeightPt) = currentAttributes.printableAreaPt()
+            generateTrayCard(codes, tempFile, pageWidthPt, pageHeightPt)
             if (cancellationSignal.isCanceled) {
                 callback.onWriteCancelled()
                 return
@@ -232,5 +260,30 @@ class TrayCardPrintDocumentAdapter(
         } finally {
             tempFile.delete()
         }
+    }
+}
+
+/**
+ * Computes the printable area in PDF points from [PrintAttributes].
+ *
+ * Printable area = media size − hardware margins. Both are expressed in mils
+ * (thousandths of an inch) by the Android API; converting to PDF points requires
+ * multiplying by 72/1000. Falls back to US Letter landscape with no margins when
+ * the receiver is null (should only happen if onWrite is somehow called before onLayout).
+ */
+private fun PrintAttributes?.printableAreaPt(): Pair<Float, Float> {
+    val media = this?.mediaSize ?: PrintAttributes.MediaSize.NA_LETTER.asLandscape()
+    val margins = this?.minMargins ?: PrintAttributes.Margins.NO_MARGINS
+    // Android Margins fields are in portrait-paper-space (never rotated). For landscape
+    // media (widthMils > heightMils), left/right margins bound the short (height) axis
+    // and top/bottom margins bound the long (width) axis.
+    return if (media.widthMils > media.heightMils) {
+        val w = (media.widthMils  - margins.topMils   - margins.bottomMils) * 72f / 1000f
+        val h = (media.heightMils - margins.leftMils  - margins.rightMils)  * 72f / 1000f
+        w to h
+    } else {
+        val w = (media.widthMils  - margins.leftMils  - margins.rightMils)  * 72f / 1000f
+        val h = (media.heightMils - margins.topMils   - margins.bottomMils) * 72f / 1000f
+        w to h
     }
 }
