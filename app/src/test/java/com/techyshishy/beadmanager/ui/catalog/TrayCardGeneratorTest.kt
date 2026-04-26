@@ -62,4 +62,18 @@ class TrayCardGeneratorTest {
         val result = truncateToFit("A", 10f) { text -> text.length * 100f }
         assertEquals("\u2026", result)
     }
+
+    // ---- Print-dimension sanity ----
+
+    @Test
+    fun `TRAY_CARD_WIDTH_PT matches 10 cells at the declared cell width`() {
+        assertEquals(TRAY_COLS * TRAY_CELL_WIDTH_PT, TRAY_CARD_WIDTH_PT, 0.01f)
+    }
+
+    @Test
+    fun `TRAY_PAGE_MARGIN_LEFT_PT centers the card on a Letter-landscape page`() {
+        // Both side margins must be equal and non-negative.
+        val rightMargin = TRAY_PAGE_WIDTH_PT - TRAY_CARD_WIDTH_PT - TRAY_PAGE_MARGIN_LEFT_PT
+        assertEquals(TRAY_PAGE_MARGIN_LEFT_PT, rightMargin, 0.01f)
+    }
 }

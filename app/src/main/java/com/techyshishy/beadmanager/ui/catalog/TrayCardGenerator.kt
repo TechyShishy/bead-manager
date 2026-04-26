@@ -12,12 +12,14 @@ internal const val TRAY_SLOTS_PER_CARD = TRAY_COLS * TRAY_ROWS_PER_CARD
 internal const val TRAY_SLOTS_PER_PAGE = TRAY_SLOTS_PER_CARD * TRAY_CARDS_PER_PAGE
 
 // Cell dimensions in PDF points (1 pt = 1/72 in).
-// Physical size: 0.93 in wide × 0.38 in tall  →  66.96 pt × 27.36 pt, rounded to whole points.
-internal const val TRAY_CELL_WIDTH_PT = 67
+// Width: 23.04 mm = 0.9069 in = 65.3 pt. Corrected from an earlier 67 pt value that
+// produced a card ~6 mm wider than the physical 50-slot test-tube tray.
+// Height: 27.36 pt (= 0.38 in = 9.65 mm) rounded to 27 pt (= 9.525 mm).
+internal const val TRAY_CELL_WIDTH_PT = 65.3f
 internal const val TRAY_CELL_HEIGHT_PT = 27
 
 // Per-card grid dimensions (10 cols × 5 rows at cell size above).
-internal const val TRAY_CARD_WIDTH_PT = TRAY_COLS * TRAY_CELL_WIDTH_PT       // 670 pt
+internal const val TRAY_CARD_WIDTH_PT = TRAY_COLS * TRAY_CELL_WIDTH_PT       // 653 pt ≈ 230.4 mm
 internal const val TRAY_CARD_HEIGHT_PT = TRAY_ROWS_PER_CARD * TRAY_CELL_HEIGHT_PT // 135 pt
 
 // US Letter landscape: 11 × 8.5 in = 792 × 612 pt.
@@ -25,9 +27,9 @@ internal const val TRAY_PAGE_WIDTH_PT = 792
 internal const val TRAY_PAGE_HEIGHT_PT = 612
 
 // Margins that center the 4-card content block on the page.
-// Horizontal: (792 − 670) / 2 = 61 pt each side.
+// Horizontal: (792 − 653) / 2 = 69.5 pt each side.
 // Vertical:   (612 − 4 × 135) / 2 = 36 pt top/bottom.
-internal const val TRAY_PAGE_MARGIN_LEFT_PT = (TRAY_PAGE_WIDTH_PT - TRAY_CARD_WIDTH_PT) / 2   // 61
+internal const val TRAY_PAGE_MARGIN_LEFT_PT: Float = (TRAY_PAGE_WIDTH_PT - TRAY_CARD_WIDTH_PT) / 2   // 69.5 pt
 internal const val TRAY_PAGE_MARGIN_TOP_PT = (TRAY_PAGE_HEIGHT_PT - TRAY_CARDS_PER_PAGE * TRAY_CARD_HEIGHT_PT) / 2 // 36
 
 // Maximum quantity a single test-tube tray slot can hold.
@@ -64,10 +66,10 @@ internal fun truncateToFit(
  * Generates a printable tray card PDF at [outputFile].
  *
  * Pages are US Letter landscape (792 × 612 pt). Each page holds 4 tray card grids of
- * 10 cols × 5 rows, stacked vertically and centered on the page (~61 pt left/right margin,
+ * 10 cols × 5 rows, stacked vertically and centered on the page (~69.5 pt left/right margin,
  * ~36 pt top/bottom margin). Dashed horizontal cut guides are drawn at the top edge,
- * bottom edge, and between every card on the page. Cell dimensions remain 67 × 27 pt
- * (≈ 0.93 × 0.38 in), matching standard 50-slot test-tube bead trays.
+ * bottom edge, and between every card on the page. Cell dimensions are 65.3 × 27 pt
+ * (≈ 23.04 × 9.53 mm), matching standard 50-slot test-tube bead trays.
  *
  * The caller is responsible for providing [codes] in the desired order; this function
  * renders them as-is. An empty [codes] list produces a minimal empty PDF.
@@ -98,7 +100,7 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
             pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
         }
 
-        val marginLeft = TRAY_PAGE_MARGIN_LEFT_PT.toFloat()
+        val marginLeft = TRAY_PAGE_MARGIN_LEFT_PT
         val marginTop = TRAY_PAGE_MARGIN_TOP_PT.toFloat()
         val contentRight = marginLeft + TRAY_CARD_WIDTH_PT
 
