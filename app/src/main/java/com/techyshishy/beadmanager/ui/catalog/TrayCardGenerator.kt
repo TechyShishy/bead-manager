@@ -124,9 +124,12 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
                 canvas.drawLine(marginLeft, guideY, contentRight, guideY, cutGuidePaint)
             }
 
-            // Render each card's cells.
-            for (i in pageSliceStart until pageSliceEnd) {
-                val slotIndex = i - pageSliceStart
+            // Render all cells for every card on this page — borders always, text only for
+            // occupied slots. This ensures the full 50-slot grid is visible even when the
+            // last card on a page is only partially filled.
+            val slotsForPage = cardsOnPage * TRAY_SLOTS_PER_CARD
+            for (slotIndex in 0 until slotsForPage) {
+                val codeIndex = pageSliceStart + slotIndex
                 val cardIndex = slotIndex / TRAY_SLOTS_PER_CARD
                 val slotInCard = slotIndex % TRAY_SLOTS_PER_CARD
                 val col = slotInCard % TRAY_COLS
@@ -139,15 +142,17 @@ fun generateTrayCard(codes: List<String>, outputFile: File) {
 
                 canvas.drawRect(cellLeft, cellTop, cellRight, cellBottom, borderPaint)
 
-                // Centre text vertically within the cell.
-                val textBaseline = cellTop + TRAY_CELL_HEIGHT_PT / 2f +
-                    (textPaint.textSize / 2f) - textPaint.descent()
-                val displayCode = truncateToFit(
-                    codes[i],
-                    TRAY_CELL_WIDTH_PT - 4f, // 2f margin on each side of centered text
-                    textPaint::measureText,
-                )
-                canvas.drawText(displayCode, cellLeft + TRAY_CELL_WIDTH_PT / 2f, textBaseline, textPaint)
+                if (codeIndex < codes.size) {
+                    // Centre text vertically within the cell.
+                    val textBaseline = cellTop + TRAY_CELL_HEIGHT_PT / 2f +
+                        (textPaint.textSize / 2f) - textPaint.descent()
+                    val displayCode = truncateToFit(
+                        codes[codeIndex],
+                        TRAY_CELL_WIDTH_PT - 4f, // 2f margin on each side of centered text
+                        textPaint::measureText,
+                    )
+                    canvas.drawText(displayCode, cellLeft + TRAY_CELL_WIDTH_PT / 2f, textBaseline, textPaint)
+                }
             }
 
             document.finishPage(page)
