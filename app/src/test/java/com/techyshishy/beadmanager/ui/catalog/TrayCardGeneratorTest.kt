@@ -103,4 +103,34 @@ class TrayCardGeneratorTest {
     fun `slotRowCol slot 49 maps to row 4 col 9 — last slot of card`() {
         assertEquals(Pair(4, 9), slotRowCol(49))
     }
+
+    // ---- Palette label generation ----
+
+    @Test
+    fun `paletteLabel index 0 is A`() {
+        assertEquals("A", paletteLabel(0))
+    }
+
+    @Test
+    fun `paletteLabel index 25 is Z`() {
+        assertEquals("Z", paletteLabel(25))
+    }
+
+    @Test
+    fun `paletteLabel index 26 is AA`() {
+        assertEquals("AA", paletteLabel(26))
+    }
+
+    @Test
+    fun `paletteLabel index 49 is AX`() {
+        assertEquals("AX", paletteLabel(49))
+    }
+
+    @Test
+    fun `paletteLabel generates 50 distinct labels from A to AX`() {
+        val labels = (0 until TRAY_SLOTS_PER_CARD).map { paletteLabel(it) }
+        assertEquals(50, labels.distinct().size)
+        assertEquals("A", labels.first())
+        assertEquals("AX", labels.last())
+    }
 }

@@ -284,4 +284,7 @@
     <string name="more_options">More options</string>
     <string name="tray_card_empty_inventory">No beads eligible for tray card print</string>
     <string name="tray_card_export_error">Failed to prepare tray card</string>
+    <string name="export_project_card">Print Project Card</string>
+    <string name="project_card_print_job_name">Project Card</string>
+    <string name="project_card_export_error">Failed to prepare project card</string>
 </resources>

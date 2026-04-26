@@ -38,6 +38,9 @@ class CatalogViewModel @Inject constructor(
     private val _trayCardEvent = MutableSharedFlow<TrayCardEvent>(extraBufferCapacity = 1)
     val trayCardEvent: SharedFlow<TrayCardEvent> = _trayCardEvent.asSharedFlow()
 
+    private val _projectCardEvent = MutableSharedFlow<ProjectCardEvent>(extraBufferCapacity = 1)
+    val projectCardEvent: SharedFlow<ProjectCardEvent> = _projectCardEvent.asSharedFlow()
+
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
 
@@ -444,10 +447,34 @@ class CatalogViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Emits [ProjectCardEvent.Print] so the screen can launch Android's print dialog for
+     * the project card. No inventory data is needed — the card always contains all 50
+     * palette labels (A–AX). Only the calibration value is read from preferences.
+     */
+    fun exportProjectCard() {
+        viewModelScope.launch {
+            try {
+                val calibrationMm = preferencesRepository.trayCardCalibrationMm.first()
+                _projectCardEvent.emit(ProjectCardEvent.Print(calibrationMm))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("CatalogViewModel", "exportProjectCard failed", e)
+                _projectCardEvent.emit(ProjectCardEvent.Error)
+            }
+        }
+    }
 }
 
 sealed class TrayCardEvent {
     data class Print(val codes: List<String>, val calibrationMm: Float) : TrayCardEvent()
     data object EmptyInventory : TrayCardEvent()
     data object Error : TrayCardEvent()
+}
+
+sealed class ProjectCardEvent {
+    data class Print(val calibrationMm: Float) : ProjectCardEvent()
+    data object Error : ProjectCardEvent()
 }

@@ -312,3 +312,160 @@ private fun PrintAttributes?.printableAreaPt(): Pair<Float, Float> {
         w to h
     }
 }
+
+/**
+ * Returns the palette letter for a given slot index (0–49) using a single-then-double-letter
+ * scheme: 0–25 → A–Z, 26–49 → AA–AX.
+ *
+ * slotIndex 0 → "A", 25 → "Z", 26 → "AA", 49 → "AX".
+ */
+internal fun paletteLabel(index: Int): String =
+    if (index < 26) ('A' + index).toString()
+    else "A" + ('A' + (index - 26))
+
+/**
+ * Generates a single-page project card PDF at [outputFile].
+ *
+ * The page is US Letter landscape (792 × 612 pt by default, or the printer's printable area
+ * when called from [ProjectCardPrintDocumentAdapter]). The card is a single 10×5 grid of
+ * 50 slots centered on the page, each labeled with its palette letter (A–AX) in bold centered
+ * text using south-then-east ordering (via [slotRowCol]). Dashed cut guides are drawn at the
+ * top and bottom edges of the card.
+ *
+ * [cellWidthPt] and calibration semantics are identical to [generateTrayCard].
+ */
+fun generateProjectCard(
+    outputFile: File,
+    pageWidthPt: Float = TRAY_PAGE_WIDTH_PT.toFloat(),
+    pageHeightPt: Float = TRAY_PAGE_HEIGHT_PT.toFloat(),
+    cellWidthPt: Float = TRAY_CELL_WIDTH_PT,
+) {
+    val document = PdfDocument()
+    try {
+        val borderPaint = Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 0.5f
+        }
+        val textPaint = Paint().apply {
+            textSize = 12f
+            isFakeBoldText = true
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+        }
+        val cutGuidePaint = Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 0.5f
+            pathEffect = DashPathEffect(floatArrayOf(4f, 4f), 0f)
+        }
+
+        val cardWidthPt = TRAY_COLS * cellWidthPt
+        val marginLeft = (pageWidthPt - cardWidthPt) / 2
+        val marginTop = (pageHeightPt - TRAY_CARD_HEIGHT_PT) / 2
+        val contentRight = marginLeft + cardWidthPt
+
+        val pageInfo = PdfDocument.PageInfo.Builder(
+            pageWidthPt.roundToInt(),
+            pageHeightPt.roundToInt(),
+            1,
+        ).create()
+        val page = document.startPage(pageInfo)
+        val canvas = page.canvas
+
+        // Cut guides at the top and bottom edges of the single card.
+        canvas.drawLine(marginLeft, marginTop, contentRight, marginTop, cutGuidePaint)
+        canvas.drawLine(
+            marginLeft,
+            marginTop + TRAY_CARD_HEIGHT_PT,
+            contentRight,
+            marginTop + TRAY_CARD_HEIGHT_PT,
+            cutGuidePaint,
+        )
+
+        for (slotIndex in 0 until TRAY_SLOTS_PER_CARD) {
+            val (row, col) = slotRowCol(slotIndex)
+            val cellLeft = marginLeft + col * cellWidthPt
+            val cellTop = marginTop + row * TRAY_CELL_HEIGHT_PT
+            val cellRight = cellLeft + cellWidthPt
+            val cellBottom = cellTop + TRAY_CELL_HEIGHT_PT
+
+            canvas.drawRect(cellLeft, cellTop, cellRight, cellBottom, borderPaint)
+
+            val label = paletteLabel(slotIndex)
+            val textBaseline = cellTop + TRAY_CELL_HEIGHT_PT / 2f +
+                (textPaint.textSize / 2f) - textPaint.descent()
+            canvas.drawText(label, cellLeft + cellWidthPt / 2f, textBaseline, textPaint)
+        }
+
+        document.finishPage(page)
+        outputFile.outputStream().use { document.writeTo(it) }
+    } finally {
+        document.close()
+    }
+}
+
+/**
+ * [PrintDocumentAdapter] that renders the project card grid via [generateProjectCard] and
+ * writes the result to the destination provided by the Android print framework.
+ *
+ * Printable-area sizing, calibration, and temp-file lifecycle follow the same conventions
+ * as [TrayCardPrintDocumentAdapter]. The page count is always 1.
+ */
+class ProjectCardPrintDocumentAdapter(
+    private val context: Context,
+    private val calibrationMm: Float = TRAY_TARGET_WIDTH_MM,
+) : PrintDocumentAdapter() {
+
+    private var currentAttributes: PrintAttributes? = null
+
+    override fun onLayout(
+        oldAttributes: PrintAttributes?,
+        newAttributes: PrintAttributes,
+        cancellationSignal: CancellationSignal,
+        callback: LayoutResultCallback,
+        extras: Bundle?,
+    ) {
+        if (cancellationSignal.isCanceled) {
+            callback.onLayoutCancelled()
+            return
+        }
+        val changed = currentAttributes?.let { old ->
+            old.mediaSize != newAttributes.mediaSize || old.minMargins != newAttributes.minMargins
+        } ?: true
+        currentAttributes = newAttributes
+        val info = PrintDocumentInfo.Builder("project-card.pdf")
+            .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+            .setPageCount(1)
+            .build()
+        callback.onLayoutFinished(info, changed)
+    }
+
+    override fun onWrite(
+        pages: Array<out PageRange>,
+        destination: ParcelFileDescriptor,
+        cancellationSignal: CancellationSignal,
+        callback: WriteResultCallback,
+    ) {
+        val tempFile = File(context.cacheDir, "project-card-print-${System.nanoTime()}.pdf")
+        try {
+            if (cancellationSignal.isCanceled) {
+                callback.onWriteCancelled()
+                return
+            }
+            val (pageWidthPt, pageHeightPt) = currentAttributes.printableAreaPt()
+            val calibratedCellWidthPt = TRAY_CELL_WIDTH_PT * (TRAY_TARGET_WIDTH_MM / calibrationMm)
+            generateProjectCard(tempFile, pageWidthPt, pageHeightPt, calibratedCellWidthPt)
+            if (cancellationSignal.isCanceled) {
+                callback.onWriteCancelled()
+                return
+            }
+            FileOutputStream(destination.fileDescriptor).use { out ->
+                tempFile.inputStream().use { it.copyTo(out) }
+            }
+            callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        } catch (e: Exception) {
+            callback.onWriteFailed(e.message)
+        } finally {
+            tempFile.delete()
+        }
+    }
+}

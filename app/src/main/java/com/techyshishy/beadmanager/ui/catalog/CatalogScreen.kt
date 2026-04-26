@@ -121,6 +121,8 @@ fun CatalogScreen(
     val trayCardEmptyMsg = stringResource(R.string.tray_card_empty_inventory)
     val trayCardErrorMsg = stringResource(R.string.tray_card_export_error)
     val printJobName = stringResource(R.string.tray_card_print_job_name)
+    val projectCardPrintJobName = stringResource(R.string.project_card_print_job_name)
+    val projectCardErrorMsg = stringResource(R.string.project_card_export_error)
     LaunchedEffect(viewModel) {
         viewModel.trayCardEvent.collect { event ->
             when (event) {
@@ -139,6 +141,26 @@ fun CatalogScreen(
                 }
                 TrayCardEvent.EmptyInventory -> snackbarHostState.showSnackbar(trayCardEmptyMsg)
                 TrayCardEvent.Error -> snackbarHostState.showSnackbar(trayCardErrorMsg)
+            }
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.projectCardEvent.collect { event ->
+            when (event) {
+                is ProjectCardEvent.Print -> {
+                    val printManager =
+                        context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                    val printAttributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.NA_LETTER.asLandscape())
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
+                    printManager.print(
+                        projectCardPrintJobName,
+                        ProjectCardPrintDocumentAdapter(context.applicationContext, event.calibrationMm),
+                        printAttributes,
+                    )
+                }
+                ProjectCardEvent.Error -> snackbarHostState.showSnackbar(projectCardErrorMsg)
             }
         }
     }
@@ -259,6 +281,13 @@ fun CatalogScreen(
                                 onClick = {
                                     showOverflowMenu = false
                                     viewModel.exportTrayCard()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.export_project_card)) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    viewModel.exportProjectCard()
                                 },
                             )
                         }
