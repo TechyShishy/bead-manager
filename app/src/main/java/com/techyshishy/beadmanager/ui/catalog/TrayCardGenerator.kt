@@ -22,14 +22,17 @@ internal const val TRAY_SLOTS_PER_CARD = TRAY_COLS * TRAY_ROWS_PER_CARD
 internal const val TRAY_SLOTS_PER_PAGE = TRAY_SLOTS_PER_CARD * TRAY_CARDS_PER_PAGE
 
 // Cell dimensions in PDF points (1 pt = 1/72 in).
-// Width: 23.04 mm = 0.9069 in = 65.3 pt. Corrected from an earlier 67 pt value that
-// produced a card ~6 mm wider than the physical 50-slot test-tube tray.
-// Height: 27.36 pt (= 0.38 in = 9.65 mm) rounded to 27 pt (= 9.525 mm).
-internal const val TRAY_CELL_WIDTH_PT = 65.3f
+// Width is calibrated from a physical test print: 10 cells at 65.3 pt measured 223 mm;
+// target is 235 mm (physical tray width), so the constant is scaled proportionally:
+// 65.3 × (235/223) ≈ 68.8 pt per cell, giving 688 pt ≈ 242.8 mm in the PDF.
+// At the ~3% printer-side residual scaling that survived the printable-area fix, this
+// prints to ≈ 235 mm on the physical tray.
+// Height: 27 pt (= 9.525 mm). Not yet calibrated against a physical measurement.
+internal const val TRAY_CELL_WIDTH_PT = 68.8f
 internal const val TRAY_CELL_HEIGHT_PT = 27
 
 // Per-card grid dimensions (10 cols × 5 rows at cell size above).
-internal const val TRAY_CARD_WIDTH_PT = TRAY_COLS * TRAY_CELL_WIDTH_PT       // 653 pt ≈ 230.4 mm
+internal const val TRAY_CARD_WIDTH_PT = TRAY_COLS * TRAY_CELL_WIDTH_PT       // 688 pt ≈ 242.8 mm PDF; ~235 mm printed
 internal const val TRAY_CARD_HEIGHT_PT = TRAY_ROWS_PER_CARD * TRAY_CELL_HEIGHT_PT // 135 pt
 
 // US Letter landscape: 11 × 8.5 in = 792 × 612 pt.
@@ -37,9 +40,9 @@ internal const val TRAY_PAGE_WIDTH_PT = 792
 internal const val TRAY_PAGE_HEIGHT_PT = 612
 
 // Margins that center the 4-card content block on the page.
-// Horizontal: (792 − 653) / 2 = 69.5 pt each side.
+// Horizontal: (792 − 688) / 2 = 52 pt each side.
 // Vertical:   (612 − 4 × 135) / 2 = 36 pt top/bottom.
-internal const val TRAY_PAGE_MARGIN_LEFT_PT: Float = (TRAY_PAGE_WIDTH_PT - TRAY_CARD_WIDTH_PT) / 2   // 69.5 pt
+internal const val TRAY_PAGE_MARGIN_LEFT_PT: Float = (TRAY_PAGE_WIDTH_PT - TRAY_CARD_WIDTH_PT) / 2   // 52 pt
 internal const val TRAY_PAGE_MARGIN_TOP_PT = (TRAY_PAGE_HEIGHT_PT - TRAY_CARDS_PER_PAGE * TRAY_CARD_HEIGHT_PT) / 2 // 36
 
 // Maximum quantity a single test-tube tray slot can hold.
