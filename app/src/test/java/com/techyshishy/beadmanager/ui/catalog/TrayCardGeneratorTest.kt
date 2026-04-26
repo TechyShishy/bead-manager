@@ -16,23 +16,23 @@ class TrayCardGeneratorTest {
     }
 
     @Test
-    fun `pageCount returns 1 for exactly 50 codes`() {
+    fun `pageCount returns 1 for exactly 200 codes`() {
         assertEquals(1, pageCount(TRAY_SLOTS_PER_PAGE))
     }
 
     @Test
-    fun `pageCount returns 2 for 51 codes`() {
+    fun `pageCount returns 2 for 201 codes`() {
         assertEquals(2, pageCount(TRAY_SLOTS_PER_PAGE + 1))
     }
 
     @Test
-    fun `pageCount returns 2 for 100 codes`() {
-        assertEquals(2, pageCount(100))
+    fun `pageCount returns 2 for 400 codes`() {
+        assertEquals(2, pageCount(2 * TRAY_SLOTS_PER_PAGE))
     }
 
     @Test
-    fun `pageCount returns 3 for 101 codes`() {
-        assertEquals(3, pageCount(101))
+    fun `pageCount returns 3 for 401 codes`() {
+        assertEquals(3, pageCount(401))
     }
 
     @Test
