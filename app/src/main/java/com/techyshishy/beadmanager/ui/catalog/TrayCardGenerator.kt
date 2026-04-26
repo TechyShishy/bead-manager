@@ -133,7 +133,7 @@ fun generateTrayCard(
         }
         val cutLinePaint = Paint().apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.5f
+            strokeWidth = 3f
         }
 
         val cardWidthPt = TRAY_COLS * cellWidthPt
@@ -353,7 +353,7 @@ fun generateProjectCard(
         }
         val cutLinePaint = Paint().apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.5f
+            strokeWidth = 3f
         }
 
         val cardWidthPt = TRAY_COLS * cellWidthPt
