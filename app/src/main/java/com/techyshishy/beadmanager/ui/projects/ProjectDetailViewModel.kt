@@ -252,6 +252,35 @@ class ProjectDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Adds [tag] to [ProjectEntry.tags]. Leading/trailing whitespace is trimmed; blank strings
+     * and exact duplicates are silently rejected. Writes the full updated list via
+     * [ProjectRepository.updateProject] with [SetOptions.merge] semantics.
+     */
+    fun addTag(tag: String) {
+        val trimmed = tag.trim()
+        if (trimmed.isBlank()) return
+        val currentProject = project.value ?: return
+        if (currentProject.tags.contains(trimmed)) return
+        viewModelScope.launch {
+            projectRepository.updateProject(currentProject.copy(tags = currentProject.tags + trimmed))
+        }
+    }
+
+    /**
+     * Removes [tag] from [ProjectEntry.tags]. [tag] is trimmed before lookup. A no-op if the
+     * trimmed value is not present. Writes the full updated list via
+     * [ProjectRepository.updateProject] with [SetOptions.merge] semantics.
+     */
+    fun removeTag(tag: String) {
+        val trimmed = tag.trim()
+        val currentProject = project.value ?: return
+        if (!currentProject.tags.contains(trimmed)) return
+        viewModelScope.launch {
+            projectRepository.updateProject(currentProject.copy(tags = currentProject.tags - trimmed))
+        }
+    }
+
     // ── Cover image ──────────────────────────────────────────────────────────
 
     private val _imageUploadState = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)

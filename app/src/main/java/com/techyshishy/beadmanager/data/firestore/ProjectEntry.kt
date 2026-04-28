@@ -53,6 +53,7 @@ data class ProjectEntry(
     val markedSteps: Map<String, Map<String, Int>> = emptyMap(),
     val markedRows: Map<String, Int> = emptyMap(),
     val imageUrl: String? = null,
+    val tags: List<String> = emptyList(),
 ) {
     /**
      * True when all palette keys recorded in [originalColorMapping] are still at their original

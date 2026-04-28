@@ -963,4 +963,118 @@ class ProjectDetailViewModelTest {
         // "A" is the first key in the LinkedHashMap, so DB0168 wins deterministically.
         assertEquals("DB0168", result[0].originalBeadCode)
     }
+
+    @Test
+    fun `addTag with valid tag calls updateProject with tag appended`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project", tags = listOf("existing"))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.addTag("new-tag")
+        advanceUntilIdle()
+
+        coVerify { projectRepository.updateProject(project.copy(tags = listOf("existing", "new-tag"))) }
+    }
+
+    @Test
+    fun `addTag trims whitespace before storing`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project", tags = emptyList())
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.addTag("  holiday  ")
+        advanceUntilIdle()
+
+        coVerify { projectRepository.updateProject(project.copy(tags = listOf("holiday"))) }
+    }
+
+    @Test
+    fun `addTag with blank tag does not call updateProject`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project")
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.addTag("   ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `addTag with duplicate tag does not call updateProject`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project", tags = listOf("holiday"))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.addTag("holiday")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `removeTag calls updateProject with tag removed`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project", tags = listOf("gift", "wip"))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.removeTag("gift")
+        advanceUntilIdle()
+
+        coVerify { projectRepository.updateProject(project.copy(tags = listOf("wip"))) }
+    }
+
+    @Test
+    fun `removeTag with absent tag does not call updateProject`() = runTest {
+        val project = ProjectEntry(projectId = "p1", name = "My Project", tags = listOf("wip"))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.removeTag("nonexistent")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
 }

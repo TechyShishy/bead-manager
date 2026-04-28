@@ -6,8 +6,11 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,9 +22,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -32,6 +37,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -65,7 +71,7 @@ import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
 import java.text.DateFormat
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProjectInfoScreen(
     projectId: String,
@@ -314,6 +320,18 @@ fun ProjectInfoScreen(
             }
 
             item {
+                InfoSectionHeader(stringResource(R.string.project_info_tags_header))
+            }
+            item {
+                TagsSection(
+                    tags = project?.tags.orEmpty(),
+                    onAddTag = { viewModel.addTag(it) },
+                    onRemoveTag = { viewModel.removeTag(it) },
+                )
+                HorizontalDivider()
+            }
+
+            item {
                 InfoSectionHeader(stringResource(R.string.project_info_notes_header))
             }
             item {
@@ -393,9 +411,85 @@ fun ProjectInfoScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun InfoSectionHeader(title: String) {
-    Text(
+private fun TagsSection(
+    tags: List<String>,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (String) -> Unit,
+) {
+    var tagInput by remember { mutableStateOf("") }
+
+    val submitTag = {
+        val trimmed = tagInput.trim()
+        if (trimmed.isNotBlank()) {
+            onAddTag(trimmed)
+            tagInput = ""
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        if (tags.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                tags.forEach { tag ->
+                    InputChip(
+                        selected = false,
+                        onClick = {},
+                        label = { Text(tag) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(
+                                    R.string.project_info_tags_remove,
+                                    tag,
+                                ),
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable(
+                                        role = Role.Button,
+                                        onClickLabel = stringResource(
+                                            R.string.project_info_tags_remove,
+                                            tag,
+                                        ),
+                                    ) { onRemoveTag(tag) },
+                            )
+                        },
+                    )
+                }
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OutlinedTextField(
+                value = tagInput,
+                onValueChange = { tagInput = it },
+                placeholder = { Text(stringResource(R.string.project_info_tags_input_placeholder)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submitTag() }),
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { submitTag() }) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = stringResource(R.string.project_info_tags_add),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoSectionHeader(title: String) {    Text(
         text = title,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
