@@ -674,4 +674,46 @@ class BeadToolPdfParserTest {
         val result = runCatching { parser.parse(emptyList()) }
         assertTrue(result.exceptionOrNull() is PdfParseException.NoPatternFound)
     }
+
+    // ── multi-size PDFs (Size1 + Size2, #113) ────────────────────────────────
+
+    @Test
+    fun `parse imports only Size1 rows when PDF contains both Size1 and Size2 chart variants`() {
+        // Models DragonfliesLighterCover.pdf: a Size1 chart (26 beads/row) and a Size2
+        // chart (27 beads/row) with identical row IDs embedded in the same PDF. Without
+        // deduplication, extractRowBlock emits both occurrences of each row number and
+        // parseRows produces 4 rows instead of 2. The first occurrence of each row ID
+        // (Size1, which appears earlier in document order) must win.
+        val pages = listOf(
+            "Dragonflies Lighter Cover\nEven Peyote\n",
+            // Size1 chart: rows 1–2, 26 beads each.
+            // Two spaces after the direction indicator mirrors what BeadTool 4 actually emits
+            // in the real DragonfliesLighterCover.pdf (confirmed in diagnostic report).
+            "Dragonflies Lighter Cover (Size1)\nBead Chart\n" +
+                "Row 1 (L)  (26)A\n" +
+                "Row 2 (R)  (26)A\n" +
+                "Dragonflies Lighter Cover (Size1)  Page 2\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+            // Size2 chart: same row IDs, 27 beads each — must be discarded
+            "Dragonflies Lighter Cover (Size2)\nBead Chart\n" +
+                "Row 1 (L)  (27)A\n" +
+                "Row 2 (R)  (27)A\n" +
+                "Dragonflies Lighter Cover (Size2)  Page 7\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+        )
+        val result = parser.parse(pages)
+
+        assertEquals("Size1+Size2 PDF must produce exactly 2 rows, not 4", 2, result.rows.size)
+        assertEquals(listOf(1, 2), result.rows.map { it.id })
+        assertEquals(
+            "Row 1 must have 26 beads (Size1), not 27 (Size2)",
+            26,
+            result.rows[0].steps.sumOf { it.count },
+        )
+        assertEquals(
+            "Row 2 must have 26 beads (Size1), not 27 (Size2)",
+            26,
+            result.rows[1].steps.sumOf { it.count },
+        )
+    }
 }

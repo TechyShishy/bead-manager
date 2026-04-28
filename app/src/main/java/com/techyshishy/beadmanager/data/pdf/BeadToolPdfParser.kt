@@ -191,7 +191,11 @@ class BeadToolPdfParser @Inject constructor() {
      */
     private fun extractRowBlock(text: String): String? {
         val rowLinePattern = Regex("""Row (\d+)(?:&\d+)? \([LR]\) .+""")
+        // When a PDF embeds multiple chart size variants (e.g. Size1 then Size2),
+        // findAll returns matches in document order; distinctBy keeps the first
+        // occurrence of each row number, which is always the Size1 (smaller) chart.
         val rows = rowLinePattern.findAll(text)
+            .distinctBy { it.groupValues[1].toInt() }
             .sortedBy { it.groupValues[1].toInt() }
             .map { it.value }
             .toList()
