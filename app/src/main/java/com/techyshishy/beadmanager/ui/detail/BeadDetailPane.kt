@@ -53,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -287,6 +288,8 @@ fun BeadDetailPane(
             val beadCount = (currentGrams * BEADS_PER_GRAM).toLong()
             var customAmount by remember(beadCode) { mutableStateOf(TextFieldValue("")) }
             var showResetConfirmation by remember(beadCode) { mutableStateOf(false) }
+            var showInventoryActionDialog by remember(beadCode) { mutableStateOf(false) }
+            var pendingInventoryGrams by remember(beadCode) { mutableDoubleStateOf(0.0) }
 
             if (showResetConfirmation) {
                 AlertDialog(
@@ -306,6 +309,34 @@ fun BeadDetailPane(
                     },
                     dismissButton = {
                         TextButton(onClick = { showResetConfirmation = false }) { Text("Cancel") }
+                    },
+                )
+            }
+
+            if (showInventoryActionDialog) {
+                val gramsStr = BigDecimal.valueOf(pendingInventoryGrams).stripTrailingZeros().toPlainString()
+                AlertDialog(
+                    onDismissRequest = { showInventoryActionDialog = false },
+                    title = { Text("Update inventory") },
+                    text = { Text("Set to ${gramsStr}g, or add to current stock?") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.adjustQuantity(pendingInventoryGrams)
+                                showInventoryActionDialog = false
+                            },
+                        ) { Text("Add To") }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.setQuantity(pendingInventoryGrams)
+                                showInventoryActionDialog = false
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) { Text("Replace") }
                     },
                 )
             }
@@ -350,10 +381,24 @@ fun BeadDetailPane(
                     ),
                     keyboardActions = KeyboardActions(onDone = {
                         val parsed = customAmount.text.toDoubleOrNull()
-                        if (parsed != null && parsed > 0.0) viewModel.adjustQuantity(parsed)
                         customAmount = TextFieldValue("")
+                        if (parsed != null && parsed > 0.0) {
+                            pendingInventoryGrams = parsed
+                            showInventoryActionDialog = true
+                        }
                     }),
-                    modifier = Modifier.widthIn(min = 96.dp, max = 120.dp),
+                    modifier = Modifier
+                        .widthIn(min = 96.dp, max = 120.dp)
+                        .onFocusChanged { focusState ->
+                            if (!focusState.isFocused) {
+                                val parsed = customAmount.text.toDoubleOrNull()
+                                customAmount = TextFieldValue("")
+                                if (parsed != null && parsed > 0.0) {
+                                    pendingInventoryGrams = parsed
+                                    showInventoryActionDialog = true
+                                }
+                            }
+                        },
                     decorationBox = { innerTextField ->
                         Box(
                             modifier = Modifier
