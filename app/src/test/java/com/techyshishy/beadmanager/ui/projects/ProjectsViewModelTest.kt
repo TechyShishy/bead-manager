@@ -4,6 +4,9 @@ import android.net.Uri
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.data.pdf.PdfRow
+import com.techyshishy.beadmanager.data.pdf.PdfStep
+import com.techyshishy.beadmanager.data.pdf.PdfVariant
 import com.techyshishy.beadmanager.domain.CreateBlankProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportResult
@@ -164,7 +167,7 @@ class ProjectsViewModelTest {
     fun `isImporting is true while PDF import is suspended`() = runTest {
         val deferred = CompletableDeferred<ImportResult>()
         val pdfUseCase = mockk<ImportPdfProjectUseCase> {
-            coEvery { import(any()) } coAnswers { deferred.await() }
+            coEvery { detect(any()) } coAnswers { deferred.await() }
         }
         val vm = ProjectsViewModel(
             mockk<ProjectRepository>(relaxed = true) { every { projectsStream() } returns flowOf(emptyList()) },
@@ -175,12 +178,37 @@ class ProjectsViewModelTest {
             pdfUseCase,
         )
 
-        vm.importFromPdf(mockk<Uri>())
+        vm.detectPdf(mockk<Uri>())
         assertTrue("isImporting should be true while PDF use case is suspended", vm.isImporting.value)
 
         deferred.complete(ImportResult.Success("pid", "name"))
         advanceUntilIdle()
         assertFalse("isImporting should be false after PDF import completes", vm.isImporting.value)
+    }
+
+    @Test
+    fun `isImporting is true while importSelectedVariants is suspended then false on completion`() = runTest {
+        val deferred = CompletableDeferred<ImportResult>()
+        val pdfUseCase = mockk<ImportPdfProjectUseCase> {
+            coEvery { importVariants(any(), any()) } coAnswers { deferred.await() }
+        }
+        val vm = ProjectsViewModel(
+            mockk<ProjectRepository>(relaxed = true) { every { projectsStream() } returns flowOf(emptyList()) },
+            mockk<InventoryRepository>(relaxed = true) { every { inventoryStream() } returns flowOf(emptyMap()) },
+            mockk<PreferencesRepository>(relaxed = true) { every { globalLowStockThreshold } returns flowOf(5.0) },
+            mockk<CreateBlankProjectUseCase>(relaxed = true),
+            mockk<ImportRgpProjectUseCase>(relaxed = true),
+            pdfUseCase,
+        )
+        val variant = PdfVariant("Variant 1", listOf(PdfRow(1, listOf(PdfStep(1, "A")))))
+        val pending = ImportResult.PendingVariantChoice("file", emptyMap(), listOf(variant))
+
+        vm.importSelectedVariants(pending, listOf(variant))
+        assertTrue("isImporting should be true while importVariants is suspended", vm.isImporting.value)
+
+        deferred.complete(ImportResult.MultiSuccess("proj-1", "file (Variant 1)"))
+        advanceUntilIdle()
+        assertFalse("isImporting should be false after importVariants completes", vm.isImporting.value)
     }
 
     // ── Search ───────────────────────────────────────────────────────────────

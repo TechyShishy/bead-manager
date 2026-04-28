@@ -173,6 +173,12 @@
     <string name="import_failed_not_pdf">The selected file does not appear to be a valid PDF.</string>
     <string name="import_failed_no_pattern_found">No recognizable bead pattern was found in this PDF.</string>
 
+    <!-- Variant-selection dialog (shown when a PDF contains multiple chart sizes, issue #114) -->
+    <string name="variant_selection_title">Multiple variants found</string>
+    <!-- %1$s = derived project name (filename without extension) -->
+    <string name="variant_selection_message">"%1$s" contains multiple chart variants. Select which to import:</string>
+    <string name="variant_selection_import">Import</string>
+
     <!-- RGP export -->
     <string name="export_rgp">Export as RGP</string>
     <!-- %1$s = suggested filename e.g. "My Project.rgp" -->

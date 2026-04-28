@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import com.techyshishy.beadmanager.BuildConfig
+import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
@@ -14,6 +15,7 @@ import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsCollector
 import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsWriter
 import com.techyshishy.beadmanager.data.pdf.PdfParseException
 import com.techyshishy.beadmanager.data.pdf.PdfProject
+import com.techyshishy.beadmanager.data.pdf.PdfVariant
 import com.techyshishy.beadmanager.data.pdf.PdfTextExtractor
 import com.techyshishy.beadmanager.data.pdf.XlsmPdfParser
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
@@ -38,7 +40,16 @@ class ImportPdfProjectUseCase @Inject constructor(
         private const val TAG = "PdfImport"
     }
 
-    suspend fun import(uri: Uri): ImportResult {
+    /**
+     * Phase 1: extracts text, detects the format, parses all chart variants, and validates
+     * the color mapping against the catalog.
+     *
+     * - **Single variant**: writes to Firestore and returns [ImportResult.Success] (same
+     *   behaviour as the old `import()` API).
+     * - **Multiple variants**: returns [ImportResult.PendingVariantChoice] without writing
+     *   anything. The caller must present variant-selection UI and then call [importVariants].
+     */
+    suspend fun detect(uri: Uri): ImportResult {
         val diagnostics = PdfImportDiagnosticsCollector()
         diagnostics.pdfFilename = queryDisplayName(uri)
 
@@ -57,9 +68,9 @@ class ImportPdfProjectUseCase @Inject constructor(
             return ImportResult.Failure.NotPdf
         }
 
-        // 2. Detect format and parse. BeadTool 4 is tried first; XLSM/Word Chart is the fallback.
-        val pdfProject = when (val outcome = detectAndParse(pages, uri, diagnostics)) {
-            is ParseOutcome.Success -> outcome.project
+        // 2. Detect format and parse all variants.
+        val pdfProjects = when (val outcome = detectAndParse(pages, uri, diagnostics)) {
+            is ParseOutcome.Success -> outcome.projects
             is ParseOutcome.Failure -> {
                 Log.w(TAG, "detectAndParse failed: ${outcome.result::class.simpleName}")
                 diagnostics.failureReason = diagnostics.failureReason
@@ -69,16 +80,15 @@ class ImportPdfProjectUseCase @Inject constructor(
             }
         }
 
-        // 3. Derive the project name from the URI filename. In-document titles are often
-        //    generic ("Bead Pattern", "Sheet1"); the filename is the most reliable
-        //    user-controlled signal for what the project should be called. Reuse the display
-        //    name already queried for diagnostics — one IPC call, not two.
+        // 3. Derive the project name from the URI filename.
         val projectName = deriveProjectName(diagnostics.pdfFilename)
         Log.d(TAG, "Derived project name from filename: '$projectName'")
 
         // 4. Validate all DB codes in colorMapping against the local catalog.
+        //    The mapping is shared across all variants so one check covers all of them.
         val catalogMap = catalogRepository.allBeadsAsMap()
-        val unrecognized = pdfProject.colorMapping.values.filter { it !in catalogMap }.sorted()
+        val colorMapping = pdfProjects.first().colorMapping
+        val unrecognized = colorMapping.values.filter { it !in catalogMap }.sorted()
         if (unrecognized.isNotEmpty()) {
             Log.w(TAG, "Unrecognized catalog codes: $unrecognized")
             diagnostics.unrecognizedCatalogCodes = unrecognized
@@ -87,12 +97,72 @@ class ImportPdfProjectUseCase @Inject constructor(
             return ImportResult.Failure.UnrecognizedCodes(unrecognized)
         }
 
-        // 5. Map PdfProject → Firestore shape and write.
-        val projectRows = pdfProject.rows.map { row ->
+        // 5a. Single variant: write immediately (same path as before multi-variant support).
+        if (pdfProjects.size == 1) {
+            return writeSingleVariant(pdfProjects.first(), projectName, catalogMap, diagnostics)
+        }
+
+        // 5b. Multiple variants: surface them to the caller for selection; nothing is written yet.
+        Log.d(TAG, "Multiple variants (${pdfProjects.size}) — returning PendingVariantChoice")
+        if (BuildConfig.DEBUG) diagnosticsWriter.write(diagnostics)
+        return ImportResult.PendingVariantChoice(
+            fileName = projectName,
+            colorMapping = colorMapping,
+            variants = pdfProjects.mapIndexed { i, p -> PdfVariant(label = "Variant ${i + 1}", rows = p.rows) },
+        )
+    }
+
+    /**
+     * Phase 2: writes the [selected] variants from a [PendingVariantChoice] to Firestore.
+     *
+     * Returns [ImportResult.Success] when exactly one variant was selected, or
+     * [ImportResult.MultiSuccess] when more than one was written. Returns
+     * [ImportResult.Failure.WriteError] and stops on the first Firestore failure.
+     */
+    suspend fun importVariants(
+        pending: ImportResult.PendingVariantChoice,
+        selected: List<PdfVariant>,
+    ): ImportResult {
+        if (selected.isEmpty()) return ImportResult.Failure.WriteError
+        val catalogMap = catalogRepository.allBeadsAsMap()
+        val written = mutableListOf<ImportResult.Success>()
+        for (variant in selected) {
+            val name = "${pending.fileName} (${variant.label})"
+            val project = PdfProject(colorMapping = pending.colorMapping, rows = variant.rows)
+            val diagnostics = PdfImportDiagnosticsCollector().apply { pdfFilename = name }
+            when (val result = writeSingleVariant(project, name, catalogMap, diagnostics)) {
+                is ImportResult.Success -> written.add(result)
+                else -> {
+                    // Roll back any variants already written before this failure.
+                    for (success in written) {
+                        runCatching { projectRepository.deleteProject(success.projectId) }
+                            .onFailure { Log.w(TAG, "Rollback: deleteProject(${success.projectId}) failed", it) }
+                    }
+                    return result
+                }
+            }
+        }
+        return if (written.size == 1) {
+            written.first()
+        } else {
+            ImportResult.MultiSuccess(
+                firstProjectId = written.first().projectId,
+                firstName = written.first().name,
+            )
+        }
+    }
+
+    /** Writes [project] to Firestore and returns [ImportResult.Success] or [ImportResult.Failure.WriteError]. */
+    private suspend fun writeSingleVariant(
+        project: PdfProject,
+        projectName: String,
+        catalogMap: Map<String, BeadEntity>,
+        diagnostics: PdfImportDiagnosticsCollector,
+    ): ImportResult {
+        val projectRows = project.rows.map { row ->
             ProjectRgpRow(
                 id = row.id,
                 steps = row.steps.mapIndexed { idx, step ->
-                    // PdfStep has no id; assign a 1-based sequential id within each row.
                     ProjectRgpStep(id = idx + 1, count = step.count, description = step.colorLetter)
                 },
             )
@@ -101,30 +171,26 @@ class ImportPdfProjectUseCase @Inject constructor(
             projectRepository.createProject(
                 ProjectEntry(
                     name = projectName,
-                    colorMapping = pdfProject.colorMapping,
+                    colorMapping = project.colorMapping,
                 ),
             )
         } catch (e: Exception) {
             Log.e(TAG, "createProject failed", e)
-            // WriteError is a Firestore / connectivity failure, not a parse failure.
-            // The PDF parsed successfully so no diagnostics are written.
             return ImportResult.Failure.WriteError
         }
         try {
             projectRepository.writeProjectGrid(projectId, projectRows)
         } catch (e: Exception) {
             Log.e(TAG, "writeProjectGrid failed", e)
-            // WriteError is a Firestore / connectivity failure, not a parse failure.
-            // The PDF parsed successfully so no diagnostics are written.
             runCatching { projectRepository.deleteProject(projectId) }
                 .onSuccess { Log.d(TAG, "Partial project $projectId cleaned up") }
                 .onFailure { Log.e(TAG, "Cleanup of partial project $projectId failed", it) }
             return ImportResult.Failure.WriteError
         }
-        // Best-effort cover image generation from the imported grid. Any exception other than
-        // CancellationException is swallowed — the import result is Success regardless.
+        // Best-effort cover image generation — any exception other than CancellationException
+        // is swallowed; the import result is Success regardless.
         runCatching {
-            val bytes = generateProjectPreview.render(projectRows, pdfProject.colorMapping, catalogMap)
+            val bytes = generateProjectPreview.render(projectRows, project.colorMapping, catalogMap)
             val imageUrl = projectImageRepository.uploadCoverBytes(projectId, bytes)
             projectRepository.setProjectImageUrl(projectId, imageUrl)
         }.onFailure {
@@ -132,9 +198,6 @@ class ImportPdfProjectUseCase @Inject constructor(
             Log.w(TAG, "Cover image generation failed — import result unaffected", it)
         }
         Log.d(TAG, "Import succeeded: name='$projectName', projectId=$projectId")
-        // In debug builds write a diagnostics report even on success so that
-        // parse correctness (e.g. per-row step counts) can be verified without
-        // needing to trigger a failure.
         if (BuildConfig.DEBUG) diagnosticsWriter.write(diagnostics)
         return ImportResult.Success(projectId = projectId, name = projectName)
     }
@@ -157,16 +220,16 @@ class ImportPdfProjectUseCase @Inject constructor(
         diagnostics: PdfImportDiagnosticsCollector,
     ): ParseOutcome {
         // --- BeadTool 4 ---
-        val beadToolProject = try {
-            beadToolParser.parse(pages, diagnostics).also {
-                Log.d(TAG, "BeadTool parser matched: ${it.rows.size} rows")
+        val beadToolProjects = try {
+            beadToolParser.parseAllVariants(pages, diagnostics).also {
+                Log.d(TAG, "BeadTool parser matched: ${it.size} variant(s), first has ${it.first().rows.size} rows")
             }
         } catch (e: PdfParseException.NoPatternFound) {
             Log.d(TAG, "BeadTool parser: NoPatternFound — trying XLSM fallback")
             null
         }
 
-        if (beadToolProject != null) {
+        if (beadToolProjects != null) {
             val colorKeyIndex = colorKeyExtractor.findColorKeyPageIndex(pages)
             diagnostics.colorKeyPageIndex = colorKeyIndex
             Log.d(TAG, "Color key page index: $colorKeyIndex")
@@ -175,14 +238,17 @@ class ImportPdfProjectUseCase @Inject constructor(
                 diagnostics.failureReason = "BeadTool: no color key page found"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
-            val usedLetters = beadToolProject.rows.flatMap { it.steps }.mapTo(mutableSetOf()) { it.colorLetter }
+            // Collect all color letters used across every variant — the color key is shared.
+            val usedLetters = beadToolProjects
+                .flatMap { p -> p.rows.flatMap { it.steps } }
+                .mapTo(mutableSetOf()) { it.colorLetter }
             // Prefer text-based color key extraction — cheaper, and works when the color
             // key is printed as selectable text rather than a rasterized image.
             val textColorMap = colorKeyExtractor.parseColorKeyText(pages[colorKeyIndex])
             if (textColorMap.keys.containsAll(usedLetters)) {
                 Log.d(TAG, "Text color key complete (${textColorMap.size} entries) — skipping OCR")
                 diagnostics.ocrMissingLetters = emptySet()
-                return ParseOutcome.Success(beadToolProject.copy(colorMapping = textColorMap))
+                return ParseOutcome.Success(beadToolProjects.map { it.copy(colorMapping = textColorMap) })
             }
             // Text extraction incomplete — fall through to ML Kit OCR (standard BeadTool 4 path).
             Log.d(TAG, "Text color key partial or empty (${textColorMap.size} entries) — running OCR on page $colorKeyIndex")
@@ -203,7 +269,7 @@ class ImportPdfProjectUseCase @Inject constructor(
                 diagnostics.failureReason = "BeadTool OCR: extractor exception — ${e::class.simpleName}: ${e.message}"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
-            // Validate that OCR recovered an entry for every color letter in the parsed rows.
+            // Validate that OCR recovered an entry for every color letter used across all variants.
             val missingFromOcr = usedLetters - colorMap.keys
             diagnostics.ocrMissingLetters = missingFromOcr
             Log.d(TAG, "Letters used by pattern: $usedLetters; OCR covered: ${colorMap.keys.sorted()}")
@@ -212,16 +278,18 @@ class ImportPdfProjectUseCase @Inject constructor(
                 diagnostics.failureReason = "BeadTool OCR: missing letters $missingFromOcr"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
             }
-            return ParseOutcome.Success(beadToolProject.copy(colorMapping = colorMap))
+            return ParseOutcome.Success(beadToolProjects.map { it.copy(colorMapping = colorMap) })
         }
 
         // --- XLSM / Word Chart fallback ---
         Log.d(TAG, "Trying XLSM / Word Chart parser")
         return try {
             ParseOutcome.Success(
-                xlsmParser.parse(pages, diagnostics = diagnostics).also {
-                    Log.d(TAG, "XLSM parser matched: rows=${it.rows.size}, colorMapping=${it.colorMapping}")
-                },
+                listOf(
+                    xlsmParser.parse(pages, diagnostics = diagnostics).also {
+                        Log.d(TAG, "XLSM parser matched: rows=${it.rows.size}, colorMapping=${it.colorMapping}")
+                    },
+                ),
             )
         } catch (e: PdfParseException.NoPatternFound) {
             Log.w(TAG, "XLSM parser: NoPatternFound — ${e.message}")
@@ -276,7 +344,7 @@ class ImportPdfProjectUseCase @Inject constructor(
     }
 
     private sealed class ParseOutcome {
-        data class Success(val project: PdfProject) : ParseOutcome()
+        data class Success(val projects: List<PdfProject>) : ParseOutcome()
         data class Failure(val result: ImportResult.Failure) : ParseOutcome()
     }
 }

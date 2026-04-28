@@ -21,8 +21,11 @@ class BeadToolPdfParser @Inject constructor() {
     }
 
     /**
-     * Parses [pages] (one string per PDF page, as returned by [extractPdfText])
-     * into a [PdfProject] with empty [PdfProject.colorMapping].
+     * Parses [pages] into a single [PdfProject] representing the first chart variant found.
+     *
+     * When the PDF embeds multiple chart variants (e.g. Size1 and Size2), only the variant
+     * whose row sequence appears first in document order is returned. To obtain all variants,
+     * use [parseAllVariants].
      *
      * When [diagnostics] is provided, each intermediate text transformation and
      * the row-block extraction result are captured for post-mortem debugging.
@@ -33,13 +36,30 @@ class BeadToolPdfParser @Inject constructor() {
     fun parse(
         pages: List<String>,
         diagnostics: PdfImportDiagnosticsCollector? = null,
-    ): PdfProject {
+    ): PdfProject = parseAllVariants(pages, diagnostics).first()
+
+    // ── Text cleaning ─────────────────────────────────────────────────────────
+
+    /**
+     * Parses [pages] into one [PdfProject] per chart variant found in the document.
+     *
+     * Most BeadTool 4 PDFs contain a single chart, so this typically returns a
+     * one-element list. PDFs that embed two size variants (e.g. Size1 and Size2)
+     * return two elements — first element is the variant whose row sequence appears
+     * first in document order.
+     *
+     * [PdfProject.colorMapping] is always empty in the returned projects; call
+     * [BeadToolColorKeyExtractor] to populate it.
+     *
+     * @throws [PdfParseException.NoPatternFound] when no chart variant is found.
+     */
+    fun parseAllVariants(
+        pages: List<String>,
+        diagnostics: PdfImportDiagnosticsCollector? = null,
+    ): List<PdfProject> {
         diagnostics?.beadToolAttempted = true
         val allText = pages.joinToString("\n")
         val stripped = stripPageHeaders(allText)
-        // Some BeadTool 4 PDFs export both a Loom Word Chart and a Peyote Word Chart.
-        // Parsing the full text merges rows from both sections, doubling the row count.
-        // Prefer the Peyote section when the section header is present.
         val isolated = isolatePeyoteSection(stripped)
         val sectionText = isolated ?: stripped
         val cleaned = cleanText(sectionText)
@@ -61,22 +81,32 @@ class BeadToolPdfParser @Inject constructor() {
         diagnostics?.beadToolCleanedText = cleaned
         diagnostics?.beadToolLegendStrippedText = legendStripped
         diagnostics?.beadToolContinuedText = continued
-        val rowBlock = extractRowBlock(continued)
-        diagnostics?.beadToolRowBlockFound = rowBlock != null
-        diagnostics?.beadToolRowBlock = rowBlock
-        if (rowBlock == null) {
+
+        val variantBlocks = extractVariantRowBlocks(continued)
+        // Diagnostics capture the first block for backward compatibility with existing reports.
+        diagnostics?.beadToolRowBlockFound = variantBlocks.isNotEmpty()
+        diagnostics?.beadToolRowBlock = variantBlocks.firstOrNull()
+
+        if (variantBlocks.isEmpty()) {
             Log.d(TAG, "BeadTool: no row block matched")
             throw PdfParseException.NoPatternFound()
         }
-        Log.d(TAG, "BeadTool: row block found (${rowBlock.length} chars), first line='${rowBlock.lines().firstOrNull()}'")
-        val rows = parseRows(rowBlock)
-        diagnostics?.beadToolRowCount = rows.size
-        diagnostics?.beadToolRowSummary = rows.map { r -> "row ${r.id}: ${r.steps.sumOf { it.count }} beads" }
-        Log.d(TAG, "BeadTool: parsed ${rows.size} rows")
-        return PdfProject(colorMapping = emptyMap(), rows = rows)
+
+        Log.d(TAG, "BeadTool: ${variantBlocks.size} variant block(s) found")
+        return variantBlocks.mapIndexed { index, block ->
+            val rows = parseRows(block)
+            Log.d(TAG, "BeadTool variant ${index + 1}: parsed ${rows.size} rows")
+            PdfProject(colorMapping = emptyMap(), rows = rows)
+        }.also { projects ->
+            // Diagnostics reflect Variant 1 counts for backward compat.
+            diagnostics?.beadToolRowCount = projects.first().rows.size
+            diagnostics?.beadToolRowSummary = projects.first().rows.map { r ->
+                "row ${r.id}: ${r.steps.sumOf { it.count }} beads"
+            }
+        }
     }
 
-    // ── Text cleaning ─────────────────────────────────────────────────────────
+
 
     /**
      * Removes per-page "Created with BeadTool 4" headers and "Page N of M"
@@ -179,39 +209,59 @@ class BeadToolPdfParser @Inject constructor() {
     // ── Row block extraction ──────────────────────────────────────────────────
 
     /**
-     * Collects all row-notation lines from [text] and returns them sorted by
-     * row number, or null when no recognizable rows are found.
+     * Groups all row-notation lines from [text] into per-variant blocks and returns them
+     * sorted by row number within each block, discarding variants that lack Row 1.
      *
-     * The previous approach required all row lines to form a single contiguous
-     * block in the text. That assumption breaks for PDFs whose row lines are
-     * separated by space-only blank lines (`\n \n`) or interrupted by per-page
-     * custom headers — both of which appear in third-party patterns exported in
-     * a two-column layout (e.g. the "Bead with Bugs" format). Collecting rows
-     * with [Regex.findAll] and sorting by row number is robust to both cases.
+     * A new variant starts when the row number seen in document order drops below the
+     * previous row number — that reset marks where BeadTool 4 begins repeating the row
+     * sequence for a second chart size. This approach supersedes the old [distinctBy]
+     * strategy, which silently discarded Variant 2+; now both variants are captured so
+     * callers can present a selection UI.
+     *
+     * A new variant group is started only when the row number resets to 1. Out-of-order
+     * rows caused by two-column PDF layouts (e.g. Row 6 appears before Rows 4–5) are
+     * treated as belonging to the same variant; the resulting group is sorted by row
+     * number before being returned. Each group that does not contain a Row 1 line is
+     * discarded as an incomplete/non-primary block.
      */
-    private fun extractRowBlock(text: String): String? {
+    internal fun extractVariantRowBlocks(text: String): List<String> {
         val rowLinePattern = Regex("""Row (\d+)(?:&\d+)? \([LR]\) .+""")
-        // When a PDF embeds multiple chart size variants (e.g. Size1 then Size2),
-        // findAll returns matches in document order; distinctBy keeps the first
-        // occurrence of each row number, which is always the Size1 (smaller) chart.
-        val rows = rowLinePattern.findAll(text)
-            .distinctBy { it.groupValues[1].toInt() }
-            .sortedBy { it.groupValues[1].toInt() }
-            .map { it.value }
-            .toList()
-        if (rows.isEmpty()) {
-            Log.d(TAG, "extractRowBlock: no rows matched in ${text.length}-char text. " +
+        val allMatches = rowLinePattern.findAll(text).toList()
+        if (allMatches.isEmpty()) {
+            Log.d(TAG, "extractVariantRowBlocks: no rows matched in ${text.length}-char text. " +
                 "Contains 'Row '=${text.contains("Row ")}. " +
                 "First 500 chars: ${text.take(500).replace('\n', '↵')}")
-            return null
+            return emptyList()
         }
-        val hasStart = rows.any { it.startsWith("Row 1&2 ") || it.startsWith("Row 1 ") }
-        if (!hasStart) {
-            Log.d(TAG, "extractRowBlock: ${rows.size} rows found but none is Row 1 or Row 1&2. " +
-                "Lowest row: '${rows.first().take(80)}'")
-            return null
+
+        // Group matches into variant blocks: start a new group only when the row number
+        // resets to 1 (a new variant always begins at Row 1). Out-of-order row numbers
+        // caused by two-column PDF layouts are not treated as a variant boundary.
+        val groups = mutableListOf<MutableList<MatchResult>>()
+        for (match in allMatches) {
+            val rowNum = match.groupValues[1].toInt()
+            if (groups.isEmpty() || (rowNum == 1 && groups.last().isNotEmpty())) {
+                groups.add(mutableListOf(match))
+            } else {
+                groups.last().add(match)
+            }
         }
-        return rows.joinToString("\n")
+
+        // Discard any group that doesn't include a Row 1 or Row 1&2 line — it cannot
+        // represent a complete variant and would produce a garbled project.
+        val validGroups = groups.filter { group -> group.any { it.groupValues[1].toInt() == 1 } }
+        if (validGroups.isEmpty()) {
+            Log.d(TAG, "extractVariantRowBlocks: ${allMatches.size} row line(s) found " +
+                "but no group starts at Row 1.")
+            return emptyList()
+        }
+
+        Log.d(TAG, "extractVariantRowBlocks: found ${validGroups.size} variant block(s)")
+        return validGroups.map { group ->
+            group
+                .sortedBy { it.groupValues[1].toInt() }
+                .joinToString("\n") { it.value }
+        }
     }
 
     // ── Row parsing ───────────────────────────────────────────────────────────

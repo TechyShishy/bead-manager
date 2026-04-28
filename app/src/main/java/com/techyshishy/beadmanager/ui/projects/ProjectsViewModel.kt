@@ -11,6 +11,7 @@ import com.techyshishy.beadmanager.data.model.computeProjectSatisfaction
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.data.pdf.PdfVariant
 import com.techyshishy.beadmanager.domain.CreateBlankProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportPdfProjectUseCase
 import com.techyshishy.beadmanager.domain.ImportResult
@@ -221,17 +222,38 @@ class ProjectsViewModel @Inject constructor(
         }
     }
 
-    fun importFromPdf(uri: Uri) {
+    fun detectPdf(uri: Uri) {
         viewModelScope.launch {
             _isImporting.value = true
             try {
-                val result = importPdfProjectUseCase.import(uri)
+                val result = importPdfProjectUseCase.detect(uri)
+                // Clear the spinner before emitting so the variant-selection dialog appears
+                // without an overlapping progress indicator.
                 _isImporting.value = false
                 _importResult.emit(result)
             } finally {
                 _isImporting.value = false
             }
         }
+    }
+
+    fun importSelectedVariants(pending: ImportResult.PendingVariantChoice, selected: List<PdfVariant>) {
+        viewModelScope.launch {
+            _isImporting.value = true
+            try {
+                val result = importPdfProjectUseCase.importVariants(pending, selected)
+                _isImporting.value = false
+                _importResult.emit(result)
+            } finally {
+                _isImporting.value = false
+            }
+        }
+    }
+
+    /** Called when the user dismisses the variant-selection dialog without importing. */
+    fun cancelVariantSelection() {
+        // isImporting is already false at this point (cleared before the dialog was shown).
+        // This method exists as an explicit cancel acknowledgement; no state change needed.
     }
 
     fun addBeadToProject(beadCode: String, projectId: String) {

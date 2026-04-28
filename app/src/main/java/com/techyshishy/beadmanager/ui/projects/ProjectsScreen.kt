@@ -33,6 +33,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.model.ProjectSatisfaction
+import com.techyshishy.beadmanager.data.pdf.PdfVariant
 import com.techyshishy.beadmanager.domain.ImportResult
 import coil3.compose.AsyncImage
 import java.text.DateFormat
@@ -115,13 +117,14 @@ fun ProjectsScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
     var importError by remember { mutableStateOf<ImportResult.Failure?>(null) }
+    var pendingVariantChoice by remember { mutableStateOf<ImportResult.PendingVariantChoice?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         if (context.contentResolver.getType(uri) == "application/pdf") {
-            viewModel.importFromPdf(uri)
+            viewModel.detectPdf(uri)
         } else {
             viewModel.importFromRgp(uri)
         }
@@ -131,6 +134,8 @@ fun ProjectsScreen(
         viewModel.importResult.collect { result ->
             when (result) {
                 is ImportResult.Success -> onProjectSelected(result.projectId, result.name)
+                is ImportResult.MultiSuccess -> onProjectSelected(result.firstProjectId, result.firstName)
+                is ImportResult.PendingVariantChoice -> pendingVariantChoice = result
                 is ImportResult.Failure -> importError = result
             }
         }
@@ -307,6 +312,20 @@ fun ProjectsScreen(
         )
     }
 
+    pendingVariantChoice?.let { pending ->
+        VariantSelectionDialog(
+            pending = pending,
+            onConfirm = { selected ->
+                pendingVariantChoice = null
+                viewModel.importSelectedVariants(pending, selected)
+            },
+            onDismiss = {
+                pendingVariantChoice = null
+                viewModel.cancelVariantSelection()
+            },
+        )
+    }
+
     if (isImporting) {
         val importingLabel = stringResource(R.string.import_in_progress_title)
         BasicAlertDialog(
@@ -337,6 +356,66 @@ fun ProjectsScreen(
             }
         }
     }
+}
+
+/**
+ * Presents the chart variants found in a multi-variant PDF and lets the user choose which
+ * to import. All variants are pre-checked. At least one must remain checked to enable the
+ * confirm button.
+ */
+@Composable
+private fun VariantSelectionDialog(
+    pending: ImportResult.PendingVariantChoice,
+    onConfirm: (List<PdfVariant>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var checkedVariants by remember { mutableStateOf(pending.variants.toSet()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.variant_selection_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.variant_selection_message, pending.fileName),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                pending.variants.forEach { variant ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                checkedVariants = if (variant in checkedVariants) {
+                                    checkedVariants - variant
+                                } else {
+                                    checkedVariants + variant
+                                }
+                            },
+                    ) {
+                        Checkbox(
+                            checked = variant in checkedVariants,
+                            onCheckedChange = null,
+                        )
+                        Text(variant.label)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(pending.variants.filter { it in checkedVariants }) },
+                enabled = checkedVariants.isNotEmpty(),
+            ) {
+                Text(stringResource(R.string.variant_selection_import))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }
 
 private const val SEGMENTED_BAR_MAX_BEADS = 20

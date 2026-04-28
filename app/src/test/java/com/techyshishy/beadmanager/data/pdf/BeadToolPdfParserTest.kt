@@ -716,4 +716,43 @@ class BeadToolPdfParserTest {
             result.rows[1].steps.sumOf { it.count },
         )
     }
+
+    // ── parseAllVariants ──────────────────────────────────────────────────────
+
+    @Test
+    fun `parseAllVariants returns one variant for a single-chart PDF`() {
+        val pages = listOf(
+            "Single Chart\nEven Peyote\n",
+            "Single Chart\nBead Chart\nRow 1 (L)  (3)A, (2)B\n",
+        )
+        val result = parser.parseAllVariants(pages)
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `parseAllVariants returns two variants for a Size1+Size2 PDF`() {
+        val pages = listOf(
+            "Dragonflies Lighter Cover\nEven Peyote\n",
+            "Dragonflies Lighter Cover (Size1)\nBead Chart\n" +
+                "Row 1 (L)  (26)A\n" +
+                "Row 2 (R)  (26)A\n" +
+                "Dragonflies Lighter Cover (Size1)  Page 2\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+            "Dragonflies Lighter Cover (Size2)\nBead Chart\n" +
+                "Row 1 (L)  (27)A\n" +
+                "Row 2 (R)  (27)A\n" +
+                "Dragonflies Lighter Cover (Size2)  Page 7\n" +
+                "Created with BeadTool 4 - www.beadtool.net\n",
+        )
+        val result = parser.parseAllVariants(pages)
+        assertEquals(2, result.size)
+        assertEquals(26, result[0].rows[0].steps.sumOf { it.count })
+        assertEquals(27, result[1].rows[0].steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parseAllVariants throws NoPatternFound for empty page list`() {
+        val ex = runCatching { parser.parseAllVariants(emptyList()) }
+        assertTrue(ex.exceptionOrNull() is PdfParseException.NoPatternFound)
+    }
 }

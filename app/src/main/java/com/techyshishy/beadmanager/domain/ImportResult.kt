@@ -1,7 +1,26 @@
 package com.techyshishy.beadmanager.domain
 
+import com.techyshishy.beadmanager.data.pdf.PdfVariant
+
 sealed class ImportResult {
     data class Success(val projectId: String, val name: String) : ImportResult()
+
+    /**
+     * Returned by [ImportPdfProjectUseCase.detect] when the PDF contains two or more chart
+     * variants. No Firestore write has occurred yet. The caller must present variant-selection
+     * UI and then invoke [ImportPdfProjectUseCase.importVariants].
+     *
+     * [colorMapping] is shared across all variants — color-key extraction runs once on the
+     * full document.
+     */
+    data class PendingVariantChoice(
+        val fileName: String,
+        val colorMapping: Map<String, String>,
+        val variants: List<PdfVariant>,
+    ) : ImportResult()
+
+    /** Returned by [ImportPdfProjectUseCase.importVariants] when more than one variant was written. */
+    data class MultiSuccess(val firstProjectId: String, val firstName: String) : ImportResult()
     sealed class Failure : ImportResult() {
         data object NotGzip : Failure()
         data object InvalidJson : Failure()

@@ -17,3 +17,11 @@ data class PdfRow(val id: Int, val steps: List<PdfStep>)
 
 /** A run of [count] beads of [colorLetter] within a row. */
 data class PdfStep(val count: Int, val colorLetter: String)
+
+/**
+ * One chart variant extracted from a multi-variant PDF (e.g. a Size1 and a Size2 chart
+ * embedded in the same file). [label] is assigned by document order: "Variant 1",
+ * "Variant 2", etc. The color mapping is shared across all variants and lives in
+ * [com.techyshishy.beadmanager.domain.ImportResult.PendingVariantChoice].
+ */
+data class PdfVariant(val label: String, val rows: List<PdfRow>)
