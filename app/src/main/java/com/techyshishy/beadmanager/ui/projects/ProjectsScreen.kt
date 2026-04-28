@@ -23,17 +23,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -43,6 +44,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -84,6 +86,8 @@ fun ProjectsScreen(
     val projects by viewModel.projects.collectAsState()
     val beadSatisfaction by viewModel.beadSatisfaction.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val tagFilter by viewModel.tagFilter.collectAsState()
     val isImporting by viewModel.isImporting.collectAsState()
 
     val displayedProjects = remember(projects, beadCodeFilter) {
@@ -91,7 +95,20 @@ fun ProjectsScreen(
         else projects.filter { beadCodeFilter in it.colorMapping.values }
     }
 
-    var showSortMenu by remember { mutableStateOf(false) }
+    // When entering the bead-filter view from another tab, clear any active text search or tag
+    // filter so the ViewModel's filtered list doesn't silently exclude projects the user expects
+    // to see.
+    LaunchedEffect(beadCodeFilter) {
+        if (beadCodeFilter != null) {
+            viewModel.setSearchQuery("")
+            viewModel.setTagFilter(null)
+        }
+    }
+
+    val activeFilterCount = (if (sortOrder != ProjectSortOrder.DEFAULT) 1 else 0) +
+        (if (tagFilter != null) 1 else 0)
+
+    var showFilterSheet by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntry?>(null) }
     var importError by remember { mutableStateOf<ImportResult.Failure?>(null) }
@@ -137,39 +154,6 @@ fun ProjectsScreen(
                                 contentDescription = stringResource(R.string.import_from_file),
                             )
                         }
-                        Box {
-                            IconButton(onClick = { showSortMenu = true }) {
-                                Icon(
-                                    Icons.Filled.SwapVert,
-                                    contentDescription = stringResource(R.string.sort_projects),
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                            ) {
-                                ProjectSortKey.entries.forEach { key ->
-                                    val isActive = sortOrder.key == key
-                                    DropdownMenuItem(
-                                        text = { Text(key.label()) },
-                                        onClick = {
-                                            viewModel.toggleSortKey(key)
-                                            showSortMenu = false
-                                        },
-                                        trailingIcon = if (isActive) {
-                                            {
-                                                Icon(
-                                                    if (sortOrder.direction == SortDirection.ASCENDING) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                                                    contentDescription = stringResource(
-                                                        if (sortOrder.direction == SortDirection.ASCENDING) R.string.sort_direction_ascending else R.string.sort_direction_descending,
-                                                    ),
-                                                )
-                                            }
-                                        } else null,
-                                    )
-                                }
-                            }
-                        }
                     }
                 },
             )
@@ -185,42 +169,99 @@ fun ProjectsScreen(
             }
         },
     ) { innerPadding ->
-        if (displayedProjects.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp, vertical = 32.dp),
-            ) {
-                Text(
-                    text = if (beadCodeFilter != null) {
-                        stringResource(R.string.no_projects_for_bead)
-                    } else {
-                        stringResource(R.string.no_projects)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            if (beadCodeFilter == null) {
+                DockedSearchBar(
+                    inputField = {
+                        SearchBarDefaults.InputField(
+                            query = searchQuery,
+                            onQueryChange = { viewModel.setSearchQuery(it) },
+                            onSearch = {},
+                            expanded = false,
+                            onExpandedChange = {},
+                            placeholder = { Text(stringResource(R.string.search_projects)) },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                            trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.clear_search),
+                                            )
+                                        }
+                                    }
+                                    BadgedBox(
+                                        badge = {
+                                            if (activeFilterCount > 0) Badge { Text("$activeFilterCount") }
+                                        },
+                                    ) {
+                                        IconButton(onClick = { showFilterSheet = true }) {
+                                            Icon(
+                                                Icons.Filled.FilterList,
+                                                contentDescription = stringResource(R.string.filter),
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                        )
                     },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    expanded = false,
+                    onExpandedChange = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {}
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            ) {
-                items(displayedProjects, key = { it.projectId }) { project ->
-                    ProjectRow(
-                        project = project,
-                        satisfaction = beadSatisfaction[project.projectId],
-                        onClick = { onProjectSelected(project.projectId, project.name) },
-                        onDelete = if (beadCodeFilter == null) (
-                            { deleteTarget = project }
-                        ) else null,
+            if (displayedProjects.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 32.dp),
+                ) {
+                    Text(
+                        text = if (beadCodeFilter != null) {
+                            stringResource(R.string.no_projects_for_bead)
+                        } else {
+                            stringResource(R.string.no_projects)
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    HorizontalDivider()
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    items(displayedProjects, key = { it.projectId }) { project ->
+                        ProjectRow(
+                            project = project,
+                            satisfaction = beadSatisfaction[project.projectId],
+                            onClick = { onProjectSelected(project.projectId, project.name) },
+                            onDelete = if (beadCodeFilter == null) (
+                                { deleteTarget = project }
+                            ) else null,
+                        )
+                        HorizontalDivider()
+                    }
                 }
             }
         }
+    }
+
+    if (showFilterSheet) {
+        ProjectFilterSheet(
+            viewModel = viewModel,
+            onDismiss = { showFilterSheet = false },
+        )
     }
 
     if (showCreateDialog) {
@@ -520,13 +561,4 @@ private fun CreateProjectDialog(
             }
         },
     )
-}
-
-@Composable
-private fun ProjectSortKey.label(): String = when (this) {
-    ProjectSortKey.CREATED_AT -> stringResource(R.string.sort_date_created)
-    ProjectSortKey.NAME -> stringResource(R.string.sort_name)
-    ProjectSortKey.BEAD_TYPES -> stringResource(R.string.sort_bead_types)
-    ProjectSortKey.GRID_SIZE -> stringResource(R.string.sort_grid_size)
-    ProjectSortKey.SATISFACTION -> stringResource(R.string.sort_satisfaction)
 }

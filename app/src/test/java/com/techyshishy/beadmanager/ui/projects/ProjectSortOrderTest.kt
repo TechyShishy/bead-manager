@@ -12,12 +12,14 @@ class ProjectSortOrderTest {
         id: String,
         name: String = "project",
         createdAt: Timestamp? = null,
+        lastUpdated: Timestamp? = null,
         colorMappingSize: Int = 0,
         rowCount: Int = 0,
     ): ProjectEntry = ProjectEntry(
         projectId = id,
         name = name,
         createdAt = createdAt,
+        lastUpdated = lastUpdated,
         colorMapping = (1..colorMappingSize).associate { "K$it" to "DB000$it" },
         rowCount = rowCount,
     )
@@ -218,6 +220,34 @@ class ProjectSortOrderTest {
             "b" to ProjectSatisfaction(listOf(true, false)),
         )
         assertEquals(0, sortSatisfaction(SortDirection.ASCENDING, sat).compare(p1, p2))
+    }
+
+    // ── LAST_UPDATED ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `LAST_UPDATED DESCENDING places more recently updated project first`() {
+        val older = project("a", lastUpdated = Timestamp(1_000, 0))
+        val newer = project("b", lastUpdated = Timestamp(2_000, 0))
+        val sorted = listOf(older, newer).sortedWith(sort(ProjectSortKey.LAST_UPDATED, SortDirection.DESCENDING))
+        assertEquals(listOf(newer, older), sorted)
+    }
+
+    @Test
+    fun `LAST_UPDATED ASCENDING places less recently updated project first`() {
+        val older = project("a", lastUpdated = Timestamp(1_000, 0))
+        val newer = project("b", lastUpdated = Timestamp(2_000, 0))
+        val sorted = listOf(newer, older).sortedWith(sort(ProjectSortKey.LAST_UPDATED, SortDirection.ASCENDING))
+        assertEquals(listOf(older, newer), sorted)
+    }
+
+    @Test
+    fun `LAST_UPDATED places null lastUpdated after real timestamps regardless of direction`() {
+        val withTs = project("a", lastUpdated = Timestamp(1_000, 0))
+        val noTs = project("b", lastUpdated = null)
+        val sortedAsc = listOf(noTs, withTs).sortedWith(sort(ProjectSortKey.LAST_UPDATED, SortDirection.ASCENDING))
+        val sortedDesc = listOf(noTs, withTs).sortedWith(sort(ProjectSortKey.LAST_UPDATED, SortDirection.DESCENDING))
+        assertEquals(listOf(withTs, noTs), sortedAsc)
+        assertEquals(listOf(withTs, noTs), sortedDesc)
     }
 
     // ── Edge cases ───────────────────────────────────────────────────────────

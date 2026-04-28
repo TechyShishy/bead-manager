@@ -93,7 +93,10 @@ class FirestoreProjectSource @Inject constructor(
 
     suspend fun updateProject(entry: ProjectEntry) {
         val uid = requireUid()
-        projectsRef(uid).document(entry.projectId).set(entry, SetOptions.merge()).await()
+        // Null out lastUpdated so @ServerTimestamp fires on every merge write. If we pass the
+        // non-null Timestamp that Firestore returned on the last read, the annotation has no
+        // effect and the field is written back with its stale value.
+        projectsRef(uid).document(entry.projectId).set(entry.copy(lastUpdated = null), SetOptions.merge()).await()
     }
 
     /**

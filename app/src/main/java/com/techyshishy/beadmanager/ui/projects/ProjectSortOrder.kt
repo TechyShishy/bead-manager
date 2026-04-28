@@ -7,6 +7,7 @@ enum class SortDirection { ASCENDING, DESCENDING }
 
 enum class ProjectSortKey(val defaultDirection: SortDirection) {
     CREATED_AT(SortDirection.DESCENDING),
+    LAST_UPDATED(SortDirection.DESCENDING),
     NAME(SortDirection.ASCENDING),
     BEAD_TYPES(SortDirection.DESCENDING),
     GRID_SIZE(SortDirection.DESCENDING),
@@ -18,6 +19,7 @@ enum class ProjectSortKey(val defaultDirection: SortDirection) {
  *
  * Sentinel / null values always sort last regardless of direction:
  * - [ProjectSortKey.CREATED_AT]: null [ProjectEntry.createdAt] → always after real timestamps.
+ * - [ProjectSortKey.LAST_UPDATED]: null [ProjectEntry.lastUpdated] → always after real timestamps.
  * - [ProjectSortKey.GRID_SIZE]: [ProjectEntry.rowCount] == 0 (no imported grid) → always after
  *   grid-backed projects.
  * - [ProjectSortKey.SATISFACTION]: null satisfaction (no Delica beads / grid not yet loaded) →
@@ -37,6 +39,17 @@ data class ProjectSortOrder(
         ProjectSortKey.CREATED_AT -> Comparator { a, b ->
             val aTs = a.createdAt
             val bTs = b.createdAt
+            when {
+                aTs == null && bTs == null -> 0
+                aTs == null -> 1   // nulls always last
+                bTs == null -> -1
+                direction == SortDirection.DESCENDING -> bTs.compareTo(aTs)
+                else -> aTs.compareTo(bTs)
+            }
+        }
+        ProjectSortKey.LAST_UPDATED -> Comparator { a, b ->
+            val aTs = a.lastUpdated
+            val bTs = b.lastUpdated
             when {
                 aTs == null && bTs == null -> 0
                 aTs == null -> 1   // nulls always last

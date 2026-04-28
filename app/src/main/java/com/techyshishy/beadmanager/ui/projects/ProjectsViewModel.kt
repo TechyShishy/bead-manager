@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -44,6 +45,12 @@ class ProjectsViewModel @Inject constructor(
 
     private val _sortOrder = MutableStateFlow(ProjectSortOrder.DEFAULT)
     val sortOrder: StateFlow<ProjectSortOrder> = _sortOrder.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _tagFilter = MutableStateFlow<String?>(null)
+    val tagFilter: StateFlow<String?> = _tagFilter.asStateFlow()
 
     /**
      * Bead requirements per project, keyed by projectId.
@@ -83,13 +90,32 @@ class ProjectsViewModel @Inject constructor(
      */
     val beadSatisfaction: StateFlow<Map<String, ProjectSatisfaction?>> = _satisfactionFlow
 
+    /**
+     * Sorted, deduplicated list of all tags across the user's projects. Empty when no projects
+     * have tags. Used to populate the filter chip row in [ProjectFilterSheet].
+     */
+    val availableTags: StateFlow<List<String>> =
+        projectRepository.projectsStream()
+            .map { list -> list.flatMap { it.tags }.distinct().sorted() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val projects: StateFlow<List<ProjectEntry>> =
         combine(
             projectRepository.projectsStream(),
             _sortOrder,
             _satisfactionFlow,
-        ) { list, order, satisfaction ->
-            list.sortedWith(order.comparator(satisfaction))
+            _searchQuery,
+            _tagFilter,
+        ) { list, order, satisfaction, query, tagFilter ->
+            list
+                .filter { project ->
+                    (query.isBlank() ||
+                        project.name.contains(query, ignoreCase = true) ||
+                        project.notes?.contains(query, ignoreCase = true) == true ||
+                        project.tags.any { it.contains(query, ignoreCase = true) }) &&
+                        (tagFilter == null || tagFilter in project.tags)
+                }
+                .sortedWith(order.comparator(satisfaction))
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -139,7 +165,7 @@ class ProjectsViewModel @Inject constructor(
         _projectBeads.update { it + (project.projectId to beads) }
     }
 
-    fun toggleSortKey(key: ProjectSortKey) {
+    fun setSortKey(key: ProjectSortKey) {
         _sortOrder.update { current ->
             if (current.key == key) {
                 current.copy(
@@ -149,6 +175,19 @@ class ProjectsViewModel @Inject constructor(
                 ProjectSortOrder(key, key.defaultDirection)
             }
         }
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun setTagFilter(tag: String?) {
+        _tagFilter.value = tag
+    }
+
+    fun clearFilters() {
+        _sortOrder.value = ProjectSortOrder.DEFAULT
+        _tagFilter.value = null
     }
 
     fun createProject(name: String) {

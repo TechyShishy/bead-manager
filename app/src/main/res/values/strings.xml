@@ -137,12 +137,17 @@
     <string name="import_from_file">Import from file</string>
 
     <!-- Projects sort -->
-    <string name="sort_projects">Sort projects</string>
     <string name="sort_date_created">Date Created</string>
+    <string name="sort_last_updated">Last Updated</string>
     <string name="sort_name">Name</string>
     <string name="sort_bead_types">Bead Types</string>
     <string name="sort_grid_size">Grid Size</string>
     <string name="sort_satisfaction">Satisfaction</string>
+
+    <!-- Projects search and filter -->
+    <string name="search_projects">Search projects</string>
+    <string name="filter_by_tag">Filter by tag</string>
+    <string name="clear_search">Clear search</string>
 
     <!-- Satisfaction bar content descriptions (TalkBack) -->
     <!-- %1$d = total bead types -->

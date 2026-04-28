@@ -54,6 +54,7 @@ data class ProjectEntry(
     val markedRows: Map<String, Int> = emptyMap(),
     val imageUrl: String? = null,
     val tags: List<String> = emptyList(),
+    @ServerTimestamp val lastUpdated: Timestamp? = null,
 ) {
     /**
      * True when all palette keys recorded in [originalColorMapping] are still at their original
