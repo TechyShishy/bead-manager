@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -81,6 +82,17 @@ class CatalogRepository @Inject constructor(
     /** All packs for a bead across every vendor, for vendor auto-selection at finalize time. */
     suspend fun packsForBead(beadCode: String): List<VendorPackEntity> =
         vendorPackDao.packsForBead(beadCode)
+
+    /**
+     * All packs for a set of beads as a reactive [Flow].
+     *
+     * Returns an empty-list flow immediately when [beadCodes] is empty — Room's SQLite
+     * IN-clause rejects an empty argument list on some API levels, so the empty guard
+     * must live here rather than in the DAO.
+     */
+    fun packsForBeads(beadCodes: List<String>): Flow<List<VendorPackEntity>> =
+        if (beadCodes.isEmpty()) flowOf(emptyList())
+        else vendorPackDao.packsForBeads(beadCodes)
 
     /**
      * All available, priced packs for a given vendor across the entire catalog.

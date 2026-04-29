@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.db.BeadEntity
+import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
@@ -53,6 +54,21 @@ sealed class ImageUploadState {
     data object Idle : ImageUploadState()
     data object Uploading : ImageUploadState()
     data class Error(@StringRes val messageRes: Int) : ImageUploadState()
+}
+
+/**
+ * Offline cost estimate for a project derived from [VendorPackEntity.priceCents] in Room.
+ *
+ * [Full]    — all beads with a positive targetGrams have a priced pack on at least one vendor.
+ * [Partial] — some beads have no priced pack; [unpricedCount] is the count of those beads.
+ *
+ * In both cases [totalCents] is the sum of prorated per-bead contributions from beads that
+ * do have price data. `null` from [ProjectDetailViewModel.estimatedCost] means no bead has
+ * any price data at all — the row should be hidden entirely.
+ */
+sealed class CostEstimate(open val totalCents: Int) {
+    data class Full(override val totalCents: Int) : CostEstimate(totalCents)
+    data class Partial(override val totalCents: Int, val unpricedCount: Int) : CostEstimate(totalCents)
 }
 
 /**
@@ -142,6 +158,71 @@ class ProjectDetailViewModel @Inject constructor(
         if (entry == null) null
         else computeGridSummary(rows, entry.colorMapping, entry.rowCount)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Offline cost estimate for the project.
+     *
+     * Derived from [beads] + [PreferencesRepository.vendorPriorityOrder] + pack prices stored
+     * in Room ([VendorPackEntity.priceCents]). Null when no bead has any price data on any
+     * preferred vendor (the row is hidden). Updates reactively if the scraper refreshes prices.
+     *
+     * Only tier-1 ([VendorPackEntity.priceCents]) is used. Contribution per bead is prorated:
+     * `(targetGrams / pack.grams) × pack.priceCents`. Beads with targetGrams == 0.0 are skipped.
+     */
+    val estimatedCost: StateFlow<CostEstimate?> = combine(
+        beads,
+        preferencesRepository.vendorPriorityOrder,
+    ) { beadList, priorityOrder ->
+        // Collect only beads that actually need material (targetGrams > 0).
+        val priceable = beadList.filter { it.targetGrams > 0.0 }
+        priceable to priorityOrder
+    }.flatMapLatest { (priceable, priorityOrder) ->
+        val beadCodes = priceable.map { it.beadCode }.distinct()
+        catalogRepository.packsForBeads(beadCodes).map { allPacks ->
+            computeEstimatedCost(priceable, allPacks, priorityOrder)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * For each bead in [priceable], walks [priorityOrder] and selects the first vendor that has
+     * at least one available, priced pack for that bead. Among eligible packs for that vendor,
+     * picks the one with the smallest [VendorPackEntity.grams] value. Returns null when no
+     * qualifying pack exists for [beadCode] on any vendor in the priority order.
+     */
+    private fun cheapestSmallestPackFor(
+        beadCode: String,
+        allPacks: List<VendorPackEntity>,
+        priorityOrder: List<String>,
+    ): VendorPackEntity? {
+        val byVendor = allPacks
+            .filter { it.beadCode == beadCode && it.available != false && it.priceCents != null }
+            .groupBy { it.vendorKey }
+        for (vendorKey in priorityOrder) {
+            val packs = byVendor[vendorKey] ?: continue
+            return packs.minByOrNull { it.grams } ?: continue
+        }
+        return null
+    }
+
+    private fun computeEstimatedCost(
+        priceable: List<ProjectBeadEntry>,
+        allPacks: List<VendorPackEntity>,
+        priorityOrder: List<String>,
+    ): CostEstimate? {
+        var totalCents = 0.0
+        var unpricedCount = 0
+        for (bead in priceable) {
+            val pack = cheapestSmallestPackFor(bead.beadCode, allPacks, priorityOrder)
+            if (pack == null) {
+                unpricedCount++
+            } else {
+                totalCents += (bead.targetGrams / pack.grams) * pack.priceCents!!
+            }
+        }
+        if (totalCents == 0.0 && unpricedCount == priceable.size) return null
+        val cents = totalCents.toInt()
+        return if (unpricedCount == 0) CostEstimate.Full(cents) else CostEstimate.Partial(cents, unpricedCount)
+    }
 
     /**
      * All orders that currently list this project in their [projectIds] array.

@@ -62,12 +62,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import java.util.Locale
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
 import com.techyshishy.beadmanager.R
@@ -89,6 +91,7 @@ fun ProjectInfoScreen(
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val suggestedTags by viewModel.suggestedTags.collectAsState()
     val gridSummary by viewModel.gridSummary.collectAsState()
+    val estimatedCost by viewModel.estimatedCost.collectAsState()
     val imageUrl = project?.imageUrl
 
     val rowCount = project?.rowCount ?: 0
@@ -286,7 +289,31 @@ fun ProjectInfoScreen(
                     )
                     HorizontalDivider()
                 }
-            }
+                val cost = estimatedCost
+                if (cost != null) {
+                    item {
+                        val formattedAmount = String.format(Locale.US, "%.2f", cost.totalCents / 100.0)
+                        val costStr = when (cost) {
+                            is CostEstimate.Full -> stringResource(
+                                R.string.project_info_estimated_cost_full,
+                                formattedAmount,
+                            )
+                            is CostEstimate.Partial -> pluralStringResource(
+                                R.plurals.project_info_estimated_cost_partial,
+                                cost.unpricedCount,
+                                formattedAmount,
+                                cost.unpricedCount,
+                            )
+                        }
+                        InfoDetailRow(
+                            label = stringResource(R.string.project_info_estimated_cost_label),
+                            value = costStr,
+                        )
+                        HorizontalDivider()
+                    }
+                }
+
+            } // end if (rowCount > 0 && summary != null)
 
             if (sortedBeadCounts.isNotEmpty()) {
                 item {

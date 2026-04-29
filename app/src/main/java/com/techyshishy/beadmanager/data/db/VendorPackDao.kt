@@ -59,6 +59,16 @@ interface VendorPackDao {
     suspend fun packsForBead(beadCode: String): List<VendorPackEntity>
 
     /**
+     * All packs for a set of beads, as a reactive [Flow].
+     * Returns an empty list immediately when [beadCodes] is empty.
+     * Used by the project cost estimate in Project Info.
+     */
+    @Query(
+        "SELECT * FROM vendor_packs WHERE beadCode IN (:beadCodes) ORDER BY beadCode ASC, vendorKey ASC, grams ASC"
+    )
+    fun packsForBeads(beadCodes: List<String>): Flow<List<VendorPackEntity>>
+
+    /**
      * Records the outcome of a live price check for a single SKU.
      * Called after a successful scrape; never called on fetch failure.
      * Tier 2/3/4 prices are FMG-only; AC passes null for those columns.

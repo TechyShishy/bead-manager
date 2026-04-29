@@ -1,6 +1,9 @@
 package com.techyshishy.beadmanager.ui.projects
 
+import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.firestore.ProjectEntry
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
+import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
@@ -22,6 +25,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -1259,5 +1264,243 @@ class ProjectDetailViewModelTest {
 
         coVerify { projectRepository.deleteColorMappingEntries("p1", setOf("A")) }
         coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    // ── estimatedCost ────────────────────────────────────────────────────────
+
+    // 416 beads of a single key → 416.0 / 208 = 2.0 g (exact, no rounding needed)
+    private val singleBeadRow = listOf(
+        ProjectRgpRow(
+            id = 0,
+            steps = listOf(ProjectRgpStep(id = 0, count = 416, description = "A")),
+        ),
+    )
+
+    private fun buildVm(
+        projectRepository: ProjectRepository,
+        catalogRepository: CatalogRepository,
+        preferencesRepository: PreferencesRepository,
+    ): ProjectDetailViewModel {
+        val orderRepository = mockk<OrderRepository>(relaxed = true) {
+            every { ordersStream(any()) } returns flowOf(emptyList())
+        }
+        val inventoryRepository = mockk<InventoryRepository>(relaxed = true) {
+            every { inventoryStream() } returns flowOf(emptyMap())
+        }
+        val exportUseCase = mockk<ExportRgpProjectUseCase>(relaxed = true)
+        val projectImageRepository = mockk<ProjectImageRepository>(relaxed = true)
+        val generateProjectPreviewUseCase = mockk<GenerateProjectPreviewUseCase>(relaxed = true)
+        return ProjectDetailViewModel(
+            projectRepository,
+            orderRepository,
+            inventoryRepository,
+            catalogRepository,
+            preferencesRepository,
+            exportUseCase,
+            projectImageRepository,
+            generateProjectPreviewUseCase,
+        )
+    }
+
+    @Test
+    fun `estimatedCost is Full when all beads have pricing data`() = runTest {
+        // DB0001 with 2g target; pack 5g at 399¢ → contribution 159.6 → 159¢ truncated
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "P",
+            colorMapping = mapOf("A" to "DB0001"),
+        )
+        val pack = VendorPackEntity(
+            beadCode = "DB0001", vendorKey = "fmg", grams = 5.0,
+            url = "https://example.com", priceCents = 399, available = true,
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns singleBeadRow
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+            every { packsForBeads(any()) } returns flowOf(listOf(pack))
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+
+        val vm = buildVm(projectRepository, catalogRepository, preferencesRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.estimatedCost.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        val result = vm.estimatedCost.value
+        assertNotNull(result)
+        assertTrue("expected Full, got $result", result is CostEstimate.Full)
+        assertEquals(159, (result as CostEstimate.Full).totalCents)
+    }
+
+    @Test
+    fun `estimatedCost is Partial when some beads have no pricing data`() = runTest {
+        // DB0001: priced; DB0002: no pack → unpricedCount = 1
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "P",
+            colorMapping = mapOf("A" to "DB0001", "B" to "DB0002"),
+        )
+        val rows = listOf(
+            ProjectRgpRow(
+                id = 0,
+                steps = listOf(
+                    ProjectRgpStep(id = 0, count = 416, description = "A"),
+                    ProjectRgpStep(id = 1, count = 416, description = "B"),
+                ),
+            ),
+        )
+        val pack = VendorPackEntity(
+            beadCode = "DB0001", vendorKey = "fmg", grams = 5.0,
+            url = "https://example.com", priceCents = 399, available = true,
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns rows
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+            // Only DB0001 has a pack; DB0002 has none.
+            every { packsForBeads(any()) } returns flowOf(listOf(pack))
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+
+        val vm = buildVm(projectRepository, catalogRepository, preferencesRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.estimatedCost.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        val result = vm.estimatedCost.value
+        assertNotNull(result)
+        assertTrue("expected Partial, got $result", result is CostEstimate.Partial)
+        assertEquals(159, (result as CostEstimate.Partial).totalCents)
+        assertEquals(1, result.unpricedCount)
+    }
+
+    @Test
+    fun `estimatedCost is null when no bead has any price data`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "P",
+            colorMapping = mapOf("A" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns singleBeadRow
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+            // No packs at all for any bead.
+            every { packsForBeads(any()) } returns flowOf(emptyList())
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+
+        val vm = buildVm(projectRepository, catalogRepository, preferencesRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.estimatedCost.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        assertNull(vm.estimatedCost.value)
+    }
+
+    @Test
+    fun `estimatedCost uses first vendor in priority order that has a priced pack`() = runTest {
+        // fmg has a more expensive pack; ac has cheaper. Priority is fmg first → fmg wins.
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "P",
+            colorMapping = mapOf("A" to "DB0001"),
+        )
+        val fmgPack = VendorPackEntity(
+            beadCode = "DB0001", vendorKey = "fmg", grams = 5.0,
+            url = "https://fmg.example.com", priceCents = 499, available = true,
+        )
+        val acPack = VendorPackEntity(
+            beadCode = "DB0001", vendorKey = "ac", grams = 5.0,
+            url = "https://ac.example.com", priceCents = 299, available = true,
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns singleBeadRow
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+            every { packsForBeads(any()) } returns flowOf(listOf(fmgPack, acPack))
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+
+        val vm = buildVm(projectRepository, catalogRepository, preferencesRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.estimatedCost.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        val result = vm.estimatedCost.value
+        assertNotNull(result)
+        assertTrue("expected Full, got $result", result is CostEstimate.Full)
+        // (2.0 / 5.0) * 499 = 199.6 → 199 (fmg, not 119 from ac)
+        assertEquals(199, (result as CostEstimate.Full).totalCents)
+    }
+
+    @Test
+    fun `estimatedCost ignores beads with targetGrams 0 and does not count them as unpriced`() = runTest {
+        // DB0001: 2g (has a pack). DB0002: no grid rows → 0g (color-mapping only).
+        // DB0002 must be invisible to the estimate; result should be Full, not Partial.
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "P",
+            colorMapping = mapOf("A" to "DB0001", "B" to "DB0002"),
+        )
+        val pack = VendorPackEntity(
+            beadCode = "DB0001", vendorKey = "fmg", grams = 5.0,
+            url = "https://example.com", priceCents = 399, available = true,
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            // Only rows for "A"; "B" has no grid steps so targetGrams will be 0.0.
+            coEvery { readProjectGrid("p1") } returns singleBeadRow
+        }
+        val catalogRepository = mockk<CatalogRepository>(relaxed = true) {
+            every { allBeadsLookup() } returns flowOf(emptyMap())
+            every { packsForBeads(any()) } returns flowOf(listOf(pack))
+        }
+        val preferencesRepository = mockk<PreferencesRepository>(relaxed = true) {
+            every { globalLowStockThreshold } returns flowOf(5.0)
+            every { vendorPriorityOrder } returns flowOf(listOf("fmg", "ac"))
+        }
+
+        val vm = buildVm(projectRepository, catalogRepository, preferencesRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.estimatedCost.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        val result = vm.estimatedCost.value
+        assertNotNull(result)
+        // Full (not Partial) because DB0002 at 0g is not counted as unpriced
+        assertTrue("expected Full, got $result", result is CostEstimate.Full)
+        assertEquals(159, (result as CostEstimate.Full).totalCents)
     }
 }

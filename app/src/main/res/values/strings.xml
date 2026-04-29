@@ -285,6 +285,14 @@
     <string name="project_info_summary_dimensions">%1$d rows × %2$d columns</string>
     <string name="project_info_approx_size_label">Approx. size</string>
     <string name="project_info_approx_size_format">%1$.1f × %2$.1f cm</string>
+    <string name="project_info_estimated_cost_label">Estimated cost</string>
+    <!-- %1$s = dollar amount, e.g. "4.37" -->
+    <string name="project_info_estimated_cost_full">$%1$s</string>
+    <!-- %1$s = dollar amount; quantity = unpricedCount -->
+    <plurals name="project_info_estimated_cost_partial">
+        <item quantity="one">~$%1$s (incomplete — 1 bead unpriced)</item>
+        <item quantity="other">~$%1$s (incomplete — %2$d beads unpriced)</item>
+    </plurals>
     <string name="project_info_bead_counts_header">Bead Counts</string>
     <string name="project_info_tags_header">Tags</string>
     <string name="project_info_tags_input_placeholder">Add a tag…</string>
