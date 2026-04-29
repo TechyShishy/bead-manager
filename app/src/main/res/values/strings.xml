@@ -98,7 +98,7 @@
     <string name="confirm_reset_all_colors_title">Reset all color swaps?</string>
     <string name="confirm_reset_all_colors_body">This will restore all beads to their originally imported colors.</string>
     <string name="remove_bead">Remove bead</string>
-    <string name="pin_all_to_comparison">Pin all beads to catalog comparison</string>
+    <string name="pin_all_to_comparison">Pin all beads</string>
     <string name="view_in_catalog">View bead in catalog</string>
     <string name="confirm_remove_bead">Remove %1$s from this project?</string>
     <string name="bead_progress">%1$s g / %2$s g received</string>
