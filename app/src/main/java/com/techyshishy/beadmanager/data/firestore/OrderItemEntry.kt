@@ -56,6 +56,12 @@ data class OrderItemEntry(
      * Firestore stores the field only when true; absent = false for pre-existing documents.
      */
     val buyUp: Boolean = false,
+    /**
+     * Invoice or order number entered when transitioning this item from FINALIZED to ORDERED.
+     * Null when not yet ordered or when no invoice number was provided.
+     * Firestore stores the field only when non-null; absent = null for pre-existing documents.
+     */
+    val invoiceNumber: String? = null,
 )
 
 /**

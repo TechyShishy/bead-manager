@@ -91,6 +91,8 @@
     <string name="mark_received">Mark received</string>
     <string name="mark_skipped">Skip</string>
     <string name="revert_pending">Revert to pending</string>
+    <!-- %1$s = invoice number -->
+    <string name="order_invoice_number">Invoice: %1$s</string>
 
     <!-- Project detail / bead list -->
     <string name="no_beads">No beads yet. Add beads from the Catalog tab.</string>
@@ -196,6 +198,7 @@
     <string name="finalize_checking_prices">Checking prices…</string>
     <string name="finalize_no_pending_items">No pending items. Order is already finalized.</string>
     <string name="finalize_mark_vendor_ordered">Mark as Ordered</string>
+    <string name="finalize_invoice_hint">Invoice # (optional)</string>
     <string name="finalize_reopen_order">Reopen Order</string>
     <string name="finalize_reopen_confirm">Clear vendor assignments and reopen this order for editing?</string>
     <string name="finalize_reopen">Reopen</string>

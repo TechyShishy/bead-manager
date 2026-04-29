@@ -270,6 +270,13 @@ private fun OrderItemRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (status == OrderItemStatus.ORDERED && !item.invoiceNumber.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(R.string.order_invoice_number, item.invoiceNumber),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (!isVendorless) StatusBadge(status)
             IconButton(onClick = onRemove, enabled = !item.appliedToInventory && !isFrozen) {

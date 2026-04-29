@@ -132,11 +132,11 @@ class FinalizeOrderViewModel @Inject constructor(
      * If no FINALIZED items remain after the transition, emits [UiState.AllOrdered] to trigger
      * navigation back. Otherwise, the state reflects the remaining vendors still to be ordered.
      */
-    fun markVendorOrdered(vendorKey: String) {
+    fun markVendorOrdered(vendorKey: String, invoiceNumber: String? = null) {
         val orderId = currentOrderId.takeIf { it.isNotBlank() } ?: return
         viewModelScope.launch {
             val order = orderRepository.orderStream(orderId).first() ?: return@launch
-            orderRepository.markVendorItemsOrdered(orderId, vendorKey, order.items)
+            orderRepository.markVendorItemsOrdered(orderId, vendorKey, order.items, invoiceNumber)
             val currentState = _uiState.value
             if (currentState is UiState.FinalizedView) {
                 val remaining = currentState.items.filter { it.vendorKey != vendorKey }

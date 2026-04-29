@@ -279,7 +279,10 @@ class OrderRepository @Inject constructor(
         check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
             "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"
         }
-        val updated = item.copy(status = newStatus.firestoreValue)
+        val updated = item.copy(
+            status = newStatus.firestoreValue,
+            invoiceNumber = null,  // only markVendorItemsOrdered is allowed to set an invoice number
+        )
         val updatedItems = allItems.map { existing ->
             if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
                 updated
@@ -339,12 +342,16 @@ class OrderRepository @Inject constructor(
         orderId: String,
         vendorKey: String,
         allItems: List<OrderItemEntry>,
+        invoiceNumber: String? = null,
     ) {
         val updated = allItems.map { item ->
             if (item.vendorKey == vendorKey &&
                 OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED
             ) {
-                item.copy(status = OrderItemStatus.ORDERED.firestoreValue)
+                item.copy(
+                    status = OrderItemStatus.ORDERED.firestoreValue,
+                    invoiceNumber = invoiceNumber?.takeIf { it.isNotBlank() },
+                )
             } else {
                 item
             }

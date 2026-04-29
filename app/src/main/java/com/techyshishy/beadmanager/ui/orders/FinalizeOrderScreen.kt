@@ -57,10 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
@@ -160,7 +163,7 @@ fun FinalizeOrderScreen(
 
             is FinalizeOrderViewModel.UiState.FinalizedView -> FinalizedViewContent(
                 items = state.items,
-                onMarkVendorOrdered = { vendorKey -> viewModel.markVendorOrdered(vendorKey) },
+                onMarkVendorOrdered = { vendorKey, invoiceNumber -> viewModel.markVendorOrdered(vendorKey, invoiceNumber) },
                 onReopen = { viewModel.reopen() },
                 onViewInCatalog = onViewInCatalog,
                 modifier = Modifier.padding(innerPadding),
@@ -229,7 +232,7 @@ private fun CheckingContent(modifier: Modifier = Modifier) {
 @Composable
 private fun FinalizedViewContent(
     items: List<FinalizedItem>,
-    onMarkVendorOrdered: (vendorKey: String) -> Unit,
+    onMarkVendorOrdered: (vendorKey: String, invoiceNumber: String?) -> Unit,
     onReopen: () -> Unit,
     onViewInCatalog: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -313,7 +316,7 @@ private fun FinalizedViewContent(
                     VendorFinalizeHeader(
                         vendorKey = vendorKey,
                         subtotal = totals.byVendor.getValue(vendorKey),
-                        onMarkOrdered = { onMarkVendorOrdered(vendorKey) },
+                        onMarkOrdered = { invoiceNumber -> onMarkVendorOrdered(vendorKey, invoiceNumber) },
                     )
                 }
                 items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
@@ -469,9 +472,10 @@ private fun ErrorContent(
 private fun VendorFinalizeHeader(
     vendorKey: String,
     subtotal: VendorSubtotal,
-    onMarkOrdered: () -> Unit,
+    onMarkOrdered: (invoiceNumber: String?) -> Unit,
 ) {
     val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey
+    var showDialog by remember { mutableStateOf(false) }
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Row(
             modifier = Modifier
@@ -497,12 +501,55 @@ private fun VendorFinalizeHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Button(onClick = onMarkOrdered) {
+            Button(onClick = { showDialog = true }) {
                 Text(stringResource(R.string.finalize_mark_vendor_ordered))
             }
         }
         HorizontalDivider()
     }
+    if (showDialog) {
+        InvoiceNumberDialog(
+            vendorName = displayName,
+            onConfirm = { invoiceNumber ->
+                showDialog = false
+                onMarkOrdered(invoiceNumber)
+            },
+            onDismiss = { showDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun InvoiceNumberDialog(
+    vendorName: String,
+    onConfirm: (invoiceNumber: String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var invoiceText by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(vendorName) },
+        text = {
+            OutlinedTextField(
+                value = invoiceText,
+                onValueChange = { invoiceText = it },
+                label = { Text(stringResource(R.string.finalize_invoice_hint)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onConfirm(invoiceText.takeIf { it.isNotBlank() }) }),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(invoiceText.takeIf { it.isNotBlank() }) }) {
+                Text(stringResource(R.string.finalize_mark_vendor_ordered))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable
