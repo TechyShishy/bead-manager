@@ -260,6 +260,7 @@ class ProjectDetailViewModel @Inject constructor(
     fun addTag(tag: String) {
         val trimmed = tag.trim()
         if (trimmed.isBlank()) return
+        if (trimmed.length > 30) return
         val currentProject = project.value ?: return
         if (currentProject.tags.contains(trimmed)) return
         viewModelScope.launch {
