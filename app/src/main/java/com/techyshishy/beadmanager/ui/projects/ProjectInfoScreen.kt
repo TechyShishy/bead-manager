@@ -40,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -86,6 +87,7 @@ fun ProjectInfoScreen(
     val project by viewModel.project.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
+    val suggestedTags by viewModel.suggestedTags.collectAsState()
     val gridSummary by viewModel.gridSummary.collectAsState()
     val imageUrl = project?.imageUrl
 
@@ -327,6 +329,7 @@ fun ProjectInfoScreen(
             item {
                 TagsSection(
                     tags = project?.tags.orEmpty(),
+                    suggestedTags = suggestedTags,
                     onAddTag = { viewModel.addTag(it) },
                     onRemoveTag = { viewModel.removeTag(it) },
                 )
@@ -417,6 +420,7 @@ fun ProjectInfoScreen(
 @Composable
 private fun TagsSection(
     tags: List<String>,
+    suggestedTags: List<String>,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
 ) {
@@ -463,6 +467,19 @@ private fun TagsSection(
                                     ) { onRemoveTag(tag) },
                             )
                         },
+                    )
+                }
+            }
+        }
+        if (suggestedTags.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                suggestedTags.forEach { tag ->
+                    SuggestionChip(
+                        onClick = { onAddTag(tag) },
+                        label = { Text(tag) },
                     )
                 }
             }

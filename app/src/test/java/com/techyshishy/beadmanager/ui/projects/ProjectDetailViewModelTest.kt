@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -1076,5 +1077,89 @@ class ProjectDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `suggestedTags is empty before initialize is called`() = runTest {
+        val otherProject = ProjectEntry(projectId = "p2", name = "Other", tags = listOf("holiday"))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectsStream() } returns flowOf(listOf(otherProject))
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.suggestedTags.collect {}
+        }
+        // initialize() is intentionally not called
+        advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), vm.suggestedTags.value)
+    }
+
+    @Test
+    fun `suggestedTags excludes tags already on the current project`() = runTest {
+        val currentProject = ProjectEntry(projectId = "p1", name = "Current", tags = listOf("holiday"))
+        val otherProject = ProjectEntry(projectId = "p2", name = "Other", tags = listOf("holiday", "gift"))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(currentProject)
+            every { projectsStream() } returns flowOf(listOf(currentProject, otherProject))
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.suggestedTags.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        assertEquals(listOf("gift"), vm.suggestedTags.value)
+    }
+
+    @Test
+    fun `suggestedTags is empty when no other project has tags`() = runTest {
+        val currentProject = ProjectEntry(projectId = "p1", name = "Current", tags = listOf("wip"))
+        val otherProject = ProjectEntry(projectId = "p2", name = "Other", tags = emptyList())
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(currentProject)
+            every { projectsStream() } returns flowOf(listOf(currentProject, otherProject))
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.suggestedTags.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), vm.suggestedTags.value)
+    }
+
+    @Test
+    fun `suggestedTags updates reactively when another project gains a tag`() = runTest {
+        val currentProject = ProjectEntry(projectId = "p1", name = "Current", tags = emptyList())
+        val otherProject = ProjectEntry(projectId = "p2", name = "Other", tags = emptyList())
+        val allProjectsFlow = MutableStateFlow(listOf(currentProject, otherProject))
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(currentProject)
+            every { projectsStream() } returns allProjectsFlow
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.suggestedTags.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+        assertEquals(emptyList<String>(), vm.suggestedTags.value)
+
+        allProjectsFlow.value = listOf(currentProject, otherProject.copy(tags = listOf("new-tag")))
+        advanceUntilIdle()
+
+        assertEquals(listOf("new-tag"), vm.suggestedTags.value)
     }
 }

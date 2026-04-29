@@ -203,6 +203,27 @@ class ProjectDetailViewModel @Inject constructor(
         .allBeadsLookup()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /**
+     * Tags from all other projects that have not yet been applied to the current project,
+     * sorted and deduplicated. Used to populate suggestion chips in the tag-entry UI.
+     *
+     * Derived reactively from the full projects list and the current project's own tags so
+     * that suggestions disappear as soon as a chip is tapped.
+     */
+    val suggestedTags: StateFlow<List<String>> = combine(
+        projectRepository.projectsStream(),
+        project,
+    ) { allProjects, currentProject ->
+        if (currentProject == null) return@combine emptyList()
+        val currentId = currentProject.projectId
+        val ownTags = currentProject.tags.toSet()
+        allProjects
+            .filter { it.projectId != currentId }
+            .flatMap { it.tags }
+            .toSortedSet()
+            .filter { it !in ownTags }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     // ── RGP export ───────────────────────────────────────────────────────────
 
     private val _exportEvents = MutableSharedFlow<ExportResult>(extraBufferCapacity = 1)
