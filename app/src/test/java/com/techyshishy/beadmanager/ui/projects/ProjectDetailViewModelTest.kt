@@ -1162,4 +1162,74 @@ class ProjectDetailViewModelTest {
 
         assertEquals(listOf("new-tag"), vm.suggestedTags.value)
     }
+
+    // ── resetAllColors ────────────────────────────────────────────────────────
+
+    @Test
+    fun `resetAllColors restores swapped keys to originals and clears originalColorMapping`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0999", "B" to "DB0042"),
+            originalColorMapping = mapOf("A" to "DB0168", "B" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+            coEvery { readProjectGrid("p1") } returns emptyList()
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.resetAllColors()
+        advanceUntilIdle()
+
+        coVerify {
+            projectRepository.updateProject(
+                project.copy(
+                    colorMapping = mapOf("A" to "DB0168", "B" to "DB0001"),
+                    originalColorMapping = emptyMap(),
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `resetAllColors is a no-op when isAllOriginalColors is true`() = runTest {
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0168"),
+            originalColorMapping = emptyMap(),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.resetAllColors()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
+
+    @Test
+    fun `resetAllColors before project loads is a no-op`() = runTest {
+        val projectRepository = mockk<ProjectRepository>(relaxed = true)
+        val vm = buildVm(projectRepository)
+        // Do not call initialize — project.value remains null.
+
+        vm.resetAllColors()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
 }

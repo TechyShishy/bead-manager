@@ -94,6 +94,9 @@
 
     <!-- Project detail / bead list -->
     <string name="no_beads">No beads yet. Add beads from the Catalog tab.</string>
+    <string name="reset_all_colors">Reset all colors</string>
+    <string name="confirm_reset_all_colors_title">Reset all color swaps?</string>
+    <string name="confirm_reset_all_colors_body">This will restore all beads to their originally imported colors.</string>
     <string name="remove_bead">Remove bead</string>
     <string name="pin_all_to_comparison">Pin all beads to catalog comparison</string>
     <string name="view_in_catalog">View bead in catalog</string>

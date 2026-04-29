@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.Info
@@ -99,6 +100,7 @@ fun ProjectDetailScreen(
 
     val isGridBacked = project?.rowCount?.let { it > 0 } == true
     val hasBeads = project?.colorMapping?.isNotEmpty() == true
+    val hasColorSwaps = project?.isAllOriginalColors == false
 
     val deficitCodes = remember(beads, inventoryEntries, globalThreshold) {
         beads
@@ -109,6 +111,7 @@ fun ProjectDetailScreen(
     var deleteTarget by remember { mutableStateOf<ProjectBeadEntry?>(null) }
     var detachTarget by remember { mutableStateOf<OrderEntry?>(null) }
     var exportErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showResetAllColorsDialog by remember { mutableStateOf(false) }
 
     var renameMode by rememberSaveable { mutableStateOf(false) }
     var renameInput by rememberSaveable { mutableStateOf("") }
@@ -240,6 +243,14 @@ fun ProjectDetailScreen(
                                 Icons.Filled.LibraryAdd,
                                 contentDescription = stringResource(R.string.add_bead_from_catalog),
                             )
+                        }
+                        if (hasColorSwaps) {
+                            IconButton(onClick = { showResetAllColorsDialog = true }) {
+                                Icon(
+                                    Icons.Filled.Refresh,
+                                    contentDescription = stringResource(R.string.reset_all_colors),
+                                )
+                            }
                         }
                         if (hasBeads) {
                             IconButton(onClick = {
@@ -387,6 +398,27 @@ fun ProjectDetailScreen(
             confirmButton = {
                 TextButton(onClick = { exportErrorMessage = null }) {
                     Text(stringResource(android.R.string.ok))
+                }
+            },
+        )
+    }
+
+    if (showResetAllColorsDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetAllColorsDialog = false },
+            title = { Text(stringResource(R.string.confirm_reset_all_colors_title)) },
+            text = { Text(stringResource(R.string.confirm_reset_all_colors_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetAllColors()
+                    showResetAllColorsDialog = false
+                }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetAllColorsDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
                 }
             },
         )

@@ -457,6 +457,32 @@ class ProjectDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Restores every palette key still present in [ProjectEntry.colorMapping] to the code
+     * recorded in [ProjectEntry.originalColorMapping], then clears [originalColorMapping].
+     *
+     * A no-op when [ProjectEntry.isAllOriginalColors] is already true (nothing to restore).
+     * Both maps are written atomically via a single [ProjectRepository.updateProject] call.
+     *
+     * Palette keys that were removed from [colorMapping] after being swapped are silently
+     * dropped — the reset does not re-add removed beads.
+     */
+    fun resetAllColors() {
+        val currentProject = project.value ?: return
+        if (currentProject.isAllOriginalColors) return
+        val restored = currentProject.colorMapping.mapValues { (key, current) ->
+            currentProject.originalColorMapping[key] ?: current
+        }
+        viewModelScope.launch {
+            projectRepository.updateProject(
+                currentProject.copy(
+                    colorMapping = restored,
+                    originalColorMapping = emptyMap(),
+                )
+            )
+        }
+    }
+
     // ── Order creation ───────────────────────────────────────────────────────
 
     /**
