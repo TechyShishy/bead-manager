@@ -24,12 +24,15 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -117,6 +120,7 @@ fun ProjectDetailScreen(
     var renameInput by rememberSaveable { mutableStateOf("") }
     var renameError by rememberSaveable { mutableStateOf(false) }
     val renameFocusRequester = remember { FocusRequester() }
+    var overflowMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(renameMode) {
         if (renameMode) renameFocusRequester.requestFocus()
@@ -230,52 +234,81 @@ fun ProjectDetailScreen(
                             )
                         }
                     } else {
-                        if (deficitCodes.isNotEmpty()) {
-                            IconButton(onClick = { onAddToOrder(deficitCodes) }) {
-                                Icon(
-                                    Icons.Filled.ShoppingCart,
-                                    contentDescription = stringResource(R.string.add_to_order),
-                                )
-                            }
-                        }
-                        IconButton(onClick = onAddBeadFromCatalog) {
-                            Icon(
-                                Icons.Filled.LibraryAdd,
-                                contentDescription = stringResource(R.string.add_bead_from_catalog),
-                            )
-                        }
-                        if (hasColorSwaps) {
-                            IconButton(onClick = { showResetAllColorsDialog = true }) {
-                                Icon(
-                                    Icons.Filled.Refresh,
-                                    contentDescription = stringResource(R.string.reset_all_colors),
-                                )
-                            }
-                        }
-                        if (hasBeads) {
-                            IconButton(onClick = {
-                                onPinAllToComparison(beads.map { it.beadCode })
-                            }) {
-                                Icon(
-                                    Icons.Outlined.PushPin,
-                                    contentDescription = stringResource(R.string.pin_all_to_comparison),
-                                )
-                            }
-                            IconButton(onClick = {
-                                exportLauncher.launch("${project?.name ?: "project"}.rgp")
-                            }) {
-                                Icon(
-                                    Icons.Filled.FileDownload,
-                                    contentDescription = stringResource(R.string.export_rgp),
-                                )
-                            }
-                        }
                         IconButton(onClick = onViewProjectInfo) {
                             Icon(
                                 Icons.Outlined.Info,
                                 contentDescription = stringResource(R.string.project_info_title),
                             )
                         }
+                        Box {
+                            IconButton(onClick = { overflowMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = stringResource(R.string.overflow_menu),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = overflowMenuExpanded,
+                                onDismissRequest = { overflowMenuExpanded = false },
+                            ) {
+                                if (deficitCodes.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.add_to_order)) },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.ShoppingCart, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            onAddToOrder(deficitCodes)
+                                        },
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.add_bead_from_catalog)) },
+                                    leadingIcon = {
+                                        Icon(Icons.Filled.LibraryAdd, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        overflowMenuExpanded = false
+                                        onAddBeadFromCatalog()
+                                    },
+                                )
+                                if (hasBeads) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.pin_all_to_comparison)) },
+                                        leadingIcon = {
+                                            Icon(Icons.Outlined.PushPin, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            onPinAllToComparison(beads.map { it.beadCode })
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.export_rgp)) },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.FileDownload, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            exportLauncher.launch("${project?.name ?: "project"}.rgp")
+                                        },
+                                    )
+                                }
+                                if (hasColorSwaps) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.reset_all_colors)) },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            showResetAllColorsDialog = true
+                                        },
+                                    )
+                                }
+                            }
+                        } // Box
                     }
                 },
             )

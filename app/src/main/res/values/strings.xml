@@ -248,6 +248,9 @@
 
     <!-- Project list satisfaction bar rendered in ProjectsScreen -->
 
+    <!-- Project detail top bar -->
+    <string name="overflow_menu">More actions</string>
+
     <!-- Project Info screen -->
     <string name="project_info_title">Project Info</string>
     <string name="project_info_grid_header">Grid</string>
