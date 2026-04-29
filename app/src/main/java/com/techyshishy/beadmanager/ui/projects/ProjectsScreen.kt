@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -45,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -516,6 +519,7 @@ private fun ImportErrorDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProjectRow(
     project: ProjectEntry,
@@ -537,12 +541,27 @@ private fun ProjectRow(
                 text = project.name,
                 style = MaterialTheme.typography.bodyLarge,
             )
-            project.createdAt?.let { ts ->
-                Text(
-                    text = DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            if (project.createdAt != null || project.tags.isNotEmpty()) {
+                val dateFormat = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    project.createdAt?.let { ts ->
+                        Text(
+                            text = dateFormat.format(ts.toDate()),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                        )
+                    }
+                    project.tags.forEach { tag ->
+                        SuggestionChip(
+                            onClick = {},
+                            label = { Text(tag) },
+                        )
+                    }
+                }
             }
             if (satisfaction != null) {
                 SatisfactionBar(
