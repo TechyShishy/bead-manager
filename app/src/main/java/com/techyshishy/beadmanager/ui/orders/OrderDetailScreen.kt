@@ -1,5 +1,6 @@
 package com.techyshishy.beadmanager.ui.orders
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -83,10 +85,18 @@ fun OrderDetailScreen(
     val sortedItems by viewModel.sortedItems.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
     val beadColorNames by viewModel.beadColorNames.collectAsState()
+    val isFullyOrdered by viewModel.isFullyOrdered.collectAsState()
+    val vendorSets by viewModel.vendorSets.collectAsState()
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
     val isFrozen = order?.items?.any { it.status == OrderItemStatus.FINALIZED.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
+    // Non-null when the user has drilled into a specific vendor's items from the summary view.
+    var selectedVendorKey by rememberSaveable { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = selectedVendorKey != null) {
+        selectedVendorKey = null
+    }
 
     Scaffold(
         topBar = {
@@ -137,40 +147,90 @@ fun OrderDetailScreen(
             }
         },
     ) { innerPadding ->
-        if (sortedItems.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp, vertical = 32.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.no_items),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        when {
+            isFullyOrdered && selectedVendorKey == null -> {
+                // Vendor-set summary view: one row per vendor.
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    items(vendorSets, key = { it.vendorKey }) { summary ->
+                        VendorSetRow(
+                            summary = summary,
+                            onClick = { selectedVendorKey = summary.vendorKey },
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            ) {
-                items(sortedItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
-                    val bead = beadLookup[item.beadCode]
-                    OrderItemRow(
-                        item = item,
-                        imageUrl = bead?.imageUrl ?: "",
-                        hex = bead?.hex ?: "",
-                        colorName = beadColorNames[item.beadCode],
-                        isFrozen = isFrozen,
-                        onMarkReceived = { viewModel.markItemReceived(item) },
-                        onRevertReceived = { viewModel.revertItemReceived(item) },
-                        onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
-                        onRemove = { removeTarget = item },
-                        onViewInCatalog = { onViewInCatalog(item.beadCode) },
+            isFullyOrdered && selectedVendorKey != null -> {
+                // Scoped vendor detail: line items for the selected vendor only.
+                val vendorItems = sortedItems.filter {
+                    it.vendorKey == selectedVendorKey &&
+                        it.status != OrderItemStatus.SKIPPED.firestoreValue
+                }
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
+                        val bead = beadLookup[item.beadCode]
+                        OrderItemRow(
+                            item = item,
+                            imageUrl = bead?.imageUrl ?: "",
+                            hex = bead?.hex ?: "",
+                            colorName = beadColorNames[item.beadCode],
+                            isFrozen = isFrozen,
+                            showInvoiceNumber = false,
+                            onMarkReceived = { viewModel.markItemReceived(item) },
+                            onRevertReceived = { viewModel.revertItemReceived(item) },
+                            onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
+                            onRemove = { removeTarget = item },
+                            onViewInCatalog = { onViewInCatalog(item.beadCode) },
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                    }
+                }
+            }
+            sortedItems.isEmpty() -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp, vertical = 32.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.no_items),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            else -> {
+                // Standard flat item list.
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    items(sortedItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
+                        val bead = beadLookup[item.beadCode]
+                        OrderItemRow(
+                            item = item,
+                            imageUrl = bead?.imageUrl ?: "",
+                            hex = bead?.hex ?: "",
+                            colorName = beadColorNames[item.beadCode],
+                            isFrozen = isFrozen,
+                            onMarkReceived = { viewModel.markItemReceived(item) },
+                            onRevertReceived = { viewModel.revertItemReceived(item) },
+                            onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
+                            onRemove = { removeTarget = item },
+                            onViewInCatalog = { onViewInCatalog(item.beadCode) },
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                    }
                 }
             }
         }
@@ -208,6 +268,45 @@ fun OrderDetailScreen(
     }
 }
 
+@Composable
+private fun VendorSetRow(
+    summary: OrderDetailViewModel.VendorSetSummary,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = summary.displayName,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = stringResource(R.string.order_vendor_item_count, summary.itemCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!summary.invoiceNumber.isNullOrBlank()) {
+                Text(
+                    text = stringResource(R.string.order_invoice_number, summary.invoiceNumber),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OrderItemRow(
@@ -216,6 +315,7 @@ private fun OrderItemRow(
     hex: String,
     colorName: String?,
     isFrozen: Boolean,
+    showInvoiceNumber: Boolean = true,
     onMarkReceived: () -> Unit,
     onRevertReceived: () -> Unit,
     onUpdateStatus: (OrderItemStatus) -> Unit,
@@ -270,7 +370,7 @@ private fun OrderItemRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (status == OrderItemStatus.ORDERED && !item.invoiceNumber.isNullOrBlank()) {
+                if (showInvoiceNumber && status == OrderItemStatus.ORDERED && !item.invoiceNumber.isNullOrBlank()) {
                     Text(
                         text = stringResource(R.string.order_invoice_number, item.invoiceNumber),
                         style = MaterialTheme.typography.bodySmall,

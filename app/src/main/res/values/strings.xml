@@ -93,6 +93,8 @@
     <string name="revert_pending">Revert to pending</string>
     <!-- %1$s = invoice number -->
     <string name="order_invoice_number">Invoice: %1$s</string>
+    <!-- %1$d = number of line items in vendor group -->
+    <string name="order_vendor_item_count">%1$d items</string>
 
     <!-- Project detail / bead list -->
     <string name="no_beads">No beads yet. Add beads from the Catalog tab.</string>
