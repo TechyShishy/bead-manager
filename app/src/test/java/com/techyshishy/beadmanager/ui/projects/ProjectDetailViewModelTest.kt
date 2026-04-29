@@ -1232,4 +1232,32 @@ class ProjectDetailViewModelTest {
 
         coVerify(exactly = 0) { projectRepository.updateProject(any()) }
     }
+
+    @Test
+    fun `removeBead with a swapped bead calls deleteColorMappingEntries with the palette key`() = runTest {
+        // Palette key "A" was originally DB0001 but was swapped to DB0999. Removing DB0999 must
+        // pass the palette key "A" to deleteColorMappingEntries, which is responsible for
+        // clearing both colorMapping.A and originalColorMapping.A in Firestore.
+        val project = ProjectEntry(
+            projectId = "p1",
+            name = "My Project",
+            colorMapping = mapOf("A" to "DB0999"),
+            originalColorMapping = mapOf("A" to "DB0001"),
+        )
+        val projectRepository = mockk<ProjectRepository>(relaxed = true) {
+            every { projectStream("p1") } returns flowOf(project)
+        }
+        val vm = buildVm(projectRepository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.project.collect {}
+        }
+        vm.initialize("p1")
+        advanceUntilIdle()
+
+        vm.removeBead("DB0999")
+        advanceUntilIdle()
+
+        coVerify { projectRepository.deleteColorMappingEntries("p1", setOf("A")) }
+        coVerify(exactly = 0) { projectRepository.updateProject(any()) }
+    }
 }
