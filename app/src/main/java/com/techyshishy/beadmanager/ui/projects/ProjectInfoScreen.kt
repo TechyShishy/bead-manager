@@ -473,7 +473,7 @@ private fun TagsSection(
             ) {
                 tags.forEach { tag ->
                     InputChip(
-                        selected = false,
+                        selected = true,
                         onClick = {},
                         label = { Text(tag) },
                         trailingIcon = {
