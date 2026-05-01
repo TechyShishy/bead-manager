@@ -45,7 +45,7 @@ class SettingsViewModel @Inject constructor(
 
     val trayCardCalibrationMm: StateFlow<Float> =
         preferencesRepository.trayCardCalibrationMm
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_TRAY_CARD_CALIBRATION_MM)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_TRAY_CARD_CALIBRATION_MM)
 
     fun setGlobalLowStockThreshold(grams: Double) {
         viewModelScope.launch {

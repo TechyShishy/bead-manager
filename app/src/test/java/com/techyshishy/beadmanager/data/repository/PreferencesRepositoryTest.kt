@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.firebase.auth.FirebaseAuth
@@ -347,6 +348,42 @@ class PreferencesRepositoryTest {
         fireSignOut()
 
         repo.setTrayCardMaxGrams(20.0)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { firestoreSource.setPreferences(any(), any()) }
+        coVerify { mockDataStore.updateData(any()) }
+    }
+
+    // ---- trayCardCalibrationMm (device-local, never synced to Firestore) ----
+
+    @Test
+    fun `trayCardCalibrationMm emits default when DataStore has no value`() = runTest {
+        every { mockDataStore.data } returns flowOf(emptyPreferences())
+        val repo = makeRepo()
+
+        val values = repo.trayCardCalibrationMm.take(1).toList()
+
+        assertEquals(235.0f, values.single(), 0.001f)
+    }
+
+    @Test
+    fun `trayCardCalibrationMm reads DataStore value`() = runTest {
+        val key = floatPreferencesKey("tray_card_calibration_mm")
+        every { mockDataStore.data } returns flowOf(mutablePreferencesOf(key to 250.0f))
+        val repo = makeRepo()
+        fireSignOut()
+
+        val values = repo.trayCardCalibrationMm.take(1).toList()
+
+        assertEquals(250.0f, values.single(), 0.001f)
+    }
+
+    @Test
+    fun `setTrayCardCalibrationMm writes DataStore and never writes Firestore`() = runTest {
+        val repo = makeRepo()
+        fireSignIn("uid1")
+
+        repo.setTrayCardCalibrationMm(280.0f)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { firestoreSource.setPreferences(any(), any()) }
