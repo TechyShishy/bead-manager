@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
@@ -130,6 +133,7 @@ private fun AllOrderRow(
     val receivedCount = order.items.count {
         OrderItemStatus.fromFirestore(it.status) == OrderItemStatus.RECEIVED
     }
+    val summaryStatus = deriveOrderSummaryStatus(order.items)
 
     Row(
         modifier = Modifier
@@ -159,17 +163,20 @@ private fun AllOrderRow(
                     )
                 }
             }
-            if (item.projectNames.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OrderSummaryStatusBadge(summaryStatus)
+                val projectLabel = if (item.projectNames.isNotEmpty()) {
+                    item.projectNames.joinToString(", ")
+                } else {
+                    stringResource(R.string.all_orders_no_project)
+                }
                 Text(
-                    text = item.projectNames.joinToString(", "),
+                    text = projectLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.all_orders_no_project),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
         }
@@ -181,4 +188,42 @@ private fun AllOrderRow(
             )
         }
     }
+}
+
+@Composable
+private fun OrderSummaryStatusBadge(status: OrderSummaryStatus) {
+    val (label, containerColor, contentColor) = when (status) {
+        OrderSummaryStatus.PENDING -> Triple(
+            stringResource(R.string.status_pending),
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OrderSummaryStatus.FINALIZED -> Triple(
+            stringResource(R.string.status_finalized),
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+        OrderSummaryStatus.ORDERED -> Triple(
+            stringResource(R.string.status_ordered),
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        OrderSummaryStatus.RECEIVED -> Triple(
+            stringResource(R.string.status_received),
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+    }
+    SuggestionChip(
+        onClick = {},
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        colors = SuggestionChipDefaults.suggestionChipColors(
+            containerColor = containerColor,
+            labelColor = contentColor,
+        ),
+        border = SuggestionChipDefaults.suggestionChipBorder(
+            enabled = true,
+            borderColor = Color.Transparent,
+        ),
+    )
 }
