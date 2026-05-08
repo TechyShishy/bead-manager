@@ -128,6 +128,7 @@ fun FinalizeOrderScreen(
     viewModel: FinalizeOrderViewModel,
     onNavigateBack: () -> Unit,
     onViewInCatalog: (String) -> Unit = {},
+    onNavigateToLowStock: () -> Unit,
 ) {
     LaunchedEffect(orderId) { viewModel.initiate(orderId) }
 
@@ -176,6 +177,15 @@ fun FinalizeOrderScreen(
                     invalidBeadCode = state.invalidBeadCode,
                     onAccept = { beadCode -> viewModel.acceptBuyUp(beadCode) },
                     onSkip = { viewModel.skipBuyUp() },
+                )
+            }
+
+            is FinalizeOrderViewModel.UiState.LowStockPrompt -> {
+                CheckingContent(modifier = Modifier.padding(innerPadding))
+                LowStockWarningDialog(
+                    lowStockBeadCodes = state.lowStockBeadCodes,
+                    onIgnore = { viewModel.ignoreLowStock() },
+                    onGoToLowStock = onNavigateToLowStock,
                 )
             }
 
@@ -706,6 +716,45 @@ private fun FinalizedItemRow(
             }
         }
     }
+}
+
+@Composable
+private fun LowStockWarningDialog(
+    lowStockBeadCodes: List<String>,
+    onIgnore: () -> Unit,
+    onGoToLowStock: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onIgnore,
+        title = { Text(stringResource(R.string.finalize_low_stock_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.finalize_low_stock_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    lowStockBeadCodes.forEach { code ->
+                        Text(
+                            text = "• $code",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onGoToLowStock) {
+                Text(stringResource(R.string.finalize_low_stock_go_to_low_stock))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onIgnore) {
+                Text(stringResource(R.string.finalize_low_stock_ignore))
+            }
+        },
+    )
 }
 
 @Composable

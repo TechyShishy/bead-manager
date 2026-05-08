@@ -496,6 +496,11 @@ fun AdaptiveScaffold() {
                                 catalogDetailReturnTab = AppTab.ORDERS
                                 currentTab = AppTab.CATALOG
                             },
+                            onNavigateToLowStock = {
+                                allOrdersShowFinalizing = false
+                                allOrdersOrderId = null
+                                currentTab = AppTab.LOW_STOCK
+                            },
                         )
                     }
                     allOrdersOrderId != null -> {

@@ -30,6 +30,18 @@ class FinalizeOrderViewModel @Inject constructor(
         data class FinalizedView(val items: List<FinalizedItem>) : UiState
         /** Scrape and selection done; user decides whether to add buy-up items. */
         data class BuyUpPrompt(val analysis: OrderAnalysis, val invalidBeadCode: String? = null) : UiState
+        /**
+         * Low-stock items detected before finalizing. The user can ignore the warning and
+         * proceed, or navigate to the low-stock screen to restock first.
+         *
+         * [lowStockBeadCodes] is the non-empty list of bead codes below their threshold.
+         * [pendingAnalysis] is the completed [OrderAnalysis] ready for [commitAnalysis] if
+         * the user chooses to proceed.
+         */
+        data class LowStockPrompt(
+            val lowStockBeadCodes: List<String>,
+            val pendingAnalysis: OrderAnalysis,
+        ) : UiState
         data class UnavailableError(val beadCodes: List<String>) : UiState
         data object ConnectivityError : UiState
         data object ScrapingError : UiState
@@ -86,11 +98,27 @@ class FinalizeOrderViewModel @Inject constructor(
                 },
             )
 
-            if (analysis.buyUpSuggestion != null) {
+            val lowStockBeadCodes = runCatching { useCase.checkLowStock() }.getOrDefault(emptyList())
+            if (lowStockBeadCodes.isNotEmpty()) {
+                _uiState.value = UiState.LowStockPrompt(lowStockBeadCodes, analysis)
+            } else if (analysis.buyUpSuggestion != null) {
                 _uiState.value = UiState.BuyUpPrompt(analysis)
             } else {
                 commitAnalysis(analysis, buyUpBeadCode = null)
             }
+        }
+    }
+
+    /**
+     * Dismisses the low-stock warning and continues finalization with the pending analysis.
+     * No-op if not currently in [UiState.LowStockPrompt].
+     */
+    fun ignoreLowStock() {
+        val state = _uiState.value as? UiState.LowStockPrompt ?: return
+        if (state.pendingAnalysis.buyUpSuggestion != null) {
+            _uiState.value = UiState.BuyUpPrompt(state.pendingAnalysis)
+        } else {
+            viewModelScope.launch { commitAnalysis(state.pendingAnalysis, buyUpBeadCode = null) }
         }
     }
 

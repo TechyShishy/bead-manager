@@ -7,8 +7,11 @@ import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.VendorPackEntity
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.model.SUFFICIENT_THRESHOLD_GRAMS
+import com.techyshishy.beadmanager.data.model.effectiveThresholdFor
 import com.techyshishy.beadmanager.data.repository.BuyUpSuggestion
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
+import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PackCombination
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
@@ -112,6 +115,7 @@ class FinalizeOrderUseCase @Inject constructor(
     @ApplicationContext private val context: Context,
     private val orderRepository: OrderRepository,
     private val catalogRepository: CatalogRepository,
+    private val inventoryRepository: InventoryRepository,
     private val preferencesRepository: PreferencesRepository,
 ) {
     private val mutex = Mutex()
@@ -572,6 +576,25 @@ class FinalizeOrderUseCase @Inject constructor(
         }
 
         return result
+    }
+
+    /**
+     * Returns the bead codes of any owned inventory items that are at or below the configured
+     * low-stock threshold. An empty list means everything is adequately stocked.
+     *
+     * Uses the per-bead override when set (> 0); otherwise falls back to the global threshold.
+     * Ignores floating-point noise below [SUFFICIENT_THRESHOLD_GRAMS].
+     */
+    suspend fun checkLowStock(): List<String> {
+        val inventoryMap = inventoryRepository.inventoryStream().first()
+        val globalThreshold = preferencesRepository.globalLowStockThreshold.first()
+        return inventoryMap.values
+            .filter { entry ->
+                val threshold = effectiveThresholdFor(entry, globalThreshold)
+                entry.quantityGrams > SUFFICIENT_THRESHOLD_GRAMS && entry.quantityGrams <= threshold
+            }
+            .map { it.beadCode }
+            .sorted()
     }
 
     private fun assertConnectivity() {

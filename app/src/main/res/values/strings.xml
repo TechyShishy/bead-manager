@@ -213,6 +213,10 @@
     <string name="finalize_open_vendor">Open in vendor</string>
     <string name="finalize_vendor_visited">Visited</string>
     <string name="finalize_price_unavailable">Price check failed</string>
+    <string name="finalize_low_stock_title">Low Stock Warning</string>
+    <string name="finalize_low_stock_body">The following items in your inventory are running low. You may want to restock before placing this order.</string>
+    <string name="finalize_low_stock_ignore">Ignore</string>
+    <string name="finalize_low_stock_go_to_low_stock">Go to Low Stock</string>
     <!-- %1$d = pack count, %2$s = formatted cost e.g. "$8.97" or "$8.97 + ?" -->
     <plurals name="finalize_subtotal">
         <item quantity="one">%1$d pack · %2$s</item>
