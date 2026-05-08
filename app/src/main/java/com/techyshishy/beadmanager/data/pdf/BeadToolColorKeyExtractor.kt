@@ -33,7 +33,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * Returns the 0-based index into [pages] (as returned by [extractPdfText])
      * of the color key page.
      *
-     * Two signals are tried in order:
+     * Three signals are tried in order, from most precise to weakest:
      * 1. `"Chart #:"` + `"DB-"` — The color key entries themselves are language-independent.
      *    Localized BeadTool exports (e.g. Italian, which uses `"Conteggio"` instead of
      *    `"Count"`) omit the English metadata line but still emit `Chart #:A`, `DB-1910`,
@@ -43,11 +43,17 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      *    as MariVirra-style exports where a separate metadata page contains `"Color count:"`
      *    as plain text before the actual legend page — `"Chart #:"` + `"DB-"` only appear
      *    together on the legend page, so this picks the right page regardless of order.
-     * 2. `"Color count"` — English-language BeadTool exports include a metadata line
-     *    such as `"Color count - 18. Bead count - 42000."` on the color key page. This is
-     *    a fallback for rasterized color-key pages (e.g. CraftPatternsShop/BeadTool exports)
-     *    where the chart entries are images: PDFBox cannot read `"Chart #:"` or `"DB-"` from
-     *    the raster, so only this weaker signal is available.
+     * 2. `"Count:"` + `"DB-"` — BeadTool exports that omit the `"Chart #:"` label but still
+     *    emit per-entry `"Count:"` lines alongside DB codes. This covers PDFs where the
+     *    color key text uses an alternative format (e.g. `"A\nDB-101\nBlack\nCount:1234"`
+     *    without a `"Chart #:"` prefix). Both tokens must co-occur to avoid false positives
+     *    from pages that contain only one of them.
+     * 3. `"Color count"` (case-insensitive) — English-language BeadTool exports include a
+     *    metadata line such as `"Color count - 18. Bead count - 42000."` on the color key
+     *    page. This is a fallback for rasterized color-key pages (e.g. CraftPatternsShop/
+     *    BeadTool exports) where the chart entries are images: PDFBox cannot read `"Chart #:"`
+     *    or `"DB-"` from the raster, so only this weaker signal is available. Case-insensitive
+     *    to handle exports that capitalise `"Color Count"` differently.
      *
      * Returns -1 when no such page is found.
      */
@@ -59,17 +65,30 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         // the legend page itself, so this picks the right page regardless of order.
         val chartAndDb = pages.indexOfFirst { "Chart #:" in it && "DB-" in it }
         if (chartAndDb != -1) return chartAndDb
+        // Secondary signal: a page with per-entry Count lines and DB codes but no
+        // "Chart #:" label. Covers BeadTool exports that use a different color-entry
+        // format (e.g. Deadly Potion style where the letter/DB/Count block appears
+        // without the "Chart #:" prefix in the PDFBox-extracted text).
+        // Count: + DB- can appear on non-color-key pages (e.g., bead count summaries
+        // that reference DB catalog numbers). This is acceptable because the primary
+        // signal (Chart #:) is more specific and takes precedence.
+        val countAndDb = pages.indexOfFirst { "Count:" in it && "DB-" in it }
+        if (countAndDb != -1) return countAndDb
         // Fallback: English-language CraftPatternsShop/BeadTool exports include a
         // "Color count - N" metadata line on the rasterized color-key page. When
         // the color key is an image (not selectable text), PDFBox cannot see the
         // Chart # or DB codes, so only this weaker signal is available.
-        return pages.indexOfFirst { "Color count" in it }
+        // Case-insensitive to handle exports that capitalise the label differently
+        // (e.g. "Color Count - 12" vs "Color count - 12").
+        return pages.indexOfFirst { it.contains("color count", ignoreCase = true) }
     }
 
     /**
-     * Parses raw OCR text from a color key page into a letter-to-DB-code map.
+     * Parses raw PDFBox-extracted text from a color key page into a letter-to-DB-code map.
      *
-     * Expects text in BeadTool 4 format, e.g.:
+     * Two text formats are recognised:
+     *
+     * **Standard BeadTool 4 format** (primary):
      * ```
      * Chart #:A
      * DB-0010
@@ -79,6 +98,25 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * DB-2368
      * …
      * ```
+     *
+     * **Compact format** (fallback): used by some BeadTool exports (e.g. Deadly Potion)
+     * where the `"Chart #:"` label is absent and the color letter appears on its own line
+     * immediately before the DB code:
+     * ```
+     * A
+     * DB-101
+     * Black
+     * Count:1234
+     * B
+     * DB-201
+     * …
+     * ```
+     *
+     * When the primary pattern produces no results (no `"Chart #:"` entries found), the
+     * compact-format pass is attempted. A standalone letter line is only considered a
+     * chart-letter candidate when a `"DB-"` code appears within the next few lines,
+     * which avoids false-positives from bead-graph pages that contain isolated letters.
+     *
      * Entries without a DB code (e.g. dropped by OCR noise) are silently skipped.
      * If the last entry in [ocrText] has no DB code, the loop exits without
      * processing it — this is intentional; there is nothing further to scan.
@@ -104,6 +142,28 @@ class BeadToolColorKeyExtractor @Inject constructor() {
             if (nextLetter == null || dbMatch.range.first < nextLetter.range.first) {
                 result[letter] = normalizeDbCode(dbMatch.groupValues[1])
             }
+        }
+        if (result.isNotEmpty()) return result
+
+        // Compact-format fallback: a standalone uppercase letter on its own line
+        // followed (within a short window) by a DB code line. This covers BeadTool
+        // exports that omit the "Chart #:" label, where each entry reads:
+        //   A\nDB-101\nBlack\nCount:1234
+        // The window limit (COMPACT_FORMAT_WINDOW chars) is generous enough for a name + Count line
+        // between the letter and the DB code, but tight enough to avoid pairing a
+        // letter from one entry with the DB code of a distant unrelated entry.
+        val standaloneLetter = Regex("""^([A-Z]{1,2})$""", RegexOption.MULTILINE)
+        var compactSearchFrom = 0
+        while (true) {
+            val letterMatch = standaloneLetter.find(ocrText, compactSearchFrom) ?: break
+            compactSearchFrom = letterMatch.range.last + 1
+            val letter = letterMatch.groupValues[1]
+            // Only accept if a DB code appears within the next COMPACT_FORMAT_WINDOW characters — avoids
+            // pairing with a distant DB code that belongs to a different entry.
+            val windowEnd = minOf(ocrText.length, letterMatch.range.last + COMPACT_FORMAT_WINDOW)
+            val window = ocrText.substring(letterMatch.range.last + 1, windowEnd)
+            val dbMatch = dbCodeRegex.find(window) ?: continue
+            result[letter] = normalizeDbCode(dbMatch.groupValues[1])
         }
         return result
     }
@@ -304,5 +364,9 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         const val TAG = "PdfImport"
         const val RENDER_DPI = 300f
         const val POINTS_PER_INCH = 72f
+        // Maximum character distance between a standalone letter and its DB code in
+        // the compact format. Generous enough to span a color name + Count line, but
+        // tight enough to avoid pairing a letter with a distant unrelated DB code.
+        const val COMPACT_FORMAT_WINDOW = 300
     }
 }

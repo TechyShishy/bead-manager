@@ -102,6 +102,41 @@ class BeadToolColorKeyExtractorTest {
         assertEquals(0, extractor.findColorKeyPageIndex(pages))
     }
 
+    @Test
+    fun `findColorKeyPageIndex returns page index using Count and DB signal when Chart hash is absent`() {
+        // Regression for Deadly Potion.pdf: the color key page has Count: lines and DB-
+        // codes but no "Chart #:" label in the PDFBox-extracted text. The secondary
+        // signal ("Count:" + "DB-") must fire and return the correct page index.
+        val pages = listOf(
+            "Deadly Potion\nCreated by Artist\n",
+            "A\nDB-101\nBlack\nCount:1234\nB\nDB-201\nWhite\nCount:567\n",
+            "Row 1 (L)  (1)A, (1)B\n",
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex primary Chart and DB signal wins over secondary Count and DB signal`() {
+        // When one page has only Count:+DB- and another has Chart #:+DB-, the primary
+        // signal must select the Chart #: page regardless of document order.
+        val pages = listOf(
+            "Count:100\nDB-101\n",                              // secondary signal only
+            "Chart #:A\nDB-101\nBlack\nCount:100\n",            // primary signal
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex fallback Color count match is case-insensitive`() {
+        // Some BeadTool exports capitalise as "Color Count" (capital C on Count).
+        // The fallback must match regardless of case.
+        val pages = listOf(
+            "Deadly Potion\nCreated by Artist\n",
+            "Color Count - 12. Bead Count - 8400.\n",
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
     // ── parseColorKeyText ─────────────────────────────────────────────────────
 
     @Test
@@ -265,6 +300,106 @@ class BeadToolColorKeyExtractorTest {
             assertEquals("Mapping for $letter", expected, result[letter])
         }
         assertEquals(entries.size, result.size)
+    }
+
+    @Test
+    fun `parseColorKeyText parses compact format without Chart hash prefix`() {
+        // Regression for Deadly Potion.pdf: the color key page has entries as
+        //   A\nDB-101\nBlack\nCount:1234
+        // without a "Chart #:" label. The compact-format fallback must extract
+        // all 12 entries (A–L).
+        val ocrText = """
+            A
+            DB-101
+            Black
+            Count:1234
+            B
+            DB-201
+            White
+            Count:567
+            C
+            DB-301
+            Red
+            Count:890
+            D
+            DB-401
+            Blue
+            Count:432
+            E
+            DB-111
+            Green
+            Count:321
+            F
+            DB-121
+            Yellow
+            Count:654
+            G
+            DB-131
+            Purple
+            Count:987
+            H
+            DB-141
+            Orange
+            Count:234
+            I
+            DB-151
+            Pink
+            Count:345
+            J
+            DB-161
+            Brown
+            Count:456
+            K
+            DB-171
+            Grey
+            Count:567
+            L
+            DB-208
+            Teal
+            Count:678
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals("DB0301", result["C"])
+        assertEquals("DB0401", result["D"])
+        assertEquals("DB0111", result["E"])
+        assertEquals("DB0121", result["F"])
+        assertEquals("DB0131", result["G"])
+        assertEquals("DB0141", result["H"])
+        assertEquals("DB0151", result["I"])
+        assertEquals("DB0161", result["J"])
+        assertEquals("DB0171", result["K"])
+        assertEquals("DB0208", result["L"])
+        assertEquals(12, result.size)
+    }
+
+    @Test
+    fun `parseColorKeyText compact format returns empty when no standalone letters precede DB codes`() {
+        // When there are no "Chart #:" entries and no standalone-letter lines before
+        // DB codes, both passes produce an empty map.
+        val ocrText = "Some page text\nNo color key entries here\n"
+        assertTrue(extractor.parseColorKeyText(ocrText).isEmpty())
+    }
+
+    @Test
+    fun `parseColorKeyText compact format does not fire when standard Chart hash format is present`() {
+        // If the standard "Chart #:" format is present, the compact fallback should
+        // not run — result must match the primary parse, not be polluted by a second pass.
+        val ocrText = """
+            Chart #:A
+            DB-101
+            Black
+            Count:1234
+            Chart #:B
+            DB-201
+            White
+            Count:567
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals(2, result.size)
     }
 
     // ── parseBlockTexts ───────────────────────────────────────────────────────
