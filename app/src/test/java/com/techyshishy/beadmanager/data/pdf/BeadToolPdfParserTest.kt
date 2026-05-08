@@ -552,6 +552,26 @@ class BeadToolPdfParserTest {
         assertEquals(12, result.rows[0].steps.sumOf { it.count })
     }
 
+    @Test
+    fun `parse joins split step tokens across line boundaries`() {
+        // A step token split across lines: the count (4) ends one line, and the
+        // letter B begins the next. This occurs in American Flag.pdf where long
+        // rows are wrapped in the PDF text extraction.
+        val pages = minimalPages(
+            wordChartRows = "Row 1 (R)  (1)A, (4)C, (4)\nB, (3)C, (4)B, (4)A"
+        )
+        val result = parser.parse(pages)
+        assertEquals(1, result.rows.size)
+        // Should parse as: (1)A, (4)C, (4)B, (3)C, (4)B, (4)A = 20 beads
+        assertEquals(20, result.rows[0].steps.sumOf { it.count })
+        assertEquals(PdfStep(1, "A"), result.rows[0].steps[0])
+        assertEquals(PdfStep(4, "C"), result.rows[0].steps[1])
+        assertEquals(PdfStep(4, "B"), result.rows[0].steps[2])
+        assertEquals(PdfStep(3, "C"), result.rows[0].steps[3])
+        assertEquals(PdfStep(4, "B"), result.rows[0].steps[4])
+        assertEquals(PdfStep(4, "A"), result.rows[0].steps[5])
+    }
+
     // ── Springsong tapestry page boundary (#89) ──────────────────────────────
 
     /**

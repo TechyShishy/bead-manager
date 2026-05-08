@@ -194,6 +194,9 @@ class BeadToolPdfParser @Inject constructor() {
      * line beginning with a whitespace-variant token such as `( 1)B` is still
      * stitched to the preceding row line.
      *
+     * Also handles step tokens split across line boundaries, where the count
+     * `(N)` appears at the end of one line and the letter `X` starts the next.
+     *
      * Ported verbatim from the rowguide TypeScript reference implementation.
      *
      * A negative lookahead `(?!Row )` guards the trailing-comma branch: a
@@ -205,6 +208,7 @@ class BeadToolPdfParser @Inject constructor() {
         text
             .replace(Regex(""",\n+(?!Row )"""), ", ")
             .replace(Regex("""\n+(?=\(\s*\d+\s*\)\s*\w)"""), ", ")
+            .replace(Regex("""(\(\s*\d+\s*\))\s*\n+(?=[A-Z])"""), "$1 ")
 
     // ── Row block extraction ──────────────────────────────────────────────────
 
