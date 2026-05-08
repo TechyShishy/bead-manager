@@ -142,13 +142,11 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0001",
                 quantityGrams = 5.0,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
             "DB0002" to com.techyshishy.beadmanager.data.firestore.InventoryEntry(
                 beadCode = "DB0002",
                 quantityGrams = 10.0,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
@@ -181,7 +179,6 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0001",
                 quantityGrams = 5.0,
                 lowStockThresholdGrams = 3.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
@@ -213,7 +210,6 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0001",
                 quantityGrams = SUFFICIENT_THRESHOLD_GRAMS / 2.0,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
@@ -245,7 +241,6 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0001",
                 quantityGrams = SUFFICIENT_THRESHOLD_GRAMS,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
@@ -277,7 +272,6 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0001",
                 quantityGrams = 7.0,
                 lowStockThresholdGrams = 5.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
@@ -309,7 +303,6 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0001",
                 quantityGrams = 7.0,
                 lowStockThresholdGrams = 10.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
@@ -341,19 +334,16 @@ class FinalizeOrderUseCaseTest {
                 beadCode = "DB0003",
                 quantityGrams = 2.0,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
             "DB0001" to com.techyshishy.beadmanager.data.firestore.InventoryEntry(
                 beadCode = "DB0001",
                 quantityGrams = 3.0,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
             "DB0002" to com.techyshishy.beadmanager.data.firestore.InventoryEntry(
                 beadCode = "DB0002",
                 quantityGrams = 1.0,
                 lowStockThresholdGrams = 0.0,
-                history = emptyList(),
             ),
         )
         val inventoryRepo = mockk<InventoryRepository> {
