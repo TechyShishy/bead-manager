@@ -86,7 +86,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     /**
      * Parses raw PDFBox-extracted text from a color key page into a letter-to-DB-code map.
      *
-     * Two text formats are recognised:
+     * Three text formats are recognised (in fallback order):
      *
      * **Standard BeadTool 4 format** (primary):
      * ```
@@ -99,9 +99,8 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * …
      * ```
      *
-     * **Compact format** (fallback): used by some BeadTool exports (e.g. Deadly Potion)
-     * where the `"Chart #:"` label is absent and the color letter appears on its own line
-     * immediately before the DB code:
+     * **Compact format** (fallback 1): used by some BeadTool exports where the `"Chart #:"`
+     * label is absent and the color letter appears on its own line immediately before the DB code:
      * ```
      * A
      * DB-101
@@ -112,10 +111,24 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * …
      * ```
      *
-     * When the primary pattern produces no results (no `"Chart #:"` entries found), the
-     * compact-format pass is attempted. A standalone letter line is only considered a
-     * chart-letter candidate when a `"DB-"` code appears within the next few lines,
-     * which avoids false-positives from bead-graph pages that contain isolated letters.
+     * **Inline format** (fallback 2): letter and DB code on the same line, separated by '='.
+     * Used by some exports (e.g. Deadly Potion.pdf) where OCR extraction produces entries like:
+     * ```
+     * A = DB-101
+     * Light Smoky Topaz Gold Luster
+     * Count:982
+     * B= DB-1779
+     * …
+     * ```
+     *
+     * When the primary pattern produces no results, the compact-format pass is attempted.
+     * A standalone letter line is only considered a chart-letter candidate when a `"DB-"`
+     * code appears within the next few lines, which avoids false-positives from bead-graph
+     * pages that contain isolated letters.
+     *
+     * If both primary and compact fail, the inline-format pass attempts to parse letter=DB-code
+     * entries on individual lines. This handles cases where the color letter and DB code are
+     * extracted as a single OCR block with '=' as a separator.
      *
      * Entries without a DB code (e.g. dropped by OCR noise) are silently skipped.
      * If the last entry in [ocrText] has no DB code, the loop exits without
@@ -164,6 +177,20 @@ class BeadToolColorKeyExtractor @Inject constructor() {
             val window = ocrText.substring(letterMatch.range.last + 1, windowEnd)
             val dbMatch = dbCodeRegex.find(window) ?: continue
             result[letter] = normalizeDbCode(dbMatch.groupValues[1])
+        }
+        if (result.isNotEmpty()) return result
+
+        // Inline-format fallback: letter and DB code on the same line, separated by '='
+        // (e.g., "A = DB-101" or "B= DB-1779"). Used by some exports where the color
+        // entries are extracted as "LETTER = DB-CODE" patterns without Chart # labels.
+        val inlineLetterAndCode = Regex("""^([A-Z]{1,2})\s*=\s*.*?(DB-\d{1,4})""", RegexOption.MULTILINE)
+        var inlineSearchFrom = 0
+        while (true) {
+            val match = inlineLetterAndCode.find(ocrText, inlineSearchFrom) ?: break
+            inlineSearchFrom = match.range.last + 1
+            val letter = match.groupValues[1]
+            val dbCode = match.groupValues[2]
+            result[letter] = normalizeDbCode(dbCode)
         }
         return result
     }

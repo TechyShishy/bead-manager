@@ -602,4 +602,98 @@ class BeadToolColorKeyExtractorTest {
         assertEquals("DB1582", result["L"])
         assertFalse("II must not appear in map", result.containsKey("II"))
     }
+
+    @Test
+    fun `parseColorKeyText parses inline format where letter and DB code are on same line`() {
+        // Regression for Deadly Potion.pdf: OCR extraction produces color entries as
+        // individual blocks like "A = DB-101", "B= DB-1779", etc., where the letter
+        // and DB code are on the same line separated by '=', rather than on separate lines.
+        val ocrText = """
+            A = DB-101
+            Light Smoky Topaz Gold Luster
+            Count:982
+            B= DB-1779
+            White Lined Dark Topaz AB
+            Count:56
+            C = DB-66
+            White Lined Crystal AB
+            Count:114
+            D= DB-10
+            Black
+            Count:252
+            E = DB-274
+            Lined Pea Green Luster
+            Count:214
+            F= DB-182
+            Silver Lined Jade Green
+            Count:196
+            G= DB-81
+            Grey Lined Crystal AB
+            Count:40
+            H= DB-352
+            Matte Opaque Cream
+            Count:110
+            I = DB-271
+            Sparkling Silver Grey Lined Crystal
+            Count:30
+            J= DB-61
+            Purple Lined Light Topaz Luster
+            Count:44
+            K= DB-2267
+            Opaque Brown Picasso
+            Count:26
+            L = DB-208
+            Opaque Tan Luster
+            Count:16
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB1779", result["B"])
+        assertEquals("DB0066", result["C"])
+        assertEquals("DB0010", result["D"])
+        assertEquals("DB0274", result["E"])
+        assertEquals("DB0182", result["F"])
+        assertEquals("DB0081", result["G"])
+        assertEquals("DB0352", result["H"])
+        assertEquals("DB0271", result["I"])
+        assertEquals("DB0061", result["J"])
+        assertEquals("DB2267", result["K"])
+        assertEquals("DB0208", result["L"])
+    }
+
+    @Test
+    fun `parseColorKeyText inline format does not fire when standard Chart hash format is present`() {
+        // Verify that the primary "Chart #:" format takes precedence over the inline format.
+        val ocrText = """
+            Chart #:A
+            DB-101
+            Chart #:B
+            DB-201
+            A = DB-999
+            B= DB-888
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        // Inline entries should not override the Chart # entries
+        assertEquals(2, result.size)
+    }
+
+    @Test
+    fun `parseColorKeyText inline format does not fire when compact format is present`() {
+        // Verify that the compact format (standalone letters) takes precedence over inline format.
+        val ocrText = """
+            A
+            DB-101
+            B
+            DB-201
+            C = DB-999
+            D= DB-888
+        """.trimIndent()
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        // Inline entries should not override the compact entries
+        assertEquals(2, result.size)
+    }
 }
