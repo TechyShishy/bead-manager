@@ -171,6 +171,17 @@ class BeadToolColorKeyExtractor @Inject constructor() {
             val letterMatch = standaloneLetter.find(ocrText, compactSearchFrom) ?: break
             compactSearchFrom = letterMatch.range.last + 1
             val letter = letterMatch.groupValues[1]
+
+            // Guard: Check that letter is not preceded by lowercase text (part of a word).
+            val beforeLetter = if (letterMatch.range.first > 0)
+                ocrText[letterMatch.range.first - 1] else '\n'
+            if (beforeLetter.isLowerCase()) continue
+
+            // Guard: Check that letter is not followed directly by lowercase (word continuation).
+            val afterLetter = if (letterMatch.range.last < ocrText.length - 1)
+                ocrText[letterMatch.range.last + 1] else '\n'
+            if (afterLetter.isLowerCase() && afterLetter != '\n') continue
+
             // Only accept if a DB code appears within the next COMPACT_FORMAT_WINDOW characters — avoids
             // pairing with a distant DB code that belongs to a different entry.
             val windowEnd = minOf(ocrText.length, letterMatch.range.last + COMPACT_FORMAT_WINDOW)
@@ -290,6 +301,14 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * - Lowercase letter (`Chart #:s` → S)
      * - Digit–letter confusion (`0`→O, `1`→I)
      *
+     * When no `Chart #:` entries are found in any block, falls back to the same
+     * compact and inline formats used by [parseColorKeyText]:
+     * - **Compact fallback**: each block (or line within a block) may start with a
+     *   standalone uppercase letter followed by a DB code, as in lighter-cover
+     *   BeadTool exports (e.g. Red Skull, Spider, Pineapple) where the OCR layer
+     *   does not produce `"Chart #:"` labels.
+     * - **Inline fallback**: `"LETTER = DB-NNNN"` pattern on a single line.
+     *
      * Exposed as `internal` for unit testing on JVM; the production entry point
      * is [parseTextBlocks], which maps [Text.TextBlock] objects to their text
      * strings before calling this function.
@@ -355,6 +374,82 @@ class BeadToolColorKeyExtractor @Inject constructor() {
                     }
                 }
             }
+        }
+        if (result.isNotEmpty()) return result
+
+        // Compact-format fallback: some lighter-cover BeadTool exports produce OCR
+        // blocks without "Chart #:" labels. The color key entries appear as a
+        // standalone uppercase letter on a line followed by a DB code within the
+        // next COMPACT_FORMAT_WINDOW characters. Join all blocks so that letter
+        // and DB code from adjacent blocks are still associated.
+        //
+        // Uses the same window-based heuristic as parseColorKeyText's compact pass.
+        //
+        // False-positive risk: bead-graph pages contain isolated single-letter cells
+        // (e.g. "A", "B", "C") and page titles contain isolated letters (e.g. "S" from
+        // "Smokin' Lips"). Without guards these would produce wrong but non-empty compact
+        // results, causing the function to return garbage instead of falling through to inline.
+        //
+        // Guard conditions before trusting a compact result:
+        //   1. "DB-" must appear somewhere in the joined text — bead-graph pages do not
+        //      contain DB catalog codes, so this eliminates the primary false-positive source.
+        //   2. The result must contain ≥ 2 distinct letter keys — a real color key always
+        //      has multiple entries; a single match is more likely accidental.
+        //   3. Each matched letter must not be preceded by lowercase text (e.g., "Smokin' S"
+        //      would fail because 'S' is preceded by lowercase 'n') — this rejects letters
+        //      that are parts of words rather than standalone entries.
+        //   4. The letter must not be followed immediately by lowercase text without a line
+        //      break — this catches cases where "S" is followed by "mokin'" on continuation.
+        // If guards fail the compact result is discarded and inline parsing is tried.
+        //
+        // simpleDbCode uses only the canonical DB-\d{1,4} form, not the garbled \d-\d{3,4}
+        // form accepted by dbCodeRegex in the primary pass. The garbled form requires
+        // OCR-specific normalization context (knowledge that the prefix digits are corrupted
+        // "DB-") that this plain-text fallback does not have; matching it here would cause
+        // false positives from legitimate numeric patterns in surrounding text.
+        val joinedText = blockTexts.joinToString("\n")
+        val standaloneLetter = Regex("""^([A-Z]{1,2})$""", RegexOption.MULTILINE)
+        val simpleDbCode = Regex("""(DB-\d{1,4})""")
+        if ("DB-" in joinedText) {
+            var compactSearchFrom = 0
+            while (true) {
+                val letterMatch = standaloneLetter.find(joinedText, compactSearchFrom) ?: break
+                compactSearchFrom = letterMatch.range.last + 1
+                val letter = letterMatch.groupValues[1]
+
+                // Guard 3: Check that letter is not preceded by lowercase text (part of a word).
+                val beforeLetter = if (letterMatch.range.first > 0)
+                    joinedText[letterMatch.range.first - 1] else '\n'
+                if (beforeLetter.isLowerCase()) continue
+
+                // Guard 4: Check that letter is not followed directly by lowercase (word continuation).
+                val afterLetter = if (letterMatch.range.last < joinedText.length - 1)
+                    joinedText[letterMatch.range.last + 1] else '\n'
+                if (afterLetter.isLowerCase() && afterLetter != '\n') continue
+
+                val windowEnd = minOf(joinedText.length, letterMatch.range.last + COMPACT_FORMAT_WINDOW)
+                val window = joinedText.substring(letterMatch.range.last + 1, windowEnd)
+                val dbMatch = simpleDbCode.find(window) ?: continue
+                result[letter] = normalizeDbCode(dbMatch.groupValues[1])
+            }
+        }
+        if (result.size >= 2) return result
+        result.clear()
+
+        // Inline-format fallback: "LETTER = DB-NNNN" on a single line. Operates on
+        // the joined text so that blocks containing partial inline entries are found.
+        //
+        // Unlike the compact heuristic above, no `size >= 2` guard is applied here.
+        // The `LETTER = DB-CODE` pattern is format-specific enough to color keys that
+        // even a single match is trustworthy — the `=` separator is a strong signal
+        // that is unlikely to appear in bead-graph or count cells. If a real-world PDF
+        // produces spurious inline matches the guard can be added at that time.
+        val inlineLetterAndCode = Regex("""^([A-Z]{1,2})\s*=\s*.*?(DB-\d{1,4})""", RegexOption.MULTILINE)
+        var inlineSearchFrom = 0
+        while (true) {
+            val match = inlineLetterAndCode.find(joinedText, inlineSearchFrom) ?: break
+            inlineSearchFrom = match.range.last + 1
+            result[match.groupValues[1]] = normalizeDbCode(match.groupValues[2])
         }
         return result
     }

@@ -56,9 +56,12 @@ class PdfImportDiagnosticsCollector {
     /**
      * Text after [BeadToolPdfParser.stripLegendBlocks]: the `N of MBead Legend … Word Chart`
      * footer blocks have been removed. Sits between [beadToolCleanedText] and
-     * [beadToolContinuedText] in the pipeline.
+     * [beadToolTitleStrippedText] in the pipeline.
      */
     var beadToolLegendStrippedText: String? = null
+
+    /** Text after [BeadToolPdfParser.stripPageTitleArtifacts]. */
+    var beadToolTitleStrippedText: String? = null
 
     /** Text after joinContinuationLines. */
     var beadToolContinuedText: String? = null
@@ -174,6 +177,12 @@ class PdfImportDiagnosticsCollector {
             beadToolLegendStrippedText?.let {
                 appendLine()
                 appendLine("--- Legend-stripped text (${it.length} chars) ---")
+                appendLine(it.take(MAX_TEXT_CHARS))
+                if (it.length > MAX_TEXT_CHARS) appendLine("[... truncated at $MAX_TEXT_CHARS chars]")
+            }
+            beadToolTitleStrippedText?.let {
+                appendLine()
+                appendLine("--- Title-stripped text (${it.length} chars) ---")
                 appendLine(it.take(MAX_TEXT_CHARS))
                 if (it.length > MAX_TEXT_CHARS) appendLine("[... truncated at $MAX_TEXT_CHARS chars]")
             }

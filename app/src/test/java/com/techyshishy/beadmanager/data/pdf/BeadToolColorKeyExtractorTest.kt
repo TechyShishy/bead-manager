@@ -696,4 +696,125 @@ class BeadToolColorKeyExtractorTest {
         // Inline entries should not override the compact entries
         assertEquals(2, result.size)
     }
+
+    // ── parseBlockTexts compact and inline fallbacks ───────────────────────────
+
+    @Test
+    fun `parseBlockTexts compact fallback parses standalone letter blocks without Chart hash label`() {
+        // Regression for lighter-cover BeadTool exports (Red Skull, Spider, Pineapple,
+        // Southwest, Smokin Lips): ML Kit OCR returns blocks without "Chart #:" labels.
+        // Each color entry appears as a standalone letter followed by a DB-code block.
+        val blocks = listOf(
+            "A\nDB-101\nBlack\nCount:1234",
+            "B\nDB-201\nWhite\nCount:567",
+            "C\nDB-301\nRed\nCount:890",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals("DB0301", result["C"])
+        assertEquals(3, result.size)
+    }
+
+    @Test
+    fun `parseBlockTexts compact fallback associates letter and DB code across adjacent blocks`() {
+        // ML Kit may split compact entries across blocks: letter in one block, DB code
+        // in the next. The joined-text fallback must bridge the block boundary.
+        val blocks = listOf(
+            "A",
+            "DB-101\nBlack\nCount:1234",
+            "B",
+            "DB-201\nWhite\nCount:567",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals(2, result.size)
+    }
+
+    @Test
+    fun `parseBlockTexts compact fallback does not fire when Chart hash format is present`() {
+        // Primary Chart-# pass fires; compact fallback must not run or override.
+        // C and D are present in the text as standalone letters on their own lines
+        // (from Count/color name lines) but must NOT appear in the result because
+        // the compact fallback should not run when the primary pass already succeeded.
+        val blocks = listOf(
+            "Chart #:A\nDB-101\nBlack\nCount:1234",
+            "Chart #:B\nDB-201\nWhite\nCount:567",
+            "C\nD",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals(2, result.size)
+        assertFalse("C must not appear — compact fallback must not run", result.containsKey("C"))
+        assertFalse("D must not appear — compact fallback must not run", result.containsKey("D"))
+    }
+
+    @Test
+    fun `parseBlockTexts compact fallback rejects single match and returns empty when inline finds nothing`() {
+        // The compact fallback requires size >= 2 before returning. When only one
+        // compact pair is found the result is cleared and the inline fallback runs.
+        // If the inline fallback also finds nothing the overall result must be empty.
+        val blocks = listOf(
+            "A\nDB-101\nSome Color\nCount:5",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertTrue(
+            "compact-size-1 must be rejected; inline has nothing to match; result must be empty",
+            result.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `parseBlockTexts inline fallback parses letter equals DB-code blocks`() {
+        // Some lighter-cover PDFs produce inline OCR blocks such as "A = DB-101".
+        // The inline fallback in parseBlockTexts must handle this when both primary
+        // and compact passes produce nothing.
+        val blocks = listOf(
+            "A = DB-101\nBlack\nCount:1234",
+            "B= DB-201\nWhite\nCount:567",
+            "C = DB-66\nRed\nCount:890",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals("DB0066", result["C"])
+        assertEquals(3, result.size)
+    }
+
+    @Test
+    fun `parseBlockTexts inline fallback does not fire when Chart hash format is present`() {
+        // Primary pass fires; inline fallback must not run or override.
+        val blocks = listOf(
+            "Chart #:A\nDB-101",
+            "A = DB-999",
+        )
+        val result = extractor.parseBlockTexts(blocks)
+        assertEquals("DB0101", result["A"])
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `parseBlockTexts compact fallback handles full lighter-cover color set`() {
+        // Simulates a 13-color lighter-cover PDF where OCR produces no "Chart #:" labels.
+        // Represents the worst-case reported in issue #135 (13 missing letters).
+        val entries = listOf(
+            "A" to "DB-101", "B" to "DB-201", "C" to "DB-301",
+            "D" to "DB-401", "E" to "DB-111", "F" to "DB-121",
+            "G" to "DB-131", "H" to "DB-141", "I" to "DB-151",
+            "J" to "DB-161", "K" to "DB-171", "L" to "DB-208",
+            "M" to "DB-310",
+        )
+        val blocks = entries.map { (letter, code) ->
+            "$letter\n$code\nSome Color Name\nCount:100"
+        }
+        val result = extractor.parseBlockTexts(blocks)
+        for ((letter, rawCode) in entries) {
+            val digits = rawCode.removePrefix("DB-")
+            val expected = "DB" + digits.padStart(4, '0')
+            assertEquals("Mapping for $letter", expected, result[letter])
+        }
+        assertEquals(entries.size, result.size)
+    }
 }

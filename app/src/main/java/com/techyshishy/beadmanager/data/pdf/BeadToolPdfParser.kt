@@ -64,11 +64,12 @@ class BeadToolPdfParser @Inject constructor() {
         val sectionText = isolated ?: stripped
         val cleaned = cleanText(sectionText)
         val legendStripped = stripLegendBlocks(cleaned)
-        val continued = joinContinuationLines(legendStripped)
+        val titleStripped = stripPageTitleArtifacts(legendStripped)
+        val continued = joinContinuationLines(titleStripped)
         Log.d(TAG, "BeadTool pipeline: allText=${allText.length}ch stripped=${stripped.length}ch " +
             "section=${sectionText.length}ch (isolated=${isolated != null}) " +
             "cleaned=${cleaned.length}ch legendStripped=${legendStripped.length}ch " +
-            "continued=${continued.length}ch")
+            "titleStripped=${titleStripped.length}ch continued=${continued.length}ch")
         Log.d(TAG, "BeadTool 'Row 1' presence: allText=${allText.contains("Row 1")} " +
             "stripped=${stripped.contains("Row 1")} " +
             "section=${sectionText.contains("Row 1")} " +
@@ -80,6 +81,7 @@ class BeadToolPdfParser @Inject constructor() {
         diagnostics?.beadToolSectionIsolated = isolated != null
         diagnostics?.beadToolCleanedText = cleaned
         diagnostics?.beadToolLegendStrippedText = legendStripped
+        diagnostics?.beadToolTitleStrippedText = titleStripped
         diagnostics?.beadToolContinuedText = continued
 
         val variantBlocks = extractVariantRowBlocks(continued)
@@ -130,6 +132,28 @@ class BeadToolPdfParser @Inject constructor() {
                 "",
             )
             .replace(Regex("""[^\n]* ?Page [0-9]+(?: of [0-9]+)?\n"""), "")
+
+    /**
+     * Removes page title artifacts that appear inline with row data at end of lines.
+     * OCR/text extraction sometimes concatenates the final row step with the page title
+     * that follows (e.g., "Row 50 (L)  (...) Spider Lighter Cover Pattern..."),
+     * causing the stepRegex to match phantom color letters from the title text.
+     * This function truncates rows at markers that indicate non-pattern content.
+     */
+    private fun stripPageTitleArtifacts(text: String): String =
+        text
+            // Line-start page titles FIRST: full title must be matched before the inline
+            // pattern can partially strip it (e.g. " Cover Pattern" from within the title).
+            // E.g., "Spider Lighter Cover Pattern, Word Chart (Even-Count Peyote) - 2"
+            // Remove blank lines around the title and the title itself to avoid breaking row continuity.
+            .replace(Regex("""\n\s*\n[A-Z][a-z‘’']+ .{3,}(?:Pattern|Cover|Chart|Stitch).*(?:\n|$)"""), "\n")
+            // Inline page titles: appear on the same line as row data (preceded by space).
+            // E.g., "Row 50 (L) ... Smokin' Lips Cover Pattern"
+            .replace(Regex(""" [A-Z][a-z‘’']+ .{3,}(?:Pattern|Cover|Chart|Stitch).*$""", RegexOption.MULTILINE), "")
+            // Copyright, attribution, and page footer lines
+            .replace(Regex(""" (?:©|by) .+$""", RegexOption.MULTILINE), "")
+            .replace(Regex(""" Word Chart.+$""", RegexOption.MULTILINE), "")
+            .replace(Regex(""" Page \d+.+$""", RegexOption.MULTILINE), "")
 
     /**
      * Isolates the Peyote Word Chart section from [stripped] text when the PDF
@@ -208,7 +232,9 @@ class BeadToolPdfParser @Inject constructor() {
         text
             .replace(Regex(""",\n+(?!Row )"""), ", ")
             .replace(Regex("""\n+(?=\(\s*\d+\s*\)\s*\w)"""), ", ")
-            .replace(Regex("""(\(\s*\d+\s*\))\s*\n+(?=[A-Z])"""), "$1 ")
+            // Join step counts (e.g., "(1)") to their following content, but NOT if it's a page title.
+            // Page titles are excluded via negative lookahead: (?![A-Z][a-z']+ .{3,}(?:Pattern|Cover|Chart|Stitch))
+            .replace(Regex("""(\(\s*\d+\s*\))\s*\n+(?=[A-Z])(?![A-Z][a-z']+ .{3,}(?:Pattern|Cover|Chart|Stitch))"""), "$1 ")
 
     // ── Row block extraction ──────────────────────────────────────────────────
 
@@ -280,7 +306,10 @@ class BeadToolPdfParser @Inject constructor() {
      * `( 1)B`, `(1) A`, and `( 1) A`. The `\s*` is bounded by the required
      * `[A-Z]{1,2}` anchor so it cannot consume delimiter characters.
      */
-    private val stepRegex = Regex("""\(\s*(\d+)\s*\)\s*([A-Z]{1,2})""")
+    // Matches step format "(N)L" where L is a color letter (1-2 chars).
+    // Negative lookahead (?![a-z]) ensures the letter is not followed by lowercase
+    // text, which would indicate it's part of a word like "Smokin'" rather than a standalone letter.
+    private val stepRegex = Regex("""\(\s*(\d+)\s*\)\s*([A-Z]{1,2})(?![a-z])""")
 
     /**
      * Parses every row line in [rowBlock] into [PdfRow] objects.

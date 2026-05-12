@@ -775,4 +775,64 @@ class BeadToolPdfParserTest {
         val ex = runCatching { parser.parseAllVariants(emptyList()) }
         assertTrue(ex.exceptionOrNull() is PdfParseException.NoPatternFound)
     }
+
+    @Test
+    fun `parseAllVariants ignores phantom color letters from page title artifacts`() {
+        // Regression for issue #135: page title text concatenated inline with final row
+        // was being misinterpreted as phantom color letters (e.g., "S" from "Spider Pattern").
+        val pages = listOf(
+            "Test Pattern\n",
+            "Word Chart (Peyote)\n" +
+                    "Row 1 (R) (5)A\n" +
+                    "Row 2 (L) (3)A, (2)B Spider Lighter Cover Pattern, Word Chart (Even-Count Peyote) - 2\n" +
+                    "Row 3 (R) (1)C",
+        )
+        val result = parser.parse(pages)
+        // Should parse successfully with only A, B, C (not S from "Spider")
+        assertEquals(3, result.rows.size)
+        val usedLetters = result.rows.flatMap { it.steps }.map { it.colorLetter }.toSet()
+        assertEquals(setOf("A", "B", "C"), usedLetters)
+    }
+
+    @Test
+    fun `parseAllVariants joins split row across page break with intervening page title`() {
+        // Regression for issue #135: row data split across a page break with a page title
+        // between the two halves was not being joined correctly.
+        // The final step on page N ends with "(1)" (mid-step), the page title appears on
+        // its own line, then the continuation "C, (2)B" starts page N+1.
+        val pages = listOf(
+            "Test Pattern\n",
+            "Word Chart (Peyote)\n" +
+                    "Row 1 (R) (5)A\n" +
+                    "Row 2 (L) (3)A, (2)B, (1)\n" +
+                    "\n" +
+                    "Test Pattern, Word Chart (Even-Count Peyote) - 2\n" +
+                    "C, (2)B\n" +
+                    "Row 3 (R) (1)C",
+        )
+        val result = parser.parse(pages)
+        assertEquals(3, result.rows.size)
+        // Row 2 must have all 8 beads: (3)A + (2)B + (1)C + (2)B
+        assertEquals(8, result.rows[1].steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parseAllVariants handles page title with Unicode right-single-quotation-mark apostrophe`() {
+        // Regression: "Smokin’ Lips Cover Pattern" uses U+2019 (right single quotation
+        // mark), not ASCII apostrophe. The line-start title regex must recognise both so that
+        // the full title is stripped before the inline pattern can partially consume it.
+        val pages = listOf(
+            "Smokin’ Lips\n",
+            "Word Chart (Peyote)\n" +
+                    "Row 1 (R) (5)A\n" +
+                    "Row 2 (L) (3)A, (2)B, (1)\n" +
+                    "\n" +
+                    "Smokin’ Lips Cover Pattern, Word Chart (Even-Count Peyote) - 2\n" +
+                    "C, (2)B\n" +
+                    "Row 3 (R) (1)C",
+        )
+        val result = parser.parse(pages)
+        assertEquals(3, result.rows.size)
+        assertEquals(8, result.rows[1].steps.sumOf { it.count })
+    }
 }
