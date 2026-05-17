@@ -398,6 +398,42 @@ class OrderRepository @Inject constructor(
     }
 
     /**
+     * Updates the quantity and pack size of a PENDING line item.
+     *
+     * Identity is matched by (beadCode, vendorKey, packGrams). When [newPackGrams] differs from
+     * the current [OrderItemEntry.packGrams] the item is re-keyed; the old entry is replaced
+     * by a new one with the updated values.
+     *
+     * If the new ordered grams (newQuantityUnits * newPackGrams) fall below the sum of
+     * [OrderItemEntry.sourceProjectContributions], the excess is silently accepted — no
+     * validation blocks the save. Project tracking may show a deficit; that is expected and
+     * communicated to the user in the UI.
+     */
+    suspend fun updateItemQuantityAndSize(
+        orderId: String,
+        item: OrderItemEntry,
+        allItems: List<OrderItemEntry>,
+        newQuantityUnits: Int,
+        newPackGrams: Double,
+    ) {
+        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
+            "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"
+        }
+        require(OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.PENDING) {
+            "updateItemQuantityAndSize may only be called on PENDING items; current status: ${item.status}"
+        }
+        val updated = item.copy(quantityUnits = newQuantityUnits, packGrams = newPackGrams)
+        val updatedItems = allItems.map { existing ->
+            if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
+                updated
+            } else {
+                existing
+            }
+        }
+        source.updateItems(orderId, updatedItems)
+    }
+
+    /**
      * Detaches [projectId] from an order:
      *  1. For each item, subtracts this project's recorded contribution from [targetGrams].
      *     - Item has no entry for this project in [effectiveContributions] (manually added,

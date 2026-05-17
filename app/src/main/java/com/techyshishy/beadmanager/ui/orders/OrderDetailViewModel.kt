@@ -201,5 +201,18 @@ class OrderDetailViewModel @Inject constructor(
             orderRepository.revertItemReceived(currentOrder.orderId, item, currentOrder.items)
         }
     }
+
+    fun updateItemQuantityAndSize(item: OrderItemEntry, newQuantityUnits: Int, newPackGrams: Double) {
+        val currentOrder = order.value ?: return
+        viewModelScope.launch {
+            orderRepository.updateItemQuantityAndSize(
+                currentOrder.orderId,
+                item,
+                currentOrder.items,
+                newQuantityUnits,
+                newPackGrams,
+            )
+        }
+    }
 }
 
