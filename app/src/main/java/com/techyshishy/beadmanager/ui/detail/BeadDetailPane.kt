@@ -318,13 +318,14 @@ fun BeadDetailPane(
             if (showInventoryActionDialog) {
                 val gramsStr = BigDecimal.valueOf(pendingInventoryGrams).stripTrailingZeros().toPlainString()
                 AlertDialog(
-                    onDismissRequest = { showInventoryActionDialog = false },
+                    onDismissRequest = { focusManager.clearFocus(); showInventoryActionDialog = false },
                     title = { Text("Update inventory") },
                     text = { Text("Set to ${gramsStr}g, or add to current stock?") },
                     confirmButton = {
                         TextButton(
                             onClick = {
                                 viewModel.adjustQuantity(pendingInventoryGrams)
+                                focusManager.clearFocus()
                                 showInventoryActionDialog = false
                             },
                         ) { Text("Add To") }
@@ -333,6 +334,7 @@ fun BeadDetailPane(
                         TextButton(
                             onClick = {
                                 viewModel.setQuantity(pendingInventoryGrams)
+                                focusManager.clearFocus()
                                 showInventoryActionDialog = false
                             },
                             colors = ButtonDefaults.textButtonColors(
