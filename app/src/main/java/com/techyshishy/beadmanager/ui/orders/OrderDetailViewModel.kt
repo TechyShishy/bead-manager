@@ -202,15 +202,14 @@ class OrderDetailViewModel @Inject constructor(
         }
     }
 
-    fun updateItemQuantityAndSize(item: OrderItemEntry, newQuantityUnits: Int, newPackGrams: Double) {
+    fun updateTargetGrams(item: OrderItemEntry, newTargetGrams: Double) {
         val currentOrder = order.value ?: return
         viewModelScope.launch {
-            orderRepository.updateItemQuantityAndSize(
+            orderRepository.updateTargetGrams(
                 currentOrder.orderId,
                 item,
                 currentOrder.items,
-                newQuantityUnits,
-                newPackGrams,
+                newTargetGrams,
             )
         }
     }

@@ -409,20 +409,16 @@ class OrderRepository @Inject constructor(
      * validation blocks the save. Project tracking may show a deficit; that is expected and
      * communicated to the user in the UI.
      */
-    suspend fun updateItemQuantityAndSize(
+    suspend fun updateTargetGrams(
         orderId: String,
         item: OrderItemEntry,
         allItems: List<OrderItemEntry>,
-        newQuantityUnits: Int,
-        newPackGrams: Double,
+        newTargetGrams: Double,
     ) {
-        check(allItems.count { it.beadCode == item.beadCode && it.vendorKey == item.vendorKey && it.packGrams == item.packGrams } == 1) {
-            "Order item identity collision: ${item.beadCode}/${item.vendorKey}/${item.packGrams}"
-        }
         require(OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.PENDING) {
-            "updateItemQuantityAndSize may only be called on PENDING items; current status: ${item.status}"
+            "updateTargetGrams may only be called on PENDING items; current status: ${item.status}"
         }
-        val updated = item.copy(quantityUnits = newQuantityUnits, packGrams = newPackGrams)
+        val updated = item.copy(targetGrams = newTargetGrams)
         val updatedItems = allItems.map { existing ->
             if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
                 updated

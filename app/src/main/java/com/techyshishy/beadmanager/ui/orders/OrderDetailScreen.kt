@@ -286,8 +286,8 @@ fun OrderDetailScreen(
         EditItemBottomSheet(
             item = item,
             vendorDisplayName = vendorDisplayName,
-            onSave = { newQuantityUnits, newPackGrams ->
-                viewModel.updateItemQuantityAndSize(item, newQuantityUnits, newPackGrams)
+            onSave = { newTargetGrams ->
+                viewModel.updateTargetGrams(item, newTargetGrams)
                 editTarget = null
                 coroutineScope.launch { snackbarHostState.showSnackbar(savedMsg) }
             },
@@ -408,7 +408,7 @@ private fun OrderItemRow(
                 }
             }
             if (!isVendorless) StatusBadge(status)
-            if (!isVendorless && status == OrderItemStatus.PENDING) {
+            if (status == OrderItemStatus.PENDING) {
                 IconButton(onClick = onEdit) {
                     Icon(
                         Icons.Filled.Edit,
@@ -528,27 +528,19 @@ private fun StatusBadge(status: OrderItemStatus) {
 private fun EditItemBottomSheet(
     item: OrderItemEntry,
     vendorDisplayName: String,
-    onSave: (newQuantityUnits: Int, newPackGrams: Double) -> Unit,
+    onSave: (newTargetGrams: Double) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var quantityInput by rememberSaveable {
-        mutableStateOf(if (item.quantityUnits > 0) item.quantityUnits.toString() else "")
-    }
-    var packGramsInput by rememberSaveable {
+    var targetGramsInput by rememberSaveable {
         mutableStateOf(
-            if (item.packGrams > 0.0) BigDecimal.valueOf(item.packGrams).stripTrailingZeros().toPlainString() else ""
+            if (item.targetGrams > 0.0) BigDecimal.valueOf(item.targetGrams).stripTrailingZeros().toPlainString() else ""
         )
     }
 
-    val newQuantityUnits = quantityInput.toIntOrNull()?.takeIf { it > 0 }
-    val newPackGrams = packGramsInput.toDoubleOrNull()?.takeIf { it > 0.0 }
-    val canSave = newQuantityUnits != null && newPackGrams != null
-
-    val contributedGrams = item.effectiveContributions().values.sum()
-    val orderedGrams = (newQuantityUnits ?: 0) * (newPackGrams ?: 0.0)
-    val showShortfallHint = canSave && contributedGrams > 0.0 && orderedGrams < contributedGrams
+    val newTargetGrams = targetGramsInput.toDoubleOrNull()?.takeIf { it > 0.0 }
+    val canSave = newTargetGrams != null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -581,21 +573,9 @@ private fun EditItemBottomSheet(
             }
 
             OutlinedTextField(
-                value = quantityInput,
-                onValueChange = { quantityInput = it },
-                label = { Text(stringResource(R.string.edit_item_quantity_units)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Next,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
-                value = packGramsInput,
-                onValueChange = { packGramsInput = it },
-                label = { Text(stringResource(R.string.edit_item_pack_grams)) },
+                value = targetGramsInput,
+                onValueChange = { targetGramsInput = it },
+                label = { Text(stringResource(R.string.edit_item_target_grams)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
@@ -604,15 +584,6 @@ private fun EditItemBottomSheet(
                 suffix = { Text("g") },
                 modifier = Modifier.fillMaxWidth(),
             )
-
-            if (showShortfallHint) {
-                val needed = BigDecimal.valueOf(contributedGrams).stripTrailingZeros().toPlainString()
-                Text(
-                    text = stringResource(R.string.edit_item_shortfall_hint, needed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -623,7 +594,7 @@ private fun EditItemBottomSheet(
                 }
                 TextButton(
                     onClick = {
-                        if (canSave) onSave(newQuantityUnits!!, newPackGrams!!)
+                        if (canSave) onSave(newTargetGrams!!)
                     },
                     enabled = canSave,
                 ) {

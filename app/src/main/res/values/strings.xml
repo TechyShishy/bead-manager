@@ -82,11 +82,8 @@
     <string name="remove_item">Remove item</string>
     <string name="confirm_remove_item">Remove %1$s from this order?</string>
     <string name="edit_item">Edit item</string>
-    <string name="edit_item_quantity_units">Quantity (packs)</string>
-    <string name="edit_item_pack_grams">Pack size</string>
+    <string name="edit_item_target_grams">Target quantity</string>
     <string name="edit_item_save">Save</string>
-    <!-- %1$s = minimum grams needed to cover project contributions, e.g. "10.0" -->
-    <string name="edit_item_shortfall_hint">Tip: order at least %1$s g to cover project contributions</string>
     <string name="edit_item_saved">Item updated</string>
 
     <string name="status_pending">Pending</string>
