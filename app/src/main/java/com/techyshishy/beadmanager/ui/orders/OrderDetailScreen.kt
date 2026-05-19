@@ -406,8 +406,8 @@ private fun OrderItemRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (!isVendorless) StatusBadge(status)
             }
-            if (!isVendorless) StatusBadge(status)
             if (status == OrderItemStatus.PENDING) {
                 IconButton(onClick = onEdit) {
                     Icon(
