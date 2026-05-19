@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
@@ -280,7 +281,7 @@ private fun FinalizedViewContent(
     val vendorKeys = remember(byVendor) { byVendor.keys.toList() }
 
     // Pre-compute the absolute LazyColumn index for each vendor's sticky header.
-    // Layout: [header_v0, items_v0..., header_v1, items_v1..., ..., grand_total, reopen_button]
+    // Layout: [header_v0, items_v0..., header_v1, items_v1..., ..., grand_total]
     val headerIndices = remember(byVendor) {
         val indices = mutableMapOf<String, Int>()
         var cursor = 0
@@ -318,8 +319,8 @@ private fun FinalizedViewContent(
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .weight(1f)
-                .navigationBarsPadding(),
+                .weight(1f),
+            contentPadding = PaddingValues(bottom = 80.dp),
         ) {
             byVendor.forEach { (vendorKey, vendorItems) ->
                 stickyHeader(key = "header_$vendorKey") {
@@ -343,15 +344,20 @@ private fun FinalizedViewContent(
             item(key = "grand_total") {
                 GrandTotalFooter(totals)
             }
-            item(key = "reopen_button") {
-                OutlinedButton(
-                    onClick = { showReopenDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    Text(stringResource(R.string.finalize_reopen_order))
-                }
+        }
+        Surface(
+            tonalElevation = 3.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+        ) {
+            OutlinedButton(
+                onClick = { showReopenDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Text(stringResource(R.string.finalize_reopen_order))
             }
         }
     }
