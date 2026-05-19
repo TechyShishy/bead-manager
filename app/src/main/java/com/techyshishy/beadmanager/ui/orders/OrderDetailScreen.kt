@@ -375,8 +375,8 @@ private fun OrderItemRow(
                 model = imageUrl.takeIf { it.isNotBlank() },
                 contentDescription = null,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialTheme.shapes.small),
+                    .size(96.dp)
+                    .clip(MaterialTheme.shapes.medium),
                 placeholder = ColorPainter(hexColor),
                 error = ColorPainter(hexColor),
             )
