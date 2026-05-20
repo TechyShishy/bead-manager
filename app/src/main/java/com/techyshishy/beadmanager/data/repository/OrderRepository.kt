@@ -97,6 +97,9 @@ class OrderRepository @Inject constructor(
     suspend fun deleteOrder(orderId: String) =
         source.deleteOrder(orderId)
 
+    suspend fun setCustomName(orderId: String, customName: String?) =
+        source.setCustomName(orderId, customName)
+
     /**
      * Appends new line items to an order.
      * Items whose (beadCode, vendorKey, packGrams) triple already exists are silently skipped.

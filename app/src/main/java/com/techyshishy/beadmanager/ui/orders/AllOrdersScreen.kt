@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.model.AllOrderItem
-import java.text.DateFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,15 +142,12 @@ private fun AllOrderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            val dateLabel = order.createdAt?.let { ts ->
-                DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
-            } ?: "…"
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.order_created, dateLabel),
+                    text = item.displayName,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f),
                 )
@@ -167,17 +163,6 @@ private fun AllOrderRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OrderSummaryStatusBadge(summaryStatus)
-                val projectLabel = if (item.projectNames.isNotEmpty()) {
-                    item.projectNames.joinToString(", ")
-                } else {
-                    stringResource(R.string.all_orders_no_project)
-                }
-                Text(
-                    text = projectLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
             }
         }
         IconButton(onClick = onDelete) {

@@ -243,6 +243,12 @@
     <string name="rename_confirm">Confirm rename</string>
     <string name="project_name_blank_error">Name cannot be blank</string>
 
+    <!-- Order rename / custom name -->
+    <string name="rename_order">Rename Order</string>
+    <string name="order_custom_name_hint">Custom name (optional)</string>
+    <string name="order_custom_name_description">Leave blank to use the auto-generated name from associated projects.</string>
+    <string name="save">Save</string>
+
     <!-- Add bead from catalog picker -->
     <string name="add_bead_from_catalog">Add bead from catalog</string>
     <string name="replace_bead_from_catalog">Replace bead</string>

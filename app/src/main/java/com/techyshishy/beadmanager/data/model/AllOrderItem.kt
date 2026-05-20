@@ -9,11 +9,13 @@ import com.techyshishy.beadmanager.data.firestore.OrderEntry
  * Never persisted directly.
  *
  * [projectNames] is the resolved list of project names for each ID in [OrderEntry.projectIds].
- * IDs that no longer correspond to an existing project are silently dropped. If the list is
- * empty (all projects deleted, or a pre-migration document with an unresolvable legacy
- * [OrderEntry.projectId]), the screen should show an appropriate fallback label.
+ * IDs that no longer correspond to an existing project are silently dropped.
+ *
+ * [displayName] is the computed or custom-override name ready for direct display. Screens should
+ * use [displayName] rather than constructing a label from [projectNames] directly.
  */
 data class AllOrderItem(
     val order: OrderEntry,
     val projectNames: List<String>,
+    val displayName: String,
 )

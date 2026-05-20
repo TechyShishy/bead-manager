@@ -76,7 +76,7 @@ import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.model.effectiveDeficitFor
 import com.techyshishy.beadmanager.domain.ExportResult
 import java.math.BigDecimal
-import java.text.DateFormat
+import com.techyshishy.beadmanager.domain.OrderNameGenerator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -348,6 +348,7 @@ fun ProjectDetailScreen(
                     items(activeOrders, key = { "order_${it.orderId}" }) { order ->
                         ActiveOrderRow(
                             order = order,
+                            projectName = project?.name ?: "",
                             onDetach = { detachTarget = order },
                         )
                         HorizontalDivider()
@@ -461,6 +462,7 @@ fun ProjectDetailScreen(
 @Composable
 private fun ActiveOrderRow(
     order: OrderEntry,
+    projectName: String,
     onDetach: () -> Unit,
 ) {
     val isFinalized = remember(order) {
@@ -469,9 +471,11 @@ private fun ActiveOrderRow(
             s == OrderItemStatus.FINALIZED || s == OrderItemStatus.ORDERED || s == OrderItemStatus.RECEIVED
         }
     }
-    val dateLabel = order.createdAt?.let { ts ->
-        DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
-    } ?: "…"
+    val nameLabel = OrderNameGenerator.displayName(
+        order,
+        listOfNotNull(projectName.takeIf { it.isNotBlank() }),
+        java.time.ZoneId.systemDefault(),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -479,7 +483,7 @@ private fun ActiveOrderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.order_created, dateLabel),
+            text = nameLabel,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )

@@ -9,7 +9,9 @@ import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
+import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
+import com.techyshishy.beadmanager.domain.OrderNameGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +32,7 @@ class OrderDetailViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val catalogRepository: CatalogRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val projectRepository: ProjectRepository,
 ) : ViewModel() {
 
     private val _orderId = MutableStateFlow("")
@@ -44,6 +47,18 @@ class OrderDetailViewModel @Inject constructor(
             else orderRepository.orderStream(id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    @Suppress("DEPRECATION") // intentional: legacy projectId read for pre-migration fallback
+    val displayName: StateFlow<String> = combine(
+        order,
+        projectRepository.projectsStream(),
+    ) { entry, projects ->
+        if (entry == null) return@combine ""
+        val nameById = projects.associate { it.projectId to it.name }
+        val projectNames = entry.projectIds.mapNotNull { nameById[it] }
+            .ifEmpty { listOfNotNull(nameById[entry.projectId]) }
+        OrderNameGenerator.displayName(entry, projectNames)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
     val sortedItems: StateFlow<List<OrderItemEntry>> = order
         .map { it?.items?.sortedBy { item -> item.beadCode } ?: emptyList() }
@@ -211,6 +226,13 @@ class OrderDetailViewModel @Inject constructor(
                 currentOrder.items,
                 newTargetGrams,
             )
+        }
+    }
+
+    fun setCustomName(name: String) {
+        val currentOrder = order.value ?: return
+        viewModelScope.launch {
+            orderRepository.setCustomName(currentOrder.orderId, name.trim().ifBlank { null })
         }
     }
 }

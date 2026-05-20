@@ -43,6 +43,7 @@ class AllOrdersViewModelTest {
         val result = viewModel.orders.value
         assertEquals(1, result.size)
         assertEquals(listOf("Alpha"), result[0].projectNames)
+        assertEquals("Alpha", result[0].displayName)
     }
 
     @Test

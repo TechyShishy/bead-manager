@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.model.AllOrderItem
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.OrderNameGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,7 +56,11 @@ class AddToOrderViewModel @Inject constructor(
             .map { order ->
                 val names = order.projectIds.mapNotNull { nameById[it] }
                     .ifEmpty { listOfNotNull(nameById[order.projectId]) }
-                AllOrderItem(order = order, projectNames = names)
+                AllOrderItem(
+                    order = order,
+                    projectNames = names,
+                    displayName = OrderNameGenerator.displayName(order, names),
+                )
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }

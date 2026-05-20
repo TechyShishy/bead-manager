@@ -7,6 +7,7 @@ import com.techyshishy.beadmanager.data.repository.InventoryRepository
 import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
+import com.techyshishy.beadmanager.domain.OrderNameGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +46,11 @@ class LowStockAddToOrderViewModel @Inject constructor(
         orders.map { order ->
             val names = order.projectIds.mapNotNull { nameById[it] }
                 .ifEmpty { listOfNotNull(nameById[order.projectId]) }
-            AllOrderItem(order = order, projectNames = names)
+            AllOrderItem(
+                order = order,
+                projectNames = names,
+                displayName = OrderNameGenerator.displayName(order, names),
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

@@ -42,7 +42,6 @@ import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.model.AllOrderItem
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import kotlinx.coroutines.launch
-import java.text.DateFormat
 
 /**
  * Order picker launched from [ProjectDetailScreen] when the user has selected beads and
@@ -196,16 +195,13 @@ private fun EligibleOrderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            val dateLabel = order.createdAt?.let { ts ->
-                DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
-            } ?: "…"
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.order_created, dateLabel),
+                    text = item.displayName,
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Spacer(Modifier.width(8.dp))
@@ -216,19 +212,6 @@ private fun EligibleOrderRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-            if (item.projectNames.isNotEmpty()) {
-                Text(
-                    text = item.projectNames.joinToString(", "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.all_orders_no_project),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }

@@ -75,7 +75,6 @@ import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import java.math.BigDecimal
-import java.text.DateFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +88,7 @@ fun OrderDetailScreen(
     LaunchedEffect(orderId) { viewModel.initialize(orderId) }
 
     val order by viewModel.order.collectAsState()
+    val displayName by viewModel.displayName.collectAsState()
     val sortedItems by viewModel.sortedItems.collectAsState()
     val beadLookup by viewModel.beadLookup.collectAsState()
     val beadColorNames by viewModel.beadColorNames.collectAsState()
@@ -97,6 +97,7 @@ fun OrderDetailScreen(
     val hasPendingItems = order?.items?.any { it.status == OrderItemStatus.PENDING.firestoreValue } == true
     val isFrozen = order?.items?.any { it.status == OrderItemStatus.FINALIZED.firestoreValue } == true
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    var showRenameSheet by rememberSaveable { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
     var editTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -112,16 +113,21 @@ fun OrderDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    val dateLabel = order?.createdAt?.let { ts ->
-                        DateFormat.getDateInstance(DateFormat.MEDIUM).format(ts.toDate())
-                    } ?: "…"
-                    Text(stringResource(R.string.order_created, dateLabel))
+                    Text(displayName.ifBlank { "…" })
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.navigate_back),
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showRenameSheet = true }) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = stringResource(R.string.rename_order),
                         )
                     }
                 },
@@ -256,6 +262,17 @@ fun OrderDetailScreen(
                 showAddSheet = false
             },
             onDismiss = { showAddSheet = false },
+        )
+    }
+
+    if (showRenameSheet) {
+        RenameOrderBottomSheet(
+            currentCustomName = order?.customName ?: "",
+            onSave = { name ->
+                viewModel.setCustomName(name)
+                showRenameSheet = false
+            },
+            onDismiss = { showRenameSheet = false },
         )
     }
 
@@ -613,6 +630,63 @@ private fun formatPackLabel(item: OrderItemEntry): String {
     val gramsStr = BigDecimal.valueOf(item.packGrams).stripTrailingZeros().toPlainString()
     val targetStr = BigDecimal.valueOf(item.targetGrams).stripTrailingZeros().toPlainString()
     return "${item.quantityUnits} × ${gramsStr}g  (target ${targetStr}g)"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RenameOrderBottomSheet(
+    currentCustomName: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var nameInput by rememberSaveable { mutableStateOf(currentCustomName) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.rename_order),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            OutlinedTextField(
+                value = nameInput,
+                onValueChange = { nameInput = it },
+                label = { Text(stringResource(R.string.order_custom_name_hint)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Done,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.order_custom_name_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+                TextButton(onClick = { onSave(nameInput) }) {
+                    Text(stringResource(R.string.save))
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

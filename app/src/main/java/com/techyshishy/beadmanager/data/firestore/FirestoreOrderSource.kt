@@ -217,4 +217,16 @@ class FirestoreOrderSource @Inject constructor(
         return ordersRef(uid).document(orderId).get().await()
             .toObject(OrderEntry::class.java)
     }
+
+    /**
+     * Writes [customName] to an order document using merge so only that field is touched.
+     * Pass null to clear the override and revert to the dynamic name.
+     */
+    suspend fun setCustomName(orderId: String, customName: String?) {
+        val uid = requireUid()
+        val value: Any = customName ?: FieldValue.delete()
+        ordersRef(uid).document(orderId)
+            .set(mapOf("customName" to value), SetOptions.merge())
+            .await()
+    }
 }

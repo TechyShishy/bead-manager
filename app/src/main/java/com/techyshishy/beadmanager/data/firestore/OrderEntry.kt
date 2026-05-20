@@ -33,4 +33,10 @@ data class OrderEntry(
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val lastUpdated: Timestamp? = null,
     val items: List<OrderItemEntry> = emptyList(),
+    /**
+     * Optional user-supplied display name that overrides the dynamic name derived from
+     * associated projects. Null (or absent in Firestore) means use the computed name.
+     * An empty string is treated the same as null.
+     */
+    val customName: String? = null,
 )
