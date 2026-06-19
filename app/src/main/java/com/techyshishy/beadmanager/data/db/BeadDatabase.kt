@@ -23,13 +23,15 @@ import kotlinx.serialization.json.Json
  *       and lastCheckedEpochSeconds (INT nullable) for live price-check results
  *   5 — vendor_packs gains tier2PriceCents, tier3PriceCents, tier4PriceCents (INT nullable)
  *       for FMG quantity-break discount tiers (qty 15–49, 50–99, 100+)
+ *   6 — beads.imageUrl and beads.officialUrl updated from
+ *       www.miyuki-beads.co.jp/directory/ to directory.miyuki-beads.co.jp/ subdomain
  *
  * User inventory is intentionally NOT stored here; it lives in Firestore
  * so it syncs across devices automatically.
  */
 @Database(
     entities = [BeadEntity::class, VendorLinkEntity::class, VendorPackEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(BeadDatabase.Converters::class)
@@ -103,6 +105,22 @@ abstract class BeadDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE vendor_packs ADD COLUMN tier2PriceCents INTEGER")
                 db.execSQL("ALTER TABLE vendor_packs ADD COLUMN tier3PriceCents INTEGER")
                 db.execSQL("ALTER TABLE vendor_packs ADD COLUMN tier4PriceCents INTEGER")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Update Miyuki URLs from www.miyuki-beads.co.jp/directory/ to directory.miyuki-beads.co.jp/
+                db.execSQL(
+                    """UPDATE beads SET imageUrl = REPLACE(imageUrl,
+                    'https://www.miyuki-beads.co.jp/directory/',
+                    'https://directory.miyuki-beads.co.jp/')""".trimIndent()
+                )
+                db.execSQL(
+                    """UPDATE beads SET officialUrl = REPLACE(officialUrl,
+                    'https://www.miyuki-beads.co.jp/directory/',
+                    'https://directory.miyuki-beads.co.jp/')""".trimIndent()
+                )
             }
         }
     }

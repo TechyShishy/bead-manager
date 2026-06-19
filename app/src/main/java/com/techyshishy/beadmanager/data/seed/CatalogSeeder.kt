@@ -41,7 +41,7 @@ class CatalogSeeder @Inject constructor(
 ) {
 
     companion object {
-        private const val CATALOG_VERSION = 6
+        private const val CATALOG_VERSION = 7
         private const val CATALOG_ASSET = "delica-beads.json"
 
         private val KEY_CATALOG_VERSION = intPreferencesKey("catalog_version")
