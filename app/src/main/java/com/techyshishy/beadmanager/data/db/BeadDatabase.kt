@@ -110,16 +110,16 @@ abstract class BeadDatabase : RoomDatabase() {
 
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Update Miyuki URLs from www.miyuki-beads.co.jp/directory/ to directory.miyuki-beads.co.jp/
                 db.execSQL(
-                    """UPDATE beads SET imageUrl = REPLACE(imageUrl,
-                    'https://www.miyuki-beads.co.jp/directory/',
-                    'https://directory.miyuki-beads.co.jp/')""".trimIndent()
-                )
-                db.execSQL(
-                    """UPDATE beads SET officialUrl = REPLACE(officialUrl,
-                    'https://www.miyuki-beads.co.jp/directory/',
-                    'https://directory.miyuki-beads.co.jp/')""".trimIndent()
+                    """
+                    UPDATE beads SET
+                        imageUrl = REPLACE(imageUrl,
+                            'https://www.miyuki-beads.co.jp/directory/',
+                            'https://directory.miyuki-beads.co.jp/'),
+                        officialUrl = REPLACE(officialUrl,
+                            'https://www.miyuki-beads.co.jp/directory/',
+                            'https://directory.miyuki-beads.co.jp/')
+                    """.trimIndent()
                 )
             }
         }
