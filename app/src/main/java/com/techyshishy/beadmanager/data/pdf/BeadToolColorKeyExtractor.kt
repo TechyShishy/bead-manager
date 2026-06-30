@@ -48,7 +48,12 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      *    color key text uses an alternative format (e.g. `"A\nDB-101\nBlack\nCount:1234"`
      *    without a `"Chart #:"` prefix). Both tokens must co-occur to avoid false positives
      *    from pages that contain only one of them.
-     * 3. `"Color count"` (case-insensitive) — English-language BeadTool exports include a
+     * 3. `"^# [A-Z]{1,2}\s*$"` (full-line hash-space-letter) + `"DB-"` — ShinyBeadArt/Jane
+     *    Junkert exports use `"# A"` entries instead of `"Chart #:A"`, no `"Count:"` label,
+     *    and no `"Color count"` metadata line. The full-line anchor (`\s*$`) prevents false
+     *    positives from lines like `"# Color Scheme"` on non-color-key pages that happen to
+     *    contain `"DB-"` elsewhere. Supports two-letter codes (`"# AA"`).
+     * 4. `"Color count"` (case-insensitive) — English-language BeadTool exports include a
      *    metadata line such as `"Color count - 18. Bead count - 42000."` on the color key
      *    page. This is a fallback for rasterized color-key pages (e.g. CraftPatternsShop/
      *    BeadTool exports) where the chart entries are images: PDFBox cannot read `"Chart #:"`
@@ -74,6 +79,13 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         // signal (Chart #:) is more specific and takes precedence.
         val countAndDb = pages.indexOfFirst { "Count:" in it && "DB-" in it }
         if (countAndDb != -1) return countAndDb
+        // ShinyBeadArt/Jane Junkert format: color entries use "# A" (hash-space-letter)
+        // rather than "Chart #:A". No "Count:" label — weights are in "N g" form. No
+        // "Color count" metadata line. The "^# [A-Z]" anchor distinguishes this from
+        // bead-graph pages (standalone letters) and word-chart pages ("Row N (L) ...").
+        val shinyBeadArtPattern = Regex("""^# [A-Z]{1,2}\s*$""", RegexOption.MULTILINE)
+        val shinyBeadArt = pages.indexOfFirst { shinyBeadArtPattern.containsMatchIn(it) && "DB-" in it }
+        if (shinyBeadArt != -1) return shinyBeadArt
         // Fallback: English-language CraftPatternsShop/BeadTool exports include a
         // "Color count - N" metadata line on the rasterized color-key page. When
         // the color key is an image (not selectable text), PDFBox cannot see the
@@ -86,7 +98,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     /**
      * Parses raw PDFBox-extracted text from a color key page into a letter-to-DB-code map.
      *
-     * Three text formats are recognised (in fallback order):
+     * Four text formats are recognised (in fallback order):
      *
      * **Standard BeadTool 4 format** (primary):
      * ```
@@ -111,7 +123,20 @@ class BeadToolColorKeyExtractor @Inject constructor() {
      * …
      * ```
      *
-     * **Inline format** (fallback 2): letter and DB code on the same line, separated by '='.
+     * **ShinyBeadArt format** (fallback 2): used by Jane Junkert / ShinyBeadArt exports where
+     * each entry is prefixed with `"# "` and separated from the DB code by a blank line
+     * (an image swatch placeholder that PDFBox cannot read):
+     * ```
+     * # A
+     *
+     * DB-0209
+     * Opaque Light Grey
+     * 1050 5,5 g
+     * # B
+     * …
+     * ```
+     *
+     * **Inline format** (fallback 3): letter and DB code on the same line, separated by '='.
      * Used by some exports (e.g. Deadly Potion.pdf) where OCR extraction produces entries like:
      * ```
      * A = DB-101
@@ -184,6 +209,23 @@ class BeadToolColorKeyExtractor @Inject constructor() {
 
             // Only accept if a DB code appears within the next COMPACT_FORMAT_WINDOW characters — avoids
             // pairing with a distant DB code that belongs to a different entry.
+            val windowEnd = minOf(ocrText.length, letterMatch.range.last + COMPACT_FORMAT_WINDOW)
+            val window = ocrText.substring(letterMatch.range.last + 1, windowEnd)
+            val dbMatch = dbCodeRegex.find(window) ?: continue
+            result[letter] = normalizeDbCode(dbMatch.groupValues[1])
+        }
+        if (result.isNotEmpty()) return result
+
+        // ShinyBeadArt/Jane Junkert format: entries appear as "# A\n  \nDB-0209\nName\n..."
+        // The "# " prefix is not consumed by the standalone-letter compact pass above.
+        // A blank line (image swatch placeholder) typically separates the letter from the
+        // DB code, but the window-based search handles any inter-entry spacing.
+        val shinyBeadArtLetter = Regex("""^# ([A-Z]{1,2})\s*$""", RegexOption.MULTILINE)
+        var shinySearchFrom = 0
+        while (true) {
+            val letterMatch = shinyBeadArtLetter.find(ocrText, shinySearchFrom) ?: break
+            shinySearchFrom = letterMatch.range.last + 1
+            val letter = letterMatch.groupValues[1]
             val windowEnd = minOf(ocrText.length, letterMatch.range.last + COMPACT_FORMAT_WINDOW)
             val window = ocrText.substring(letterMatch.range.last + 1, windowEnd)
             val dbMatch = dbCodeRegex.find(window) ?: continue

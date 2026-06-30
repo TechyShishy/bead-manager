@@ -137,6 +137,67 @@ class BeadToolColorKeyExtractorTest {
         assertEquals(1, extractor.findColorKeyPageIndex(pages))
     }
 
+    @Test
+    fun `findColorKeyPageIndex returns page index using ShinyBeadArt hash-space-letter signal`() {
+        // ShinyBeadArt/Jane Junkert exports use "# A" entries: no "Chart #:", no "Count:",
+        // no "Color count". The line-anchored "# [A-Z]" + "DB-" signal must find the page.
+        val pages = listOf(
+            "ShinyBeadArt         copyright Jane Junkert\nPeyote Pattern <<AMAZING CUBES<<\n",
+            "Color Scheme\n# A \n  \nDB-0209\nOpaque Light Grey\n1050 5,5 g\n# B \n  \nDB-0010\nOpaque Black\n1050 5,5 g\n",
+            "Row 1 (L)  (15)A\n",
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex ShinyBeadArt signal requires DB code on same page`() {
+        // "# A" alone is not enough — DB- must also be present.
+        val pages = listOf(
+            "# A \n# B \nNo bead codes here\n",
+        )
+        assertEquals(-1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex primary Chart and DB signal wins over ShinyBeadArt signal`() {
+        // A standard BeadTool page with "Chart #:"+DB- must be preferred over a ShinyBeadArt page.
+        val pages = listOf(
+            "# A \n  \nDB-0200\nOpaque White\n",          // ShinyBeadArt signal
+            "Chart #:A\nDB-0200\nOpaque White\nCount:100\n",  // primary signal
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex ShinyBeadArt signal wins over Color count fallback`() {
+        // Signal 3 (ShinyBeadArt) must take precedence over signal 4 (color count fallback)
+        // regardless of page order.
+        val pages = listOf(
+            "Color count - 3. Bead count - 2000.\n",           // signal 4 only
+            "# A \n  \nDB-0209\nOpaque Light Grey\n",          // signal 3
+        )
+        assertEquals(1, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex ShinyBeadArt signal matches two-letter codes`() {
+        // The full-line pattern ^# [A-Z]{1,2}\s*$ must accept two-letter entries like "# AA".
+        val pages = listOf(
+            "# AA \n  \nDB-2143\nOpaque Navy\n# AB \n  \nDB-1054\nOpaque Gold\n",
+        )
+        assertEquals(0, extractor.findColorKeyPageIndex(pages))
+    }
+
+    @Test
+    fun `findColorKeyPageIndex ShinyBeadArt signal does not match multi-word hash lines`() {
+        // Lines like "# Color Scheme" or "# Count - 5" must not trigger the signal —
+        // the full-line anchor (\s*$) requires the line to contain only the letter(s).
+        val pages = listOf(
+            "# Color Scheme\nDB-0209\nOpaque Light Grey\n",
+        )
+        assertEquals(-1, extractor.findColorKeyPageIndex(pages))
+    }
+
     // ── parseColorKeyText ─────────────────────────────────────────────────────
 
     @Test
@@ -694,6 +755,54 @@ class BeadToolColorKeyExtractorTest {
         assertEquals("DB0101", result["A"])
         assertEquals("DB0201", result["B"])
         // Inline entries should not override the compact entries
+        assertEquals(2, result.size)
+    }
+
+    // ── parseColorKeyText ShinyBeadArt format ─────────────────────────────────
+
+    @Test
+    fun `parseColorKeyText parses ShinyBeadArt hash-space-letter format`() {
+        // Regression for ShinyBeadArt/Jane Junkert exports (Amazing Cubes, Line-Flowers,
+        // Star of David): color entries use "# A" prefix with a blank swatch line before
+        // the DB code. Matches real page-5 text from AMAZINGCUBES PDF.
+        val ocrText = "# A \n  \nDB-0209 \nOpaque Light Grey \n1050 5,5 g \n" +
+            "# B \n  \nDB-0010  \nOpaque Black \n1050 5,5 g \n" +
+            "# C \n  \nDB-0307 \nMatte Metallic Silver Grey \n1050 5,5 g \n"
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0209", result["A"])
+        assertEquals("DB0010", result["B"])
+        assertEquals("DB0307", result["C"])
+        assertEquals(3, result.size)
+    }
+
+    @Test
+    fun `parseColorKeyText ShinyBeadArt format handles two-color set`() {
+        // Matches real page-5 text from LINE-FLOWERS PDF (2 colors).
+        val ocrText = "# A \n  \nDB-0200 \nOpaque White \n1594 8 g \n" +
+            "# B \n  \nDB-0010  \nOpaque Black \n1586 8 g \n"
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0200", result["A"])
+        assertEquals("DB0010", result["B"])
+        assertEquals(2, result.size)
+    }
+
+    @Test
+    fun `parseColorKeyText ShinyBeadArt format does not fire when standard Chart hash format is present`() {
+        val ocrText = "Chart #:A\nDB-101\nCount:100\nChart #:B\nDB-201\nCount:200\n" +
+            "# C \n  \nDB-999 \n"
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
+        assertEquals(2, result.size)
+    }
+
+    @Test
+    fun `parseColorKeyText ShinyBeadArt format does not fire when compact format is present`() {
+        val ocrText = "A\nDB-101\nBlack\nCount:100\nB\nDB-201\nWhite\nCount:200\n" +
+            "# C \n  \nDB-999 \n"
+        val result = extractor.parseColorKeyText(ocrText)
+        assertEquals("DB0101", result["A"])
+        assertEquals("DB0201", result["B"])
         assertEquals(2, result.size)
     }
 
