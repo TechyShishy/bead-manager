@@ -526,6 +526,17 @@ class BeadToolColorKeyExtractorTest {
     }
 
     @Test
+    fun `parseBlockCounts collects every Count value and ignores the bead count prose`() {
+        val blocks = listOf(
+            "Chart #:A\nDB-0010",
+            "Black\nCount:19462",
+            "Count:3259",
+            "Color count- 27. Bead count - 117992.",
+        )
+        assertEquals(listOf(19462, 3259), extractor.parseBlockCounts(blocks))
+    }
+
+    @Test
     fun `parseBlockTexts returns empty map for empty block list`() {
         assertTrue(extractor.parseBlockTexts(emptyList()).isEmpty())
     }

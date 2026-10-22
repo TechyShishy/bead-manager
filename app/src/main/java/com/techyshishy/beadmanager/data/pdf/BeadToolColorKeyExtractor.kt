@@ -17,6 +17,12 @@ import java.io.IOException
 import javax.inject.Inject
 
 /**
+ * Color key recovered by OCR: the letter-to-DB-code map in read order, plus every bead
+ * count printed on the page (unassociated with letters — block order is not reliable).
+ */
+data class OcrColorKey(val colorMap: Map<String, String>, val counts: List<Int>)
+
+/**
  * Extracts the color key (letter → DB code) from a BeadTool 4 PDF.
  *
  * The color key is embedded as a rasterized image on a dedicated page — it is
@@ -274,7 +280,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         uri: Uri,
         pageIndex: Int,
         diagnostics: PdfImportDiagnosticsCollector? = null,
-    ): Map<String, String> = withContext(Dispatchers.IO) {
+    ): OcrColorKey = withContext(Dispatchers.IO) {
         val pfd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw PdfParseException.NotPdf(
                 IOException("Cannot open file descriptor for URI: $uri"),
@@ -310,7 +316,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
                             diagnostics?.ocrBlockTexts?.addAll(blocks.map { it.text })
                             val colorMap = parseTextBlocks(blocks)
                             diagnostics?.ocrColorMap = colorMap
-                            colorMap
+                            OcrColorKey(colorMap, parseBlockCounts(blocks.map { it.text }))
                         }
                     } finally {
                         bitmap.recycle()
@@ -497,6 +503,16 @@ class BeadToolColorKeyExtractor @Inject constructor() {
     }
 
     /**
+     * Returns every `Count:N` value across [blockTexts], in read order. Not associated with
+     * letters: ML Kit interleaves the blocks of adjacent entries, so a count's position
+     * does not reliably identify its entry.
+     */
+    internal fun parseBlockCounts(blockTexts: List<String>): List<Int> =
+        blockTexts.flatMap { text ->
+            COUNT_REGEX.findAll(text).mapNotNull { it.groupValues[1].toIntOrNull() }.toList()
+        }
+
+    /**
      * Normalizes OCR-garbled chart letters to uppercase.
      *
      * Substitutions applied in order:
@@ -528,6 +544,7 @@ class BeadToolColorKeyExtractor @Inject constructor() {
         const val TAG = "PdfImport"
         const val RENDER_DPI = 300f
         const val POINTS_PER_INCH = 72f
+        val COUNT_REGEX = Regex("""Count:\s*(\d+)""")
         // Maximum character distance between a standalone letter and its DB code in
         // the compact format. Generous enough to span a color name + Count line, but
         // tight enough to avoid pairing a letter with a distant unrelated DB code.

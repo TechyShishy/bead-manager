@@ -11,6 +11,7 @@ import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpStep
 import com.techyshishy.beadmanager.data.pdf.BeadToolColorKeyExtractor
 import com.techyshishy.beadmanager.data.pdf.BeadToolPdfParser
+import com.techyshishy.beadmanager.data.pdf.ColorKeyReconciler
 import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsCollector
 import com.techyshishy.beadmanager.data.pdf.PdfImportDiagnosticsWriter
 import com.techyshishy.beadmanager.data.pdf.PdfParseException
@@ -252,11 +253,11 @@ class ImportPdfProjectUseCase @Inject constructor(
             }
             // Text extraction incomplete — fall through to ML Kit OCR (standard BeadTool 4 path).
             Log.d(TAG, "Text color key partial or empty (${textColorMap.size} entries) — running OCR on page $colorKeyIndex")
-            val colorMap = try {
+            val ocrKey = try {
                 colorKeyExtractor.extractColorKey(
                     contentResolver, uri, colorKeyIndex, diagnostics
                 ).also {
-                    Log.d(TAG, "OCR color map: ${it.size} entries = ${it.keys.sorted()}")
+                    Log.d(TAG, "OCR color map: ${it.colorMap.size} entries = ${it.colorMap.keys.sorted()}")
                 }
             } catch (e: PdfParseException.NotPdf) {
                 Log.e(TAG, "OCR: PdfRenderer failed on page $colorKeyIndex", e)
@@ -268,6 +269,22 @@ class ImportPdfProjectUseCase @Inject constructor(
                 Log.e(TAG, "OCR: color key extraction failed on page $colorKeyIndex", e)
                 diagnostics.failureReason = "BeadTool OCR: extractor exception — ${e::class.simpleName}: ${e.message}"
                 return ParseOutcome.Failure(ImportResult.Failure.NoPatternFound)
+            }
+            // Relabel OCR-garbled letters (e.g. "I" read as "1I") against the pattern's letters.
+            val reconciliation = ColorKeyReconciler.reconcile(
+                ocrColorMap = ocrKey.colorMap,
+                ocrCounts = ocrKey.counts,
+                usedLetters = usedLetters,
+                variantLetterCounts = beadToolProjects.map { project ->
+                    project.rows.flatMap { it.steps }
+                        .groupingBy { it.colorLetter }
+                        .fold(0) { total, step -> total + step.count }
+                },
+            )
+            val colorMap = reconciliation.colorMap
+            diagnostics.ocrCorrections = reconciliation.corrections
+            if (reconciliation.corrections.isNotEmpty()) {
+                Log.w(TAG, "OCR labels corrected against pattern letters: ${reconciliation.corrections}")
             }
             // Validate that OCR recovered an entry for every color letter used across all variants.
             val missingFromOcr = usedLetters - colorMap.keys

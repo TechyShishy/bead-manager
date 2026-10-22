@@ -95,6 +95,9 @@ class PdfImportDiagnosticsCollector {
     /** Color map recovered by OCR. */
     var ocrColorMap: Map<String, String>? = null
 
+    /** OCR labels relabeled to pattern letters by [ColorKeyReconciler] (stray → letter). */
+    var ocrCorrections: Map<String, String>? = null
+
     /** Letters used by the pattern that were absent from [ocrColorMap]. */
     var ocrMissingLetters: Set<String>? = null
 
@@ -206,6 +209,7 @@ class PdfImportDiagnosticsCollector {
         appendLine("Color key page  : ${if (colorKeyPageIndex == -1) "not found" else colorKeyPageIndex}")
         appendLine("OCR blocks      : ${ocrBlockCount ?: "N/A"}")
         ocrColorMap?.let { appendLine("OCR color map   : $it") }
+        ocrCorrections?.takeIf { it.isNotEmpty() }?.let { appendLine("OCR corrections : $it") }
         ocrMissingLetters?.let { appendLine("OCR missing     : $it") }
         if (ocrBlockTexts.isNotEmpty()) {
             appendLine()

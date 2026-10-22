@@ -9,6 +9,7 @@ import com.techyshishy.beadmanager.data.firestore.ProjectEntry
 import com.techyshishy.beadmanager.data.firestore.ProjectRgpRow
 import com.techyshishy.beadmanager.data.pdf.BeadToolColorKeyExtractor
 import com.techyshishy.beadmanager.data.pdf.BeadToolPdfParser
+import com.techyshishy.beadmanager.data.pdf.OcrColorKey
 import com.techyshishy.beadmanager.data.pdf.PdfParseException
 import com.techyshishy.beadmanager.data.pdf.PdfProject
 import com.techyshishy.beadmanager.data.pdf.PdfRow
@@ -159,7 +160,7 @@ class ImportPdfProjectUseCaseTest {
         val extractor: BeadToolColorKeyExtractor = mockk {
             every { findColorKeyPageIndex(any()) } returns 0
             every { parseColorKeyText(any()) } returns emptyMap()  // text path yields nothing → fall through to OCR
-            coEvery { extractColorKey(any(), any(), any(), any()) } returns mapOf("A" to "DB-0001")
+            coEvery { extractColorKey(any(), any(), any(), any()) } returns OcrColorKey(mapOf("A" to "DB-0001"), emptyList())
         }
         val result = buildUseCase(beadToolParser = btParser, colorKeyExtractor = extractor).detect(uri)
         assertTrue("Expected NoPatternFound but got $result", result is ImportResult.Failure.NoPatternFound)
@@ -333,7 +334,7 @@ class ImportPdfProjectUseCaseTest {
         val extractor: BeadToolColorKeyExtractor = mockk {
             every { findColorKeyPageIndex(any()) } returns 0
             every { parseColorKeyText(any()) } returns emptyMap()  // text path yields nothing → fall through to OCR
-            coEvery { extractColorKey(any(), any(), any(), any()) } returns ocrColorMap
+            coEvery { extractColorKey(any(), any(), any(), any()) } returns OcrColorKey(ocrColorMap, emptyList())
         }
         val capturedEntry = slot<ProjectEntry>()
         val capturedRows = slot<List<ProjectRgpRow>>()

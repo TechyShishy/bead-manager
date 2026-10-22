@@ -835,4 +835,31 @@ class BeadToolPdfParserTest {
         assertEquals(3, result.rows.size)
         assertEquals(8, result.rows[1].steps.sumOf { it.count })
     }
+
+    @Test
+    fun `parseAllVariants keeps rows that precede the Peyote marker on the same page`() {
+        // Regression for 176-Dragons-Wrath-Peyote.pdf: text extraction emitted the
+        // "Word Chart (Peyote)" heading after Rows 1&2-3 on the same page. Starting the
+        // section at the marker dropped Row 1 and the parse failed.
+        val pages = listOf(
+            "Test Pattern\nBead Graph (Peyote)\nA\nB\n",
+            "Row 1&2 (L) (1)A, (1)B, (1)A, (1)B\n" +
+                    "Row 3 (R) (2)A, (1)B, (1)\n" +
+                    "Word Chart (Peyote)\n\n",
+            "A\nRow 4 (L) (4)B",
+        )
+        val result = parser.parse(pages)
+        assertEquals(listOf(1, 2, 3, 4), result.rows.map { it.id })
+        assertEquals(4, result.rows[2].steps.sumOf { it.count })
+    }
+
+    @Test
+    fun `parseAllVariants excludes the Bead Graph pages before the Peyote marker page`() {
+        val pages = listOf(
+            "Bead Graph (Peyote)\nRow 9 (R) (1)Z\n",
+            "Word Chart (Peyote)\nRow 1 (R) (5)A\nRow 2 (L) (5)B\n",
+        )
+        val result = parser.parse(pages)
+        assertEquals(setOf("A", "B"), result.rows.flatMap { it.steps }.map { it.colorLetter }.toSet())
+    }
 }

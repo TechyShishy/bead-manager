@@ -60,7 +60,7 @@ class BeadToolPdfParser @Inject constructor() {
         diagnostics?.beadToolAttempted = true
         val allText = pages.joinToString("\n")
         val stripped = stripPageHeaders(allText)
-        val isolated = isolatePeyoteSection(stripped)
+        val isolated = isolatePeyoteSection(pages)
         val sectionText = isolated ?: stripped
         val cleaned = cleanText(sectionText)
         val legendStripped = stripLegendBlocks(cleaned)
@@ -156,22 +156,27 @@ class BeadToolPdfParser @Inject constructor() {
             .replace(Regex(""" Page \d+.+$""", RegexOption.MULTILINE), "")
 
     /**
-     * Isolates the Peyote Word Chart section from [stripped] text when the PDF
-     * contains explicit "Word Chart (Peyote)" / "Word Chart (Loom)" section
-     * markers (present in BeadTool 4 exports that include both stitch types).
+     * Isolates the Peyote Word Chart section from [pages] when the PDF contains explicit
+     * "Word Chart (Peyote)" / "Word Chart (Loom)" section markers (present in BeadTool 4
+     * exports that include both stitch types).
      *
-     * Returns the substring starting at "Word Chart (Peyote)" and ending before
-     * any subsequent "Word Chart (Loom)" marker, or null when no peyote marker
-     * is found — in which case the caller falls back to the full stripped text.
+     * Returns the header-stripped text from the start of the page holding the peyote
+     * marker, ending before any subsequent "Word Chart (Loom)" marker, or null when no
+     * peyote marker is found — in which case the caller falls back to the full text.
+     *
+     * The section starts at the page boundary, not at the marker: text extraction can
+     * emit a page's heading after rows that sit above it on the same page, and starting
+     * at the marker would drop those leading rows (including Row 1).
      */
-    private fun isolatePeyoteSection(stripped: String): String? {
+    private fun isolatePeyoteSection(pages: List<String>): String? {
         val peyoteMarker = "Word Chart (Peyote)"
-        val startIdx = stripped.indexOf(peyoteMarker)
-        if (startIdx == -1) return null
+        val markerPage = pages.indexOfFirst { peyoteMarker in it }
+        if (markerPage == -1) return null
+        val section = stripPageHeaders(pages.drop(markerPage).joinToString("\n"))
         val loomMarker = "Word Chart (Loom)"
-        val endIdx = stripped.indexOf(loomMarker, startIdx + peyoteMarker.length)
-            .takeIf { it != -1 } ?: stripped.length
-        return stripped.substring(startIdx, endIdx)
+        val endIdx = section.indexOf(loomMarker, section.indexOf(peyoteMarker) + peyoteMarker.length)
+            .takeIf { it != -1 } ?: section.length
+        return section.substring(0, endIdx)
     }
 
     /**
