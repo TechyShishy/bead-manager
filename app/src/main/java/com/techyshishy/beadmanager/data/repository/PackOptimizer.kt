@@ -25,8 +25,8 @@ data class VendorSelection(
  * Chooses the cheapest vendor and pack combination for [targetGrams] of [beadCode].
  *
  * Only packs with a non-null [VendorPackEntity.priceCents] are eligible. Within each vendor,
- * the combination is computed via unbounded-knapsack DP (same algorithm used in the add-item
- * UI). Across vendors, the vendor whose combination costs the least total wins.
+ * the combination is the cheapest one that covers the target ([computeCheapestCombination]).
+ * Across vendors, the vendor whose combination costs the least total wins.
  *
  * Returns null when no vendor has a complete pack catalog with prices for [beadCode].
  */
@@ -43,7 +43,7 @@ fun selectCheapestVendor(
     var best: VendorSelection? = null
 
     for ((vendorKey, packs) in byVendor) {
-        val combination = computeOptimalCombination(packs.map { it.grams }, targetGrams)
+        val combination = computeCheapestCombination(packs, targetGrams)
         if (combination.isEmpty()) continue
 
         // Map each pack in the combination back to its entity to get the price.
@@ -65,54 +65,74 @@ fun selectCheapestVendor(
 }
 
 /**
- * Returns the combination of packs from [availablePacks] that reaches [targetGrams] with
- * minimum waste, and among equal-waste solutions, the fewest total units.
+ * Returns the cheapest combination of [packs] that reaches [targetGrams]. Among equally
+ * cheap combinations, the one with the least total grams (least waste) wins, then the
+ * one with the fewest units.
+ *
+ * Cost is the sum of [VendorPackEntity.priceCents] — the tier-1 unit price. FMG
+ * quantity-break repricing depends on the whole order's unit count, so it is applied
+ * afterward by [applyFmgTier] and [analyzeBuyUp] rather than folded into this per-bead choice.
  *
  * Uses unbounded knapsack DP scaled to integers (×10) so that half-gram pack sizes
  * (e.g. 7.5g) become clean integers (75). All known Delica pack sizes are multiples
- * of 0.5g, so the scale factor of 10 is always exact.
+ * of 0.5g, so the scale factor of 10 is always exact. Totals up to the target plus the
+ * largest pack are searched: any combination beyond that contains a pack whose removal
+ * still reaches the target at lower cost.
  *
- * Returns an empty list if [availablePacks] is empty, [targetGrams] ≤ 0, or the target
- * exceeds the practical ceiling (10 kg).
+ * Packs without a price are ignored. Returns an empty list if no priced pack remains,
+ * [targetGrams] ≤ 0, or the target exceeds the practical ceiling (10 kg).
  */
-fun computeOptimalCombination(
-    availablePacks: List<Double>,
+fun computeCheapestCombination(
+    packs: List<VendorPackEntity>,
     targetGrams: Double,
 ): List<PackCombination> {
-    if (availablePacks.isEmpty() || targetGrams <= 0.0 || targetGrams > 10_000.0) return emptyList()
+    if (targetGrams <= 0.0 || targetGrams > 10_000.0) return emptyList()
 
     val scale = 10
-    val targetInt = (targetGrams * scale).roundToInt()
-    val packsInt = availablePacks
-        .map { (it * scale).roundToInt() }
-        .filter { it > 0 }
-        .distinct()
-    if (packsInt.isEmpty()) return emptyList()
+    val priceByScaledGrams: Map<Int, Int> = packs
+        .mapNotNull { pack ->
+            val price = pack.priceCents ?: return@mapNotNull null
+            val scaled = (pack.grams * scale).roundToInt()
+            if (scaled > 0) scaled to price else null
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, prices) -> prices.min() }
+    if (priceByScaledGrams.isEmpty()) return emptyList()
 
-    val maxPack = packsInt.max()
+    val targetInt = (targetGrams * scale).roundToInt()
+    val maxPack = priceByScaledGrams.keys.max()
     val ceiling = targetInt + maxPack
 
-    val INF = Int.MAX_VALUE / 2
-    val dp = IntArray(ceiling + 1) { INF }
+    // cost[i] / units[i]: cheapest (then fewest-unit) way to reach exactly i scaled grams.
+    val INF = Long.MAX_VALUE / 2
+    val cost = LongArray(ceiling + 1) { INF }
+    val units = IntArray(ceiling + 1)
     val parent = IntArray(ceiling + 1) { -1 }
-    dp[0] = 0
+    cost[0] = 0
 
     for (i in 1..ceiling) {
-        for (pack in packsInt) {
-            if (pack <= i && dp[i - pack] < INF) {
-                val candidate = dp[i - pack] + 1
-                if (candidate < dp[i]) {
-                    dp[i] = candidate
+        for ((pack, price) in priceByScaledGrams) {
+            if (pack <= i && cost[i - pack] < INF) {
+                val candidateCost = cost[i - pack] + price
+                val candidateUnits = units[i - pack] + 1
+                if (candidateCost < cost[i] || (candidateCost == cost[i] && candidateUnits < units[i])) {
+                    cost[i] = candidateCost
+                    units[i] = candidateUnits
                     parent[i] = pack
                 }
             }
         }
     }
 
-    val reachable = (targetInt..ceiling).firstOrNull { dp[it] < INF } ?: return emptyList()
+    // Ascending scan with a strict improvement test keeps the smallest total on cost ties.
+    var best = -1
+    for (total in targetInt..ceiling) {
+        if (cost[total] < INF && (best == -1 || cost[total] < cost[best])) best = total
+    }
+    if (best == -1) return emptyList()
 
     val counts = mutableMapOf<Int, Int>()
-    var remaining = reachable
+    var remaining = best
     while (remaining > 0) {
         val p = parent[remaining]
         counts[p] = (counts[p] ?: 0) + 1
@@ -122,7 +142,7 @@ fun computeOptimalCombination(
     return counts
         .map { (scaledGrams, qty) ->
             PackCombination(
-                packGrams = availablePacks.first { (it * scale).roundToInt() == scaledGrams },
+                packGrams = packs.first { (it.grams * scale).roundToInt() == scaledGrams }.grams,
                 quantity = qty,
             )
         }
@@ -200,7 +220,7 @@ fun selectPreferredVendor(
         val packs = byVendor[vendorKey] ?: continue
         val available = packs.filter { it.available != false }
         if (available.isEmpty()) continue
-        val combination = computeOptimalCombination(available.map { it.grams }, targetGrams)
+        val combination = computeCheapestCombination(available, targetGrams)
         if (combination.isEmpty()) continue
         val scale = 10
         val totalCents = combination.sumOf { combo ->
