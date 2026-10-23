@@ -401,6 +401,31 @@ class OrderRepository @Inject constructor(
     }
 
     /**
+     * Swaps a bead's [replaced] rows for [replacements] in a single write. Rows are matched
+     * to [replaced] by (beadCode, vendorKey, packGrams) identity; everything else in
+     * [allItems], including RECEIVED and SKIPPED rows of the same bead, is left untouched.
+     *
+     * Throws [IllegalStateException] when a replacement shares its identity with a retained
+     * row, since order items are addressed by that identity.
+     */
+    suspend fun replaceItems(
+        orderId: String,
+        allItems: List<OrderItemEntry>,
+        replaced: List<OrderItemEntry>,
+        replacements: List<OrderItemEntry>,
+    ) {
+        fun OrderItemEntry.identity() = Triple(beadCode, vendorKey, packGrams)
+        val replacedIdentities = replaced.map { it.identity() }.toSet()
+        val retained = allItems.filter { it.identity() !in replacedIdentities }
+        val updated = retained + replacements
+        val duplicate = updated.groupBy { it.identity() }.entries.firstOrNull { it.value.size > 1 }
+        check(duplicate == null) {
+            "Order item identity collision: ${duplicate?.key}"
+        }
+        source.updateItems(orderId, updated)
+    }
+
+    /**
      * Updates the quantity and pack size of a PENDING line item.
      *
      * Identity is matched by (beadCode, vendorKey, packGrams). When [newPackGrams] differs from

@@ -16,6 +16,7 @@ import com.techyshishy.beadmanager.data.repository.PriceCheckResult
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -150,6 +151,64 @@ class FinalizeOrderUseCaseTest {
             listOf("ac" to 1, "fmg" to 2),
             result.items.map { it.vendorKey to it.quantityUnits },
         )
+    }
+
+    @Test
+    fun `replanBead keeps unchanged rows and re-finalizes changed ones without invoice`() = runTest {
+        val acPack = fmgPack.copy(id = 2, vendorKey = "ac", grams = 50.0, priceCents = 3000, stockQuantity = 1)
+        val fmgPack50 = fmgPack.copy(id = 3, grams = 50.0, priceCents = 3500, stockQuantity = 2)
+        val catalog = catalogRepositoryWith(emptyMap())
+        coEvery { catalog.packsForBead("DB0001") } returns listOf(acPack, fmgPack50)
+        val preferences: PreferencesRepository = mockk {
+            every { vendorPriorityOrder } returns flowOf(listOf("ac", "fmg"))
+            every { buyUpEnabled } returns flowOf(false)
+        }
+        // Previously planned 3 x ac; Aura now reports 1 in stock.
+        val ordered = OrderItemEntry(
+            beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
+            quantityUnits = 3, status = OrderItemStatus.ORDERED.firestoreValue, invoiceNumber = "INV-1",
+        )
+        val orders = orderRepositoryWith(ordered)
+        val replaced = slot<List<OrderItemEntry>>()
+        coEvery { orders.replaceItems("order1", any(), any(), capture(replaced)) } returns Unit
+
+        FinalizeOrderUseCase(
+            context = mockConnectedContext(),
+            orderRepository = orders,
+            catalogRepository = catalog,
+            inventoryRepository = inventoryRepository(),
+            preferencesRepository = preferences,
+        ).replanBead("order1", "DB0001")
+
+        assertEquals(listOf("ac" to 1, "fmg" to 2), replaced.captured.map { it.vendorKey to it.quantityUnits })
+        assertEquals(
+            listOf(OrderItemStatus.FINALIZED.firestoreValue, OrderItemStatus.FINALIZED.firestoreValue),
+            replaced.captured.map { it.status },
+        )
+        assertEquals(listOf(null, null), replaced.captured.map { it.invoiceNumber })
+        assertEquals(listOf(150.0, 150.0), replaced.captured.map { it.targetGrams })
+    }
+
+    @Test(expected = UnavailablePacksException::class)
+    fun `replanBead throws when the vendors cannot cover the bead`() = runTest {
+        val acPack = fmgPack.copy(id = 2, vendorKey = "ac", grams = 50.0, priceCents = 3000, stockQuantity = 1)
+        val catalog = catalogRepositoryWith(emptyMap())
+        coEvery { catalog.packsForBead("DB0001") } returns listOf(acPack)
+        val preferences: PreferencesRepository = mockk {
+            every { vendorPriorityOrder } returns flowOf(listOf("ac"))
+            every { buyUpEnabled } returns flowOf(false)
+        }
+        val finalized = OrderItemEntry(
+            beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
+            quantityUnits = 3, status = OrderItemStatus.FINALIZED.firestoreValue,
+        )
+        FinalizeOrderUseCase(
+            context = mockConnectedContext(),
+            orderRepository = orderRepositoryWith(finalized),
+            catalogRepository = catalog,
+            inventoryRepository = inventoryRepository(),
+            preferencesRepository = preferences,
+        ).replanBead("order1", "DB0001")
     }
 
     @Test

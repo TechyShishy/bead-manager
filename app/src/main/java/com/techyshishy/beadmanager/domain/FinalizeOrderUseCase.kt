@@ -502,6 +502,72 @@ class FinalizeOrderUseCase @Inject constructor(
     }
 
     /**
+     * Records that [vendorKey] shows only [quantity] units of the [packGrams] pack of [beadCode],
+     * then re-plans that bead against the updated stock.
+     *
+     * Throws [UnavailablePacksException] when the vendors together can no longer cover the bead.
+     * The stock report is kept in that case so the user can act on it elsewhere.
+     */
+    suspend fun reportStockAndReplan(
+        orderId: String,
+        beadCode: String,
+        vendorKey: String,
+        packGrams: Double,
+        quantity: Int,
+    ) {
+        catalogRepository.reportPackStock(
+            beadCode, vendorKey, packGrams, quantity,
+            nowEpochSeconds = System.currentTimeMillis() / 1000,
+        )
+        replanBead(orderId, beadCode)
+    }
+
+    /**
+     * Re-selects vendors and packs for the replannable rows of [beadCode] using the stock
+     * already in the catalog (no live check, so reported stock is not overwritten).
+     *
+     * Replannable rows are the bead's FINALIZED and ORDERED rows. RECEIVED, SKIPPED and
+     * buy-up rows are untouched. A new row identical to an existing row in vendor, pack and
+     * quantity keeps that row's status and invoice number; any other row is FINALIZED with
+     * no invoice number, to be marked ordered again at its vendor.
+     *
+     * Throws [UnavailablePacksException] when no allocation covers the bead.
+     */
+    suspend fun replanBead(orderId: String, beadCode: String): Unit = mutex.withLock {
+        val order = orderRepository.orderStream(orderId).first()
+            ?: error("Order $orderId not found")
+        val rows = order.items.filter { it.isReplannable(beadCode) }
+        if (rows.isEmpty()) return@withLock
+
+        val vendorPriority = preferencesRepository.vendorPriorityOrder.first()
+        val packs = catalogRepository.packsForBead(beadCode)
+        val allocation = selectAllocation(beadCode, rows.first().targetGrams, packs, vendorPriority)
+            ?: throw UnavailablePacksException(listOf(beadCode))
+
+        val template = rows.first()
+        val replacements = allocation.flattenCombinations().map { (part, combo) ->
+            val existing = rows.firstOrNull {
+                it.vendorKey == part.vendorKey && it.packGrams == combo.packGrams &&
+                    it.quantityUnits == combo.quantity
+            }
+            existing ?: template.copy(
+                vendorKey = part.vendorKey,
+                packGrams = combo.packGrams,
+                quantityUnits = combo.quantity,
+                status = OrderItemStatus.FINALIZED.firestoreValue,
+                invoiceNumber = null,
+            )
+        }
+        orderRepository.replaceItems(orderId, order.items, replaced = rows, replacements = replacements)
+    }
+
+    private fun OrderItemEntry.isReplannable(beadCode: String): Boolean {
+        if (this.beadCode != beadCode || buyUp || vendorKey.isBlank()) return false
+        val status = OrderItemStatus.fromFirestore(status)
+        return status == OrderItemStatus.FINALIZED || status == OrderItemStatus.ORDERED
+    }
+
+    /**
      * Resolves an already-finalized order into a [FinalizeResult] without re-running the price
      * check. Used when the user returns to the finalize screen after navigating away. Vendor
      * assignments are read from the FINALIZED items in Firestore; URLs and last-known prices are
