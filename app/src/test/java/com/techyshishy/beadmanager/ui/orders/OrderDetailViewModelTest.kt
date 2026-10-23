@@ -73,7 +73,7 @@ class OrderDetailViewModelTest {
         }
         val orderRepository = mockk<OrderRepository>(relaxed = true)
 
-        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.beadColorNames.collect {}
         }
@@ -100,7 +100,7 @@ class OrderDetailViewModelTest {
         }
         val orderRepository = mockk<OrderRepository>(relaxed = true)
 
-        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.beadColorNames.collect {}
         }
@@ -126,7 +126,7 @@ class OrderDetailViewModelTest {
         }
         val orderRepository = mockk<OrderRepository>(relaxed = true)
 
-        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.beadColorNames.collect {}
         }
@@ -145,7 +145,7 @@ class OrderDetailViewModelTest {
         }
         val orderRepository = mockk<OrderRepository>(relaxed = true)
 
-        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.beadColorNames.collect {}
         }
@@ -169,7 +169,7 @@ class OrderDetailViewModelTest {
         }
         val orderRepository = mockk<OrderRepository>(relaxed = true)
 
-        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.beadLookup.collect {}
         }
@@ -196,7 +196,7 @@ class OrderDetailViewModelTest {
             every { vendorPriorityOrder } returns flowOf(emptyList())
         }
 
-        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val viewModel = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         viewModel.initialize("order1")
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.sortedItems.collect {}
@@ -222,7 +222,7 @@ class OrderDetailViewModelTest {
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(emptyList())
         }
-        return OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        return OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
             .also { it.initialize("order1") }
     }
 
@@ -302,7 +302,7 @@ class OrderDetailViewModelTest {
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(emptyList())
         }
-        val vm = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val vm = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         // Not initialized — order remains null
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.isFullyOrdered.collect {} }
         advanceUntilIdle()
@@ -407,7 +407,7 @@ class OrderDetailViewModelTest {
         val preferencesRepository = mockk<PreferencesRepository> {
             every { vendorPriorityOrder } returns flowOf(emptyList())
         }
-        val vm = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) })
+        val vm = OrderDetailViewModel(orderRepository, catalogRepository, preferencesRepository, mockk<ProjectRepository> { every { projectsStream() } returns flowOf(emptyList()) }, mockk<com.techyshishy.beadmanager.domain.FinalizeOrderUseCase>(relaxed = true))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.vendorSets.collect {} }
         advanceUntilIdle()
         assertTrue(vm.vendorSets.value.isEmpty())

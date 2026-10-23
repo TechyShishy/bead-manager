@@ -102,6 +102,20 @@ fun OrderDetailScreen(
     var editTarget by remember { mutableStateOf<OrderItemEntry?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val pinEditor by viewModel.pinEditor.collectAsState()
+    val pinOutcome by viewModel.pinOutcome.collectAsState()
+    val pinMessages = mapOf(
+        OrderDetailViewModel.PinOutcome.SAVED to stringResource(R.string.pin_outcome_saved),
+        OrderDetailViewModel.PinOutcome.REMOVED to stringResource(R.string.pin_outcome_removed),
+        OrderDetailViewModel.PinOutcome.UNAVAILABLE to stringResource(R.string.pin_outcome_unavailable),
+        OrderDetailViewModel.PinOutcome.FAILED to stringResource(R.string.pin_outcome_failed),
+    )
+    LaunchedEffect(pinOutcome) {
+        pinOutcome?.let {
+            snackbarHostState.showSnackbar(pinMessages.getValue(it))
+            viewModel.pinOutcomeShown()
+        }
+    }
     // Non-null when the user has drilled into a specific vendor's items from the summary view.
     var selectedVendorKey by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -206,6 +220,7 @@ fun OrderDetailScreen(
                             onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
                             onRemove = { removeTarget = item },
                             onEdit = { editTarget = item },
+                            onOverride = { viewModel.openPinEditor(item.beadCode) },
                             onViewInCatalog = { onViewInCatalog(item.beadCode) },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
@@ -246,6 +261,7 @@ fun OrderDetailScreen(
                             onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
                             onRemove = { removeTarget = item },
                             onEdit = { editTarget = item },
+                            onOverride = { viewModel.openPinEditor(item.beadCode) },
                             onViewInCatalog = { onViewInCatalog(item.beadCode) },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
@@ -253,6 +269,15 @@ fun OrderDetailScreen(
                 }
             }
         }
+    }
+
+    pinEditor?.let { data ->
+        PinEditorSheet(
+            data = data,
+            onSave = { rows -> viewModel.savePin(rows) },
+            onRemovePin = { viewModel.removePin() },
+            onDismiss = { viewModel.dismissPinEditor() },
+        )
     }
 
     if (showAddSheet) {
@@ -366,6 +391,7 @@ private fun OrderItemRow(
     onUpdateStatus: (OrderItemStatus) -> Unit,
     onRemove: () -> Unit,
     onEdit: () -> Unit,
+    onOverride: () -> Unit,
     onViewInCatalog: () -> Unit,
 ) {
     val isVendorless = item.vendorKey.isBlank()
@@ -466,6 +492,10 @@ private fun OrderItemRow(
                             label = { Text(stringResource(R.string.mark_received)) },
                         )
                         SuggestionChip(
+                            onClick = onOverride,
+                            label = { Text(stringResource(R.string.finalize_override_vendor)) },
+                        )
+                        SuggestionChip(
                             onClick = { onUpdateStatus(OrderItemStatus.PENDING) },
                             label = { Text(stringResource(R.string.revert_pending)) },
                         )
@@ -487,7 +517,12 @@ private fun OrderItemRow(
                         )
                     }
                     OrderItemStatus.FINALIZED -> {
-                        // Managed from the finalize screen; no actions available here.
+                        // Vendor assignment is managed from the finalize screen; an override
+                        // is the one change that may also be made here.
+                        SuggestionChip(
+                            onClick = onOverride,
+                            label = { Text(stringResource(R.string.finalize_override_vendor)) },
+                        )
                     }
                 }
             }

@@ -11,7 +11,11 @@ import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.ProjectRepository
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
+import com.techyshishy.beadmanager.domain.FinalizeOrderUseCase
 import com.techyshishy.beadmanager.domain.OrderNameGenerator
+import com.techyshishy.beadmanager.domain.PinEditorData
+import com.techyshishy.beadmanager.domain.PinRow
+import com.techyshishy.beadmanager.domain.UnavailablePacksException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +37,58 @@ class OrderDetailViewModel @Inject constructor(
     private val catalogRepository: CatalogRepository,
     private val preferencesRepository: PreferencesRepository,
     private val projectRepository: ProjectRepository,
+    private val finalizeOrderUseCase: FinalizeOrderUseCase,
 ) : ViewModel() {
+
+    /** Outcome of a pin change, shown once to the user. */
+    enum class PinOutcome { SAVED, REMOVED, UNAVAILABLE, FAILED }
+
+    private val _pinEditor = MutableStateFlow<PinEditorData?>(null)
+
+    /** Non-null while the pin editor sheet is open. */
+    val pinEditor: StateFlow<PinEditorData?> = _pinEditor
+
+    private val _pinOutcome = MutableStateFlow<PinOutcome?>(null)
+    val pinOutcome: StateFlow<PinOutcome?> = _pinOutcome
+
+    fun pinOutcomeShown() {
+        _pinOutcome.value = null
+    }
+
+    fun openPinEditor(beadCode: String) {
+        val orderId = order.value?.orderId ?: return
+        viewModelScope.launch {
+            _pinEditor.value = runCatching { finalizeOrderUseCase.loadPinEditor(orderId, beadCode) }
+                .getOrElse { _pinOutcome.value = PinOutcome.FAILED; null }
+        }
+    }
+
+    fun dismissPinEditor() {
+        _pinEditor.value = null
+    }
+
+    fun savePin(rows: List<PinRow>) {
+        val beadCode = _pinEditor.value?.beadCode ?: return
+        applyPinChange(PinOutcome.SAVED) { orderId -> finalizeOrderUseCase.savePin(orderId, beadCode, rows) }
+    }
+
+    fun removePin() {
+        val beadCode = _pinEditor.value?.beadCode ?: return
+        applyPinChange(PinOutcome.REMOVED) { orderId -> finalizeOrderUseCase.removePin(orderId, beadCode) }
+    }
+
+    private fun applyPinChange(success: PinOutcome, change: suspend (orderId: String) -> Unit) {
+        val orderId = order.value?.orderId ?: return
+        viewModelScope.launch {
+            _pinEditor.value = null
+            _pinOutcome.value = runCatching { change(orderId) }.fold(
+                onSuccess = { success },
+                onFailure = { e ->
+                    if (e is UnavailablePacksException) PinOutcome.UNAVAILABLE else PinOutcome.FAILED
+                },
+            )
+        }
+    }
 
     private val _orderId = MutableStateFlow("")
 
