@@ -4,6 +4,7 @@ import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.db.BeadWithVendors
 import com.techyshishy.beadmanager.data.db.VendorLinkEntity
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
+import com.techyshishy.beadmanager.data.firestore.OrderInvoice
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
@@ -211,8 +212,11 @@ class OrderDetailViewModelTest {
 
     // ── isFullyOrdered ────────────────────────────────────────────────────────
 
-    private fun makeViewModel(items: List<OrderItemEntry>): OrderDetailViewModel {
-        val orderEntry = OrderEntry(orderId = "order1", items = items)
+    private fun makeViewModel(
+        items: List<OrderItemEntry>,
+        invoices: List<OrderInvoice> = emptyList(),
+    ): OrderDetailViewModel {
+        val orderEntry = OrderEntry(orderId = "order1", items = items, invoices = invoices)
         val orderRepository = mockk<OrderRepository> {
             every { orderStream("order1") } returns flowOf(orderEntry)
         }
@@ -426,5 +430,49 @@ class OrderDetailViewModelTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.vendorSets.collect {} }
         advanceUntilIdle()
         assertEquals("INV-123", vm.vendorSets.value.first().invoiceNumber)
+    }
+
+    @Test
+    fun `vendorSets gives each invoice of one vendor its own set with its amounts`() = runTest {
+        val vm = makeViewModel(
+            items = listOf(
+                OrderItemEntry(beadCode = "DB0001", vendorKey = "fmg",
+                    status = OrderItemStatus.ORDERED.firestoreValue, invoiceId = "a"),
+                OrderItemEntry(beadCode = "DB0002", vendorKey = "fmg",
+                    status = OrderItemStatus.ORDERED.firestoreValue, invoiceId = "a"),
+                OrderItemEntry(beadCode = "DB0003", vendorKey = "fmg",
+                    status = OrderItemStatus.ORDERED.firestoreValue, invoiceId = "b"),
+            ),
+            invoices = listOf(
+                OrderInvoice(id = "a", vendorKey = "fmg", invoiceNumber = "INV-A",
+                    estimatedCents = 5000, actualCents = 5725),
+                OrderInvoice(id = "b", vendorKey = "fmg", invoiceNumber = "INV-B"),
+            ),
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.vendorSets.collect {} }
+        advanceUntilIdle()
+
+        val sets = vm.vendorSets.value
+        assertEquals(listOf("INV-A", "INV-B"), sets.map { it.invoiceNumber })
+        assertEquals(listOf(2, 1), sets.map { it.itemCount })
+        assertEquals(5000, sets[0].estimatedCents)
+        assertEquals(5725, sets[0].actualCents)
+        assertNull(sets[1].actualCents)
+        assertEquals(listOf("fmg|a", "fmg|b"), sets.map { it.setKey })
+    }
+
+    @Test
+    fun `vendorSets reads the number from the invoice record`() = runTest {
+        val vm = makeViewModel(
+            items = listOf(
+                OrderItemEntry(beadCode = "DB0001", vendorKey = "ac",
+                    status = OrderItemStatus.ORDERED.firestoreValue, invoiceId = "a"),
+            ),
+            invoices = listOf(OrderInvoice(id = "a", vendorKey = "ac", invoiceNumber = "AC-77")),
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.vendorSets.collect {} }
+        advanceUntilIdle()
+
+        assertEquals("AC-77", vm.vendorSets.value.single().invoiceNumber)
     }
 }

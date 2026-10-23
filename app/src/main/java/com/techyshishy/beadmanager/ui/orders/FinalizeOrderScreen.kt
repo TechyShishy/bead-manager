@@ -166,7 +166,9 @@ fun FinalizeOrderScreen(
 
             is FinalizeOrderViewModel.UiState.FinalizedView -> FinalizedViewContent(
                 items = state.items,
-                onMarkVendorOrdered = { vendorKey, invoiceNumber -> viewModel.markVendorOrdered(vendorKey, invoiceNumber) },
+                onMarkVendorOrdered = { vendorKey, invoiceNumber, amountCents ->
+                    viewModel.markVendorOrdered(vendorKey, invoiceNumber, amountCents)
+                },
                 onReopen = { viewModel.reopen() },
                 onViewInCatalog = onViewInCatalog,
                 onOverride = { beadCode -> viewModel.openPinEditor(beadCode) },
@@ -254,7 +256,7 @@ private fun CheckingContent(modifier: Modifier = Modifier) {
 @Composable
 private fun FinalizedViewContent(
     items: List<FinalizedItem>,
-    onMarkVendorOrdered: (vendorKey: String, invoiceNumber: String?) -> Unit,
+    onMarkVendorOrdered: (vendorKey: String, invoiceNumber: String?, amountCents: Int?) -> Unit,
     onReopen: () -> Unit,
     onViewInCatalog: (String) -> Unit,
     onOverride: (beadCode: String) -> Unit,
@@ -339,7 +341,9 @@ private fun FinalizedViewContent(
                     VendorFinalizeHeader(
                         vendorKey = vendorKey,
                         subtotal = totals.byVendor.getValue(vendorKey),
-                        onMarkOrdered = { invoiceNumber -> onMarkVendorOrdered(vendorKey, invoiceNumber) },
+                        onMarkOrdered = { invoiceNumber, amountCents ->
+                            onMarkVendorOrdered(vendorKey, invoiceNumber, amountCents)
+                        },
                     )
                 }
                 items(vendorItems, key = { "${it.beadCode}_${it.vendorKey}_${it.packGrams}" }) { item ->
@@ -501,7 +505,7 @@ private fun ErrorContent(
 private fun VendorFinalizeHeader(
     vendorKey: String,
     subtotal: VendorSubtotal,
-    onMarkOrdered: (invoiceNumber: String?) -> Unit,
+    onMarkOrdered: (invoiceNumber: String?, amountCents: Int?) -> Unit,
 ) {
     val displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey
     var showDialog by remember { mutableStateOf(false) }
@@ -537,48 +541,19 @@ private fun VendorFinalizeHeader(
         HorizontalDivider()
     }
     if (showDialog) {
-        InvoiceNumberDialog(
-            vendorName = displayName,
-            onConfirm = { invoiceNumber ->
+        InvoiceDialog(
+            title = displayName,
+            confirmLabel = stringResource(R.string.finalize_mark_vendor_ordered),
+            initialInvoiceNumber = "",
+            initialAmount = formatCentsForInput(subtotal.knownCostCents),
+            estimateIsPartial = subtotal.hasUnknownPrice,
+            onConfirm = { invoiceNumber, amountCents ->
                 showDialog = false
-                onMarkOrdered(invoiceNumber)
+                onMarkOrdered(invoiceNumber, amountCents)
             },
             onDismiss = { showDialog = false },
         )
     }
-}
-
-@Composable
-private fun InvoiceNumberDialog(
-    vendorName: String,
-    onConfirm: (invoiceNumber: String?) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var invoiceText by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(vendorName) },
-        text = {
-            OutlinedTextField(
-                value = invoiceText,
-                onValueChange = { invoiceText = it },
-                label = { Text(stringResource(R.string.finalize_invoice_hint)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onConfirm(invoiceText.takeIf { it.isNotBlank() }) }),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(invoiceText.takeIf { it.isNotBlank() }) }) {
-                Text(stringResource(R.string.finalize_mark_vendor_ordered))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        },
-    )
 }
 
 @Composable

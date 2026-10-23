@@ -217,6 +217,12 @@
     <string name="finalize_open_vendor">Open in vendor</string>
     <string name="finalize_vendor_visited">Visited</string>
     <string name="finalize_price_unavailable">Price check failed</string>
+    <string name="invoice_amount_hint">Amount paid</string>
+    <string name="invoice_estimate_partial">The estimate leaves out items with no known price. Enter the total from the invoice.</string>
+    <string name="order_invoice_paid">Paid %1$s</string>
+    <string name="order_invoice_paid_estimate">Paid %1$s (est. %2$s)</string>
+    <string name="order_invoice_estimate_only">Est. %1$s</string>
+    <string name="order_invoice_edit">Edit invoice</string>
     <string name="pin_outcome_saved">Override saved. Mark the new vendor as ordered when you place it.</string>
     <string name="pin_outcome_removed">Override removed and the bead re-planned.</string>
     <string name="pin_outcome_unavailable">No vendor can cover this bead right now.</string>

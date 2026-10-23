@@ -64,6 +64,16 @@ class OrderDetailViewModel @Inject constructor(
         }
     }
 
+    /** Edits the number and amount paid on [invoiceId]; items are not touched. */
+    fun updateInvoice(invoiceId: String, invoiceNumber: String?, actualCents: Int?) {
+        val currentOrder = order.value ?: return
+        viewModelScope.launch {
+            orderRepository.updateInvoice(
+                currentOrder.orderId, currentOrder.invoices, invoiceId, invoiceNumber, actualCents,
+            )
+        }
+    }
+
     fun dismissPinEditor() {
         _pinEditor.value = null
     }
@@ -169,7 +179,14 @@ class OrderDetailViewModel @Inject constructor(
         val displayName: String,
         val itemCount: Int,
         val invoiceNumber: String?,
-    )
+        /** The invoice record behind this set; null for rows ordered without one. */
+        val invoiceId: String? = null,
+        val estimatedCents: Int? = null,
+        val actualCents: Int? = null,
+    ) {
+        /** Stable identity of the set: its vendor and invoice. */
+        val setKey: String get() = "$vendorKey|${invoiceId.orEmpty()}"
+    }
 
     /**
      * True when the order is non-null and contains at least one ORDERED or RECEIVED item but
@@ -212,8 +229,10 @@ class OrderDetailViewModel @Inject constructor(
                     item.vendorKey.isNotBlank() &&
                         item.status != OrderItemStatus.SKIPPED.firestoreValue
                 }
-                .groupBy { it.vendorKey }
-                .map { (vendorKey, items) ->
+                .groupBy { it.vendorKey to it.invoiceId }
+                .map { (group, items) ->
+                    val (vendorKey, invoiceId) = group
+                    val invoice = invoiceId?.let { id -> entry.invoices.firstOrNull { it.id == id } }
                     val invoiceNumbers = items
                         .mapNotNull { entry.invoiceNumberOf(it) }
                         .toSet()
@@ -227,9 +246,12 @@ class OrderDetailViewModel @Inject constructor(
                         displayName = CatalogSeeder.VENDOR_DISPLAY_NAMES[vendorKey] ?: vendorKey,
                         itemCount = items.size,
                         invoiceNumber = invoiceNumber,
+                        invoiceId = invoiceId,
+                        estimatedCents = invoice?.estimatedCents,
+                        actualCents = invoice?.actualCents,
                     )
                 }
-                .sortedBy { it.displayName }
+                .sortedWith(compareBy({ it.displayName }, { it.invoiceNumber.orEmpty() }))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

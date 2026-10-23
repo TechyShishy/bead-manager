@@ -118,10 +118,12 @@ fun OrderDetailScreen(
         }
     }
     // Non-null when the user has drilled into a specific vendor's items from the summary view.
-    var selectedVendorKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedSetKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedSet = vendorSets.firstOrNull { it.setKey == selectedSetKey }
+    var invoiceEditTarget by remember { mutableStateOf<OrderDetailViewModel.VendorSetSummary?>(null) }
 
-    BackHandler(enabled = selectedVendorKey != null) {
-        selectedVendorKey = null
+    BackHandler(enabled = selectedSetKey != null) {
+        selectedSetKey = null
     }
 
     Scaffold(
@@ -180,26 +182,27 @@ fun OrderDetailScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         when {
-            isFullyOrdered && selectedVendorKey == null -> {
-                // Vendor-set summary view: one row per vendor.
+            isFullyOrdered && selectedSet == null -> {
+                // Vendor-set summary view: one row per vendor invoice.
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
                 ) {
-                    items(vendorSets, key = { it.vendorKey }) { summary ->
+                    items(vendorSets, key = { it.setKey }) { summary ->
                         VendorSetRow(
                             summary = summary,
-                            onClick = { selectedVendorKey = summary.vendorKey },
+                            onClick = { selectedSetKey = summary.setKey },
+                            onEditInvoice = { invoiceEditTarget = summary },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                     }
                 }
             }
-            isFullyOrdered && selectedVendorKey != null -> {
-                // Scoped vendor detail: line items for the selected vendor only.
+            isFullyOrdered && selectedSet != null -> {
+                // Scoped invoice detail: line items for the selected vendor invoice only.
                 val vendorItems = sortedItems.filter {
-                    it.vendorKey == selectedVendorKey &&
+                    it.vendorKey == selectedSet.vendorKey && it.invoiceId == selectedSet.invoiceId &&
                         it.status != OrderItemStatus.SKIPPED.firestoreValue
                 }
                 LazyColumn(
@@ -274,6 +277,21 @@ fun OrderDetailScreen(
         }
     }
 
+    invoiceEditTarget?.let { summary ->
+        InvoiceDialog(
+            title = summary.displayName,
+            confirmLabel = stringResource(R.string.edit_item_save),
+            initialInvoiceNumber = summary.invoiceNumber.orEmpty(),
+            initialAmount = summary.actualCents?.let(::formatCentsForInput).orEmpty(),
+            estimateIsPartial = false,
+            onConfirm = { invoiceNumber, amountCents ->
+                summary.invoiceId?.let { viewModel.updateInvoice(it, invoiceNumber, amountCents) }
+                invoiceEditTarget = null
+            },
+            onDismiss = { invoiceEditTarget = null },
+        )
+    }
+
     pinEditor?.let { data ->
         PinEditorSheet(
             data = data,
@@ -345,6 +363,7 @@ fun OrderDetailScreen(
 private fun VendorSetRow(
     summary: OrderDetailViewModel.VendorSetSummary,
     onClick: () -> Unit,
+    onEditInvoice: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -369,6 +388,38 @@ private fun VendorSetRow(
                     text = stringResource(R.string.order_invoice_number, summary.invoiceNumber),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            val paidText = when {
+                summary.actualCents != null && summary.estimatedCents != null -> stringResource(
+                    R.string.order_invoice_paid_estimate,
+                    formatSubtotalCost(summary.actualCents, false),
+                    formatSubtotalCost(summary.estimatedCents, false),
+                )
+                summary.actualCents != null -> stringResource(
+                    R.string.order_invoice_paid,
+                    formatSubtotalCost(summary.actualCents, false),
+                )
+                summary.estimatedCents != null -> stringResource(
+                    R.string.order_invoice_estimate_only,
+                    formatSubtotalCost(summary.estimatedCents, false),
+                )
+                else -> null
+            }
+            if (paidText != null) {
+                Text(
+                    text = paidText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (summary.invoiceId != null) {
+            IconButton(onClick = onEditInvoice) {
+                Icon(
+                    Icons.Filled.Edit,
+                    contentDescription = stringResource(R.string.order_invoice_edit),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
