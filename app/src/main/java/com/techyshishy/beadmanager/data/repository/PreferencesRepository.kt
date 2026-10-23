@@ -41,6 +41,8 @@ class PreferencesRepository @Inject constructor(
             booleanPreferencesKey("migration_threshold_v1_done")
         private val KEY_MIGRATION_ORDER_PROJECT_IDS_V1 =
             booleanPreferencesKey("migration_order_project_ids_v1_done")
+        private val KEY_MIGRATION_INVOICES_V1 =
+            booleanPreferencesKey("migration_invoices_v1_done")
         /** Comma-delimited vendor key ordering, e.g. "fmg,ac". First entry is preferred. */
         private val KEY_VENDOR_PRIORITY_ORDER =
             stringPreferencesKey("vendor_priority_order")
@@ -158,6 +160,14 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setMigrationOrderProjectIdsV1Done() {
         dataStore.edit { prefs -> prefs[KEY_MIGRATION_ORDER_PROJECT_IDS_V1] = true }
+    }
+
+    val migrationInvoicesV1Done: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_MIGRATION_INVOICES_V1] ?: false
+    }
+
+    suspend fun setMigrationInvoicesV1Done() {
+        dataStore.edit { prefs -> prefs[KEY_MIGRATION_INVOICES_V1] = true }
     }
 
     val vendorPriorityOrder: Flow<List<String>> = authUidFlow.flatMapLatest { uid ->

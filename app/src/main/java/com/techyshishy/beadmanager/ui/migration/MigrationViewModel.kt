@@ -35,6 +35,7 @@ class MigrationViewModel @Inject constructor(
             runFlatProjectToGridV1Migration()
             runInlineRowsToSubcollectionV1Migration()
             runBobVendorMigration()
+            runInvoiceV1Migration()
         }
     }
 
@@ -172,6 +173,23 @@ class MigrationViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Bob vendor migration failed; will retry on next launch", e)
+        }
+    }
+
+    /**
+     * Moves legacy per-item invoice numbers onto the order's invoice records. See
+     * [com.techyshishy.beadmanager.data.firestore.planInvoiceMigration] for the grouping rule.
+     * Items without a legacy number are left without an invoice.
+     */
+    private suspend fun runInvoiceV1Migration() {
+        try {
+            val done = preferencesRepository.migrationInvoicesV1Done.first()
+            if (!done) {
+                orderRepository.migrateInvoices()
+                preferencesRepository.setMigrationInvoicesV1Done()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Invoice migration failed; will retry on next launch", e)
         }
     }
 

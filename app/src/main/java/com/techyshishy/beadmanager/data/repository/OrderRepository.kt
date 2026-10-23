@@ -6,6 +6,7 @@ import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderInvoice
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.firestore.planInvoiceMigration
 import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
 import com.techyshishy.beadmanager.data.model.SUFFICIENT_THRESHOLD_GRAMS
 import com.techyshishy.beadmanager.data.model.effectiveThresholdFor
@@ -423,6 +424,19 @@ class OrderRepository @Inject constructor(
             }
         }
         source.updateItems(orderId, updated)
+    }
+
+    /**
+     * Moves every order's legacy per-item invoice numbers onto invoice records, reading from the
+     * server. Orders with nothing to migrate are not written. Safe to run again: migrated
+     * items no longer match.
+     */
+    suspend fun migrateInvoices() {
+        for (order in source.getAllOrdersSnapshot()) {
+            if (order.orderId.isBlank()) continue
+            val plan = planInvoiceMigration(order.items, order.invoices) ?: continue
+            source.updateItemsAndInvoices(order.orderId, plan.items, plan.invoices)
+        }
     }
 
     /**
