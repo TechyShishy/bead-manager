@@ -20,7 +20,9 @@ import kotlin.math.roundToInt
  * string; we multiply by 100 and round to cents.
  *
  * Availability: [inventoryQuantity] > 0, OR [inventoryPolicy] == "continue" (which
- * means backorders are allowed — the item ships when restocked but can be ordered now).
+ * means backorders are allowed — the item ships when restocked but can be ordered now). *
+ * Stock quantity: [inventoryQuantity] clamped to zero, or null (uncapped) under the
+ * "continue" policy.
  */
 @Singleton
 class AcPackPriceFetcher @Inject constructor(
@@ -40,12 +42,16 @@ class AcPackPriceFetcher @Inject constructor(
                 ?: throw IOException("No variants in AC Shopify response")
             val priceCents = (variant.price.toDouble() * 100).roundToInt()
             val available = variant.inventoryQuantity > 0 || variant.inventoryPolicy == "continue"
+            // Backorders allowed means the reported quantity does not limit what can be ordered.
+            val stockQuantity = if (variant.inventoryPolicy == "continue") null
+                else variant.inventoryQuantity.coerceAtLeast(0)
             ScrapedPack(
                 priceCents = priceCents,
                 tier2PriceCents = null,
                 tier3PriceCents = null,
                 tier4PriceCents = null,
                 available = available,
+                stockQuantity = stockQuantity,
             )
         }
     }

@@ -46,5 +46,10 @@ data class VendorPackEntity(
     /** Tier 4 unit price (qty 100+). FMG only; null for AC. */
     val tier4PriceCents: Int? = null,
     val available: Boolean? = null,
+    /**
+     * Units the vendor reports in stock. Null when unknown or uncapped (vendor does not
+     * expose a quantity, or allows backorders); the optimizer treats null as unlimited.
+     */
+    val stockQuantity: Int? = null,
     val lastCheckedEpochSeconds: Long? = null,
 )

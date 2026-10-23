@@ -25,13 +25,14 @@ import kotlinx.serialization.json.Json
  *       for FMG quantity-break discount tiers (qty 15–49, 50–99, 100+)
  *   6 — beads.imageUrl and beads.officialUrl updated from
  *       www.miyuki-beads.co.jp/directory/ to directory.miyuki-beads.co.jp/ subdomain
+ *   7 — vendor_packs gains stockQuantity (INT nullable) for vendor-reported units in stock
  *
  * User inventory is intentionally NOT stored here; it lives in Firestore
  * so it syncs across devices automatically.
  */
 @Database(
     entities = [BeadEntity::class, VendorLinkEntity::class, VendorPackEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(BeadDatabase.Converters::class)
@@ -121,6 +122,12 @@ abstract class BeadDatabase : RoomDatabase() {
                             'https://directory.miyuki-beads.co.jp/')
                     """.trimIndent()
                 )
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE vendor_packs ADD COLUMN stockQuantity INTEGER")
             }
         }
     }

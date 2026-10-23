@@ -156,6 +156,7 @@ class CatalogRepository @Inject constructor(
                         tier3PriceCents = scraped.tier3PriceCents,
                         tier4PriceCents = scraped.tier4PriceCents,
                         available = scraped.available,
+                        stockQuantity = scraped.stockQuantity,
                         lastCheckedEpochSeconds = nowEpochSeconds,
                     )
                     true

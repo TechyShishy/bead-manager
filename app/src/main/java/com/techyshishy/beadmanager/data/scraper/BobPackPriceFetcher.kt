@@ -21,7 +21,9 @@ import kotlin.math.roundToInt
  * tier2/3/4PriceCents are always null.
  *
  * Availability: [inventoryQuantity] > 0, OR [inventoryPolicy] == "continue" (backorders
- * allowed — the item ships when restocked but can be ordered now).
+ * allowed — the item ships when restocked but can be ordered now). *
+ * Stock quantity: [inventoryQuantity] clamped to zero, or null (uncapped) under the
+ * "continue" policy.
  */
 @Singleton
 class BobPackPriceFetcher @Inject constructor(
@@ -41,12 +43,16 @@ class BobPackPriceFetcher @Inject constructor(
                 ?: throw IOException("No variants in BoB Shopify response")
             val priceCents = (variant.price.toDouble() * 100).roundToInt()
             val available = variant.inventoryQuantity > 0 || variant.inventoryPolicy == "continue"
+            // Backorders allowed means the reported quantity does not limit what can be ordered.
+            val stockQuantity = if (variant.inventoryPolicy == "continue") null
+                else variant.inventoryQuantity.coerceAtLeast(0)
             ScrapedPack(
                 priceCents = priceCents,
                 tier2PriceCents = null,
                 tier3PriceCents = null,
                 tier4PriceCents = null,
                 available = available,
+                stockQuantity = stockQuantity,
             )
         }
     }

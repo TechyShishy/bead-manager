@@ -73,14 +73,18 @@ fun selectCheapestVendor(
  * quantity-break repricing depends on the whole order's unit count, so it is applied
  * afterward by [applyFmgTier] and [analyzeBuyUp] rather than folded into this per-bead choice.
  *
- * Uses unbounded knapsack DP scaled to integers (×10) so that half-gram pack sizes
+ * A pack with a non-null [VendorPackEntity.stockQuantity] contributes at most that many
+ * units; a null quantity is unlimited. Packs with a zero quantity are ignored.
+ *
+ * Uses a grouped knapsack DP scaled to integers (×10) so that half-gram pack sizes
  * (e.g. 7.5g) become clean integers (75). All known Delica pack sizes are multiples
  * of 0.5g, so the scale factor of 10 is always exact. Totals up to the target plus the
  * largest pack are searched: any combination beyond that contains a pack whose removal
- * still reaches the target at lower cost.
+ * still reaches the target at lower cost, and removal never breaks a stock cap.
  *
  * Packs without a price are ignored. Returns an empty list if no priced pack remains,
- * [targetGrams] ≤ 0, or the target exceeds the practical ceiling (10 kg).
+ * [targetGrams] ≤ 0, the target exceeds the practical ceiling (10 kg), or the stock caps
+ * make the target unreachable.
  */
 fun computeCheapestCombination(
     packs: List<VendorPackEntity>,
@@ -89,65 +93,91 @@ fun computeCheapestCombination(
     if (targetGrams <= 0.0 || targetGrams > 10_000.0) return emptyList()
 
     val scale = 10
-    val priceByScaledGrams: Map<Int, Int> = packs
+    // One entry per pack size: the cheapest priced, in-stock SKU of that size.
+    val sizes: List<PackSize> = packs
+        .filter { (it.stockQuantity ?: 1) > 0 }
         .mapNotNull { pack ->
             val price = pack.priceCents ?: return@mapNotNull null
             val scaled = (pack.grams * scale).roundToInt()
-            if (scaled > 0) scaled to price else null
+            if (scaled > 0) PackSize(scaled, price, pack.stockQuantity, pack.grams) else null
         }
-        .groupBy({ it.first }, { it.second })
-        .mapValues { (_, prices) -> prices.min() }
-    if (priceByScaledGrams.isEmpty()) return emptyList()
+        .groupBy { it.scaledGrams }
+        .map { (_, group) -> group.minBy { it.priceCents } }
+    if (sizes.isEmpty()) return emptyList()
 
     val targetInt = (targetGrams * scale).roundToInt()
-    val maxPack = priceByScaledGrams.keys.max()
-    val ceiling = targetInt + maxPack
+    val ceiling = targetInt + sizes.maxOf { it.scaledGrams }
 
-    // cost[i] / units[i]: cheapest (then fewest-unit) way to reach exactly i scaled grams.
-    val INF = Long.MAX_VALUE / 2
-    val cost = LongArray(ceiling + 1) { INF }
-    val units = IntArray(ceiling + 1)
-    val parent = IntArray(ceiling + 1) { -1 }
-    cost[0] = 0
+    // cost[i] / units[i]: cheapest (then fewest-unit) way to reach exactly i scaled grams
+    // using the sizes processed so far. choice[k][i]: units of size k in that best way.
+    val inf = Long.MAX_VALUE / 2
+    var cost = LongArray(ceiling + 1) { inf }.also { it[0] = 0 }
+    var units = IntArray(ceiling + 1)
+    val choice = Array(sizes.size) { IntArray(ceiling + 1) }
 
-    for (i in 1..ceiling) {
-        for ((pack, price) in priceByScaledGrams) {
-            if (pack <= i && cost[i - pack] < INF) {
-                val candidateCost = cost[i - pack] + price
-                val candidateUnits = units[i - pack] + 1
-                if (candidateCost < cost[i] || (candidateCost == cost[i] && candidateUnits < units[i])) {
-                    cost[i] = candidateCost
-                    units[i] = candidateUnits
-                    parent[i] = pack
+    for ((k, size) in sizes.withIndex()) {
+        val nextCost = cost.copyOf()
+        val nextUnits = units.copyOf()
+        val cap = size.stockQuantity
+        for (i in 1..ceiling) {
+            if (cap == null) {
+                // Unbounded: nextCost[i - pack] already includes this size, so ascending
+                // order lets one size repeat arbitrarily often.
+                val prev = i - size.scaledGrams
+                if (prev >= 0 && nextCost[prev] < inf) {
+                    val candidateCost = nextCost[prev] + size.priceCents
+                    val candidateUnits = nextUnits[prev] + 1
+                    if (candidateCost < nextCost[i] ||
+                        (candidateCost == nextCost[i] && candidateUnits < nextUnits[i])
+                    ) {
+                        nextCost[i] = candidateCost
+                        nextUnits[i] = candidateUnits
+                        choice[k][i] = choice[k][prev] + 1
+                    }
+                }
+            } else {
+                for (j in 1..minOf(cap, i / size.scaledGrams)) {
+                    val prev = i - j * size.scaledGrams
+                    if (cost[prev] >= inf) continue
+                    val candidateCost = cost[prev] + j.toLong() * size.priceCents
+                    val candidateUnits = units[prev] + j
+                    if (candidateCost < nextCost[i] ||
+                        (candidateCost == nextCost[i] && candidateUnits < nextUnits[i])
+                    ) {
+                        nextCost[i] = candidateCost
+                        nextUnits[i] = candidateUnits
+                        choice[k][i] = j
+                    }
                 }
             }
         }
+        cost = nextCost
+        units = nextUnits
     }
 
     // Ascending scan with a strict improvement test keeps the smallest total on cost ties.
     var best = -1
     for (total in targetInt..ceiling) {
-        if (cost[total] < INF && (best == -1 || cost[total] < cost[best])) best = total
+        if (cost[total] < inf && (best == -1 || cost[total] < cost[best])) best = total
     }
     if (best == -1) return emptyList()
 
-    val counts = mutableMapOf<Int, Int>()
+    val result = mutableListOf<PackCombination>()
     var remaining = best
-    while (remaining > 0) {
-        val p = parent[remaining]
-        counts[p] = (counts[p] ?: 0) + 1
-        remaining -= p
+    for (k in sizes.indices.reversed()) {
+        val count = choice[k][remaining]
+        if (count > 0) result.add(PackCombination(sizes[k].packGrams, count))
+        remaining -= count * sizes[k].scaledGrams
     }
-
-    return counts
-        .map { (scaledGrams, qty) ->
-            PackCombination(
-                packGrams = packs.first { (it.grams * scale).roundToInt() == scaledGrams }.grams,
-                quantity = qty,
-            )
-        }
-        .sortedByDescending { it.packGrams }
+    return result.sortedByDescending { it.packGrams }
 }
+
+private data class PackSize(
+    val scaledGrams: Int,
+    val priceCents: Int,
+    val stockQuantity: Int?,
+    val packGrams: Double,
+)
 
 // ---------------------------------------------------------------------------
 // FMG tier pricing
@@ -291,7 +321,10 @@ fun analyzeBuyUp(
 
     // Cheapest available FMG pack (by next-tier unit price) for the suggested buy-up item.
     val cheapestPack = allAvailableFmgPacks
-        .filter { it.available != false && it.priceCents != null }
+        .filter {
+            it.available != false && it.priceCents != null &&
+                (it.stockQuantity ?: Int.MAX_VALUE) >= unitsToAdd
+        }
         .minByOrNull { fmgEffectivePriceCents(it, nextThreshold) ?: Int.MAX_VALUE }
         ?: return null
 

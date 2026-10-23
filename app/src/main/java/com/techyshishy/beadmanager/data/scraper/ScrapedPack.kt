@@ -7,6 +7,8 @@ package com.techyshishy.beadmanager.data.scraper
  * [tier2PriceCents], [tier3PriceCents], [tier4PriceCents] are FMG quantity-break prices;
  * null for AC and BoB (which use flat pricing with no tier discounts).
  * [available] reflects the vendor's current in-stock state.
+ * [stockQuantity] is the vendor-reported unit count; null when the vendor does not expose
+ * one or allows backorders (no cap).
  */
 data class ScrapedPack(
     val priceCents: Int,
@@ -14,4 +16,5 @@ data class ScrapedPack(
     val tier3PriceCents: Int?,
     val tier4PriceCents: Int?,
     val available: Boolean,
+    val stockQuantity: Int? = null,
 )

@@ -74,7 +74,7 @@ interface VendorPackDao {
      * Tier 2/3/4 prices are FMG-only; AC passes null for those columns.
      */
     @Query(
-        "UPDATE vendor_packs SET priceCents = :priceCents, tier2PriceCents = :tier2PriceCents, tier3PriceCents = :tier3PriceCents, tier4PriceCents = :tier4PriceCents, available = :available, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
+        "UPDATE vendor_packs SET priceCents = :priceCents, tier2PriceCents = :tier2PriceCents, tier3PriceCents = :tier3PriceCents, tier4PriceCents = :tier4PriceCents, available = :available, stockQuantity = :stockQuantity, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
     )
     suspend fun updatePackCheck(
         id: Long,
@@ -82,6 +82,22 @@ interface VendorPackDao {
         tier2PriceCents: Int?,
         tier3PriceCents: Int?,
         tier4PriceCents: Int?,
+        available: Boolean,
+        stockQuantity: Int?,
+        lastCheckedEpochSeconds: Long,
+    )
+
+    /**
+     * Records a user-reported stock level for a SKU (the vendor showed fewer units than
+     * the app assumed). Stamps the check time so the report stands until the next live
+     * check becomes due.
+     */
+    @Query(
+        "UPDATE vendor_packs SET stockQuantity = :stockQuantity, available = :available, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
+    )
+    suspend fun updateReportedStock(
+        id: Long,
+        stockQuantity: Int,
         available: Boolean,
         lastCheckedEpochSeconds: Long,
     )

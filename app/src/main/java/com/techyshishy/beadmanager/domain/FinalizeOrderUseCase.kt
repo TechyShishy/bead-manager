@@ -196,7 +196,15 @@ class FinalizeOrderUseCase @Inject constructor(
         val freshAssignedPacks = assignedItems.mapNotNull { item ->
             catalogRepository.packByKey(item.beadCode, item.vendorKey, item.packGrams)
         }
-        val unavailableAssigned = freshAssignedPacks.filter { it.available == false }
+        // An assigned pack needs a fallback when it is out of stock, or when the vendor reports
+        // fewer units than the assigned row asks for.
+        val unavailableAssigned = freshAssignedPacks.filter { pack ->
+            pack.available == false || assignedItems.any { item ->
+                item.beadCode == pack.beadCode && item.vendorKey == pack.vendorKey &&
+                    item.packGrams == pack.grams &&
+                    pack.stockQuantity != null && item.quantityUnits > pack.stockQuantity
+            }
+        }
 
         val assignedFallbackFailures = mutableListOf<String>()
         val fallbackSelections = mutableMapOf<String, VendorSelection>()
@@ -404,7 +412,10 @@ class FinalizeOrderUseCase @Inject constructor(
         if (buyUpBeadCode != null && analysis.buyUpSuggestion != null) {
             val suggestion = analysis.buyUpSuggestion
             val fmgPacks = catalogRepository.packsForBead(buyUpBeadCode)
-                .filter { it.vendorKey == "fmg" && it.available != false && it.priceCents != null }
+                .filter {
+                    it.vendorKey == "fmg" && it.available != false && it.priceCents != null &&
+                        (it.stockQuantity ?: Int.MAX_VALUE) >= suggestion.unitsToAdd
+                }
                 .sortedBy { it.grams }
             val buyUpPack = fmgPacks.firstOrNull()
                 ?: throw InvalidBuyUpBeadException(buyUpBeadCode)

@@ -14,6 +14,7 @@ class PackOptimizerTest {
         vendorKey: String = "fmg",
         beadCode: String = "DB0010",
         available: Boolean? = null,
+        stockQuantity: Int? = null,
     ) = VendorPackEntity(
         beadCode = beadCode,
         vendorKey = vendorKey,
@@ -21,6 +22,7 @@ class PackOptimizerTest {
         url = "https://example.test/$vendorKey/$grams",
         priceCents = priceCents,
         available = available,
+        stockQuantity = stockQuantity,
     )
 
     // FMG DB0010 tier-1 prices.
@@ -117,5 +119,44 @@ class PackOptimizerTest {
         val selection = selectCheapestVendor("DB0010", 96.67, packs)!!
         assertEquals("bob", selection.vendorKey)
         assertEquals(2 * 1000, selection.totalCents)
+    }
+
+    // ---- stock caps ----
+
+    @Test
+    fun `a stock cap below the needed units makes the vendor unable to cover the target`() {
+        // Regression: 3 x 50g needed but only 1 in stock and no other pack size.
+        val packs = listOf(pack(50.0, 2325, stockQuantity = 1))
+        assertEquals(emptyList<PackCombination>(), computeCheapestCombination(packs, 150.0))
+    }
+
+    @Test
+    fun `a capped pack is used up to its stock and uncapped packs cover the rest`() {
+        val packs = listOf(pack(7.5, 420), pack(50.0, 2325, stockQuantity = 1))
+        // 100g: one 50g (cap) plus 7 x 7.5g = 102.5g ($23.25 + $29.40) vs 14 x 7.5g = $58.80.
+        assertEquals(combo(50.0 to 1, 7.5 to 7), computeCheapestCombination(packs, 100.0))
+    }
+
+    @Test
+    fun `a pack with zero stock is ignored`() {
+        val packs = listOf(pack(7.5, 420), pack(50.0, 2325, stockQuantity = 0))
+        assertEquals(combo(7.5 to 7), computeCheapestCombination(packs, 50.0))
+    }
+
+    @Test
+    fun `a cap that exactly covers the target is accepted`() {
+        val packs = listOf(pack(50.0, 2325, stockQuantity = 3))
+        assertEquals(combo(50.0 to 3), computeCheapestCombination(packs, 150.0))
+    }
+
+    @Test
+    fun `selectPreferredVendor skips a vendor whose stock cannot cover the target`() {
+        val packs = listOf(
+            pack(50.0, 3000, vendorKey = "ac", stockQuantity = 1),
+            pack(50.0, 3500, vendorKey = "fmg"),
+        )
+        val result = selectPreferredVendor("DB0010", 150.0, packs, listOf("ac", "fmg"))
+        assertEquals("fmg", result?.vendorKey)
+        assertEquals(combo(50.0 to 3), result?.combination)
     }
 }
