@@ -68,7 +68,7 @@ class FinalizeOrderUseCaseTest {
         coEvery { allBeadsAsMap() } returns emptyMap()
         coEvery { vendorNamesForBeads(any()) } returns beadNames
         coEvery { packsForBead("DB0001") } returns listOf(fmgPack)
-        coEvery { checkAndUpdatePacks(any(), any()) } returns PriceCheckResult(emptySet())
+        coEvery { checkAndUpdatePacks(any(), any(), any(), any()) } returns PriceCheckResult(emptySet())
     }
 
     private fun orderRepositoryWith(vararg items: OrderItemEntry): OrderRepository = mockk {

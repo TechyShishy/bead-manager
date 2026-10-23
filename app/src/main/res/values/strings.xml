@@ -217,10 +217,6 @@
     <string name="finalize_open_vendor">Open in vendor</string>
     <string name="finalize_vendor_visited">Visited</string>
     <string name="finalize_price_unavailable">Price check failed</string>
-    <string name="finalize_not_available_here">Not available here</string>
-    <string name="finalize_report_stock_body">How many %3$s g packs of %2$s does %1$s actually have in stock? The order is re-planned with that number until the next price check.</string>
-    <string name="finalize_report_stock_hint">Units in stock</string>
-    <string name="finalize_report_stock_confirm">Re-plan</string>
     <string name="pin_outcome_saved">Override saved. Mark the new vendor as ordered when you place it.</string>
     <string name="pin_outcome_removed">Override removed and the bead re-planned.</string>
     <string name="pin_outcome_unavailable">No vendor can cover this bead right now.</string>

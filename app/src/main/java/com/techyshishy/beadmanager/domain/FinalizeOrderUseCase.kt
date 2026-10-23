@@ -153,6 +153,10 @@ class FinalizeOrderUseCase @Inject constructor(
 ) {
     private val mutex = Mutex()
 
+    private companion object {
+        val ALWAYS_CHECK_VENDOR_KEYS = setOf("ac", "bob")
+    }
+
     /**
      * Phase 1: scrapes prices, selects vendors per the configured priority order, applies
      * FMG tier pricing, and detects buy-up opportunities. Does NOT write to Firestore.
@@ -205,7 +209,11 @@ class FinalizeOrderUseCase @Inject constructor(
         }
 
         val allCandidatePacks = assignedPacks + packsByBead.values.flatten().distinctBy { it.id }
-        val checkResult = catalogRepository.checkAndUpdatePacks(allCandidatePacks, nowSeconds)
+        // Shopify vendors report an exact stock count in one small JSON call, so check them
+        // fresh every time; a stale count is how a short pack gets planned.
+        val checkResult = catalogRepository.checkAndUpdatePacks(
+            allCandidatePacks, nowSeconds, alwaysCheckVendorKeys = ALWAYS_CHECK_VENDOR_KEYS,
+        )
 
         val freshPacksByBead: Map<String, List<VendorPackEntity>> =
             unassignedBeadCodes.associateWith { catalogRepository.packsForBead(it) }
@@ -534,29 +542,8 @@ class FinalizeOrderUseCase @Inject constructor(
     }
 
     /**
-     * Records that [vendorKey] shows only [quantity] units of the [packGrams] pack of [beadCode],
-     * then re-plans that bead against the updated stock.
-     *
-     * Throws [UnavailablePacksException] when the vendors together can no longer cover the bead.
-     * The stock report is kept in that case so the user can act on it elsewhere.
-     */
-    suspend fun reportStockAndReplan(
-        orderId: String,
-        beadCode: String,
-        vendorKey: String,
-        packGrams: Double,
-        quantity: Int,
-    ) {
-        catalogRepository.reportPackStock(
-            beadCode, vendorKey, packGrams, quantity,
-            nowEpochSeconds = System.currentTimeMillis() / 1000,
-        )
-        replanBead(orderId, beadCode)
-    }
-
-    /**
      * Re-selects vendors and packs for the replannable rows of [beadCode] using the stock
-     * already in the catalog (no live check, so reported stock is not overwritten).
+     * already in the catalog (no live check).
      *
      * Replannable rows are the bead's FINALIZED and ORDERED rows. RECEIVED, SKIPPED and
      * buy-up rows are untouched, as are pinned rows unless [includePinned] is set (removing

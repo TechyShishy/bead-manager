@@ -65,7 +65,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import coil3.compose.AsyncImage
@@ -170,7 +169,6 @@ fun FinalizeOrderScreen(
                 onMarkVendorOrdered = { vendorKey, invoiceNumber -> viewModel.markVendorOrdered(vendorKey, invoiceNumber) },
                 onReopen = { viewModel.reopen() },
                 onViewInCatalog = onViewInCatalog,
-                onReportStock = { item, quantity -> viewModel.reportStock(item, quantity) },
                 onOverride = { beadCode -> viewModel.openPinEditor(beadCode) },
                 modifier = Modifier.padding(innerPadding),
             )
@@ -259,7 +257,6 @@ private fun FinalizedViewContent(
     onMarkVendorOrdered: (vendorKey: String, invoiceNumber: String?) -> Unit,
     onReopen: () -> Unit,
     onViewInCatalog: (String) -> Unit,
-    onReportStock: (item: FinalizedItem, quantity: Int) -> Unit,
     onOverride: (beadCode: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -352,7 +349,6 @@ private fun FinalizedViewContent(
                         isVisited = itemKey in visitedKeys,
                         onVisited = { visitedKeys = visitedKeys + itemKey },
                         onViewInCatalog = { onViewInCatalog(item.beadCode) },
-                        onReportStock = { quantity -> onReportStock(item, quantity) },
                         onOverride = { onOverride(item.beadCode) },
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
@@ -612,10 +608,8 @@ private fun FinalizedItemRow(
     isVisited: Boolean,
     onVisited: () -> Unit,
     onViewInCatalog: () -> Unit,
-    onReportStock: (quantity: Int) -> Unit,
     onOverride: () -> Unit,
 ) {
-    var showReportStock by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val hexColor = remember(item.hex) {
         runCatching { Color(item.hex.toColorInt()) }.getOrDefault(Color.Gray)
@@ -721,10 +715,6 @@ private fun FinalizedItemRow(
                 )
             }
             SuggestionChip(
-                onClick = { showReportStock = true },
-                label = { Text(stringResource(R.string.finalize_not_available_here)) },
-            )
-            SuggestionChip(
                 onClick = onOverride,
                 label = { Text(stringResource(R.string.finalize_override_vendor)) },
             )
@@ -767,64 +757,6 @@ private fun FinalizedItemRow(
             }
         }
     }
-
-    if (showReportStock) {
-        ReportStockDialog(
-            item = item,
-            onConfirm = { quantity ->
-                showReportStock = false
-                onReportStock(quantity)
-            },
-            onDismiss = { showReportStock = false },
-        )
-    }
-}
-
-@Composable
-private fun ReportStockDialog(
-    item: FinalizedItem,
-    onConfirm: (quantity: Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var quantityText by remember { mutableStateOf("0") }
-    val quantity = quantityText.toIntOrNull()?.takeIf { it >= 0 }
-    val vendorName = CatalogSeeder.VENDOR_DISPLAY_NAMES[item.vendorKey] ?: item.vendorKey
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.finalize_not_available_here)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(
-                        R.string.finalize_report_stock_body,
-                        vendorName,
-                        item.beadCode,
-                        item.packGramsLabel,
-                    )
-                )
-                OutlinedTextField(
-                    value = quantityText,
-                    onValueChange = { quantityText = it },
-                    label = { Text(stringResource(R.string.finalize_report_stock_hint)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done,
-                    ),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { quantity?.let(onConfirm) }, enabled = quantity != null) {
-                Text(stringResource(R.string.finalize_report_stock_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        },
-    )
 }
 
 @Composable

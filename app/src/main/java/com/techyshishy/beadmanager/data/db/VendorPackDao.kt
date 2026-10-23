@@ -88,21 +88,6 @@ interface VendorPackDao {
     )
 
     /**
-     * Records a user-reported stock level for a SKU (the vendor showed fewer units than
-     * the app assumed). Stamps the check time so the report stands until the next live
-     * check becomes due.
-     */
-    @Query(
-        "UPDATE vendor_packs SET stockQuantity = :stockQuantity, available = :available, lastCheckedEpochSeconds = :lastCheckedEpochSeconds WHERE id = :id"
-    )
-    suspend fun updateReportedStock(
-        id: Long,
-        stockQuantity: Int,
-        available: Boolean,
-        lastCheckedEpochSeconds: Long,
-    )
-
-    /**
      * All packs for a given vendor across every bead in the catalog.
      * Used by the buy-up analyzer to find the cheapest FMG filler pack.
      */

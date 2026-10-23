@@ -161,32 +161,6 @@ class FinalizeOrderViewModel @Inject constructor(
         )
     }
 
-    /**
-     * Records that the vendor of [item] has only [quantity] units of its pack in stock, re-plans
-     * the bead, and shows the updated finalized items. If no allocation covers the bead any more,
-     * emits [UiState.UnavailableError].
-     */
-    fun reportStock(item: FinalizedItem, quantity: Int) {
-        val orderId = currentOrderId.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch {
-            _uiState.value = UiState.Checking
-            _uiState.value = runCatching {
-                useCase.reportStockAndReplan(
-                    orderId, item.beadCode, item.vendorKey, item.packGrams, quantity,
-                )
-                useCase.resolveExistingOrder(orderId)
-            }.fold(
-                onSuccess = { UiState.FinalizedView(it.items) },
-                onFailure = { e ->
-                    when (e) {
-                        is UnavailablePacksException -> UiState.UnavailableError(e.beadCodes)
-                        else -> UiState.UnknownError
-                    }
-                },
-            )
-        }
-    }
-
     /** Opens the pin editor for [beadCode]; stays closed when the bead has nothing to edit. */
     fun openPinEditor(beadCode: String) {
         val orderId = currentOrderId.takeIf { it.isNotBlank() } ?: return

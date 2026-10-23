@@ -95,27 +95,6 @@ class CatalogRepository @Inject constructor(
         else vendorPackDao.packsForBeads(beadCodes)
 
     /**
-     * Records that a vendor shows only [quantity] units of a pack in stock. The report stands
-     * until the pack's next live check falls due, after which the scraped value wins.
-     * No-op when the pack is not in the catalog.
-     */
-    suspend fun reportPackStock(
-        beadCode: String,
-        vendorKey: String,
-        grams: Double,
-        quantity: Int,
-        nowEpochSeconds: Long,
-    ) {
-        val pack = vendorPackDao.packByKey(beadCode, vendorKey, grams) ?: return
-        vendorPackDao.updateReportedStock(
-            id = pack.id,
-            stockQuantity = quantity,
-            available = quantity > 0,
-            lastCheckedEpochSeconds = nowEpochSeconds,
-        )
-    }
-
-    /**
      * All available, priced packs for a given vendor across the entire catalog.
      * Used by the buy-up analyzer to find the cheapest filler pack.
      */
@@ -148,6 +127,9 @@ class CatalogRepository @Inject constructor(
      * Packs whose [VendorPackEntity.lastCheckedEpochSeconds] is within [staleThresholdSeconds]
      * of [nowEpochSeconds] are skipped (considered fresh). Stale packs are fetched in parallel.
      *
+     * Packs of a vendor in [alwaysCheckVendorKeys] are fetched regardless of age, so their
+     * stock is current at the moment of the call.
+     *
      * Packs with unsupported vendor keys (anything other than "ac" and "fmg") are skipped
      * silently — they are neither fetched nor counted as failures.
      *
@@ -157,10 +139,12 @@ class CatalogRepository @Inject constructor(
         packs: List<VendorPackEntity>,
         nowEpochSeconds: Long,
         staleThresholdSeconds: Long = 12L * 3600,
+        alwaysCheckVendorKeys: Set<String> = emptySet(),
     ): PriceCheckResult = coroutineScope {
         val stale = packs.filter { pack ->
             val lastChecked = pack.lastCheckedEpochSeconds
-            lastChecked == null || (nowEpochSeconds - lastChecked) >= staleThresholdSeconds
+            pack.vendorKey in alwaysCheckVendorKeys || lastChecked == null ||
+                (nowEpochSeconds - lastChecked) >= staleThresholdSeconds
         }
         val checkable = stale.filter { it.vendorKey in vendorPackPriceFetcher.supportedVendorKeys }
 
