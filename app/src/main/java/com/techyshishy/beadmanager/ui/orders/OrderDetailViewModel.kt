@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
+import com.techyshishy.beadmanager.data.firestore.invoiceNumberOf
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.db.BeadEntity
 import com.techyshishy.beadmanager.data.repository.CatalogRepository
@@ -214,7 +215,7 @@ class OrderDetailViewModel @Inject constructor(
                 .groupBy { it.vendorKey }
                 .map { (vendorKey, items) ->
                     val invoiceNumbers = items
-                        .mapNotNull { it.invoiceNumber?.takeIf { n -> n.isNotBlank() } }
+                        .mapNotNull { entry.invoiceNumberOf(it) }
                         .toSet()
                     val invoiceNumber = when {
                         invoiceNumbers.isEmpty() -> null

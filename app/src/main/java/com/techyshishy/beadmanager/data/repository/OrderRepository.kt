@@ -3,6 +3,7 @@ package com.techyshishy.beadmanager.data.repository
 import com.techyshishy.beadmanager.data.firestore.FirestoreOrderSource
 import com.techyshishy.beadmanager.data.firestore.InventoryEntry
 import com.techyshishy.beadmanager.data.firestore.OrderEntry
+import com.techyshishy.beadmanager.data.firestore.OrderInvoice
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
 import com.techyshishy.beadmanager.data.model.ProjectBeadEntry
@@ -14,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.shareIn
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -284,7 +286,8 @@ class OrderRepository @Inject constructor(
         }
         val updated = item.copy(
             status = newStatus.firestoreValue,
-            invoiceNumber = null,  // only markVendorItemsOrdered is allowed to set an invoice number
+            invoiceNumber = null,
+            invoiceId = null,  // only markVendorItemsOrdered is allowed to attach an invoice
         )
         val updatedItems = allItems.map { existing ->
             if (existing.beadCode == item.beadCode && existing.vendorKey == item.vendorKey && existing.packGrams == item.packGrams) {
@@ -338,28 +341,47 @@ class OrderRepository @Inject constructor(
         source.removeProjectIdFromOrder(orderId, projectId)
 
     /**
-     * Transitions all FINALIZED items for [vendorKey] to ORDERED.
-     * Items in any other status are left unchanged.
+     * Transitions all FINALIZED items for [vendorKey] to ORDERED on one new [OrderInvoice],
+     * written together with the items. The invoice record is created even when [invoiceNumber]
+     * is blank, so a price can still be attached. Items in any other status are left unchanged,
+     * and nothing is written when no FINALIZED item exists for the vendor.
+     *
+     * @param allInvoices the order's existing invoices, preserved in the write.
+     * @param estimatedCents the app's price for the transitioning rows, or null when unknown.
+     * @param actualCents the amount the user paid, or null when not entered.
      */
     suspend fun markVendorItemsOrdered(
         orderId: String,
         vendorKey: String,
         allItems: List<OrderItemEntry>,
+        allInvoices: List<OrderInvoice> = emptyList(),
         invoiceNumber: String? = null,
+        estimatedCents: Int? = null,
+        actualCents: Int? = null,
     ) {
+        fun OrderItemEntry.isFinalizedAt(vendor: String) =
+            this.vendorKey == vendor &&
+                OrderItemStatus.fromFirestore(this.status) == OrderItemStatus.FINALIZED
+        if (allItems.none { it.isFinalizedAt(vendorKey) }) return
+
+        val invoice = OrderInvoice(
+            id = UUID.randomUUID().toString(),
+            vendorKey = vendorKey,
+            invoiceNumber = invoiceNumber?.trim()?.takeIf { it.isNotEmpty() },
+            estimatedCents = estimatedCents,
+            actualCents = actualCents,
+        )
         val updated = allItems.map { item ->
-            if (item.vendorKey == vendorKey &&
-                OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED
-            ) {
+            if (item.isFinalizedAt(vendorKey)) {
                 item.copy(
                     status = OrderItemStatus.ORDERED.firestoreValue,
-                    invoiceNumber = invoiceNumber?.takeIf { it.isNotBlank() },
+                    invoiceId = invoice.id,
                 )
             } else {
                 item
             }
         }
-        source.updateItems(orderId, updated)
+        source.updateItemsAndInvoices(orderId, updated, allInvoices + invoice)
     }
 
     /**
@@ -401,6 +423,33 @@ class OrderRepository @Inject constructor(
             }
         }
         source.updateItems(orderId, updated)
+    }
+
+    /**
+     * Edits the number and the amount paid on invoice [invoiceId]. Items are untouched. A blank
+     * [invoiceNumber] is stored as null. No-op when [allInvoices] holds no such invoice.
+     */
+    suspend fun updateInvoice(
+        orderId: String,
+        allInvoices: List<OrderInvoice>,
+        invoiceId: String,
+        invoiceNumber: String?,
+        actualCents: Int?,
+    ) {
+        if (allInvoices.none { it.id == invoiceId }) return
+        source.updateInvoices(
+            orderId,
+            allInvoices.map { invoice ->
+                if (invoice.id == invoiceId) {
+                    invoice.copy(
+                        invoiceNumber = invoiceNumber?.trim()?.takeIf { it.isNotEmpty() },
+                        actualCents = actualCents,
+                    )
+                } else {
+                    invoice
+                }
+            },
+        )
     }
 
     /**

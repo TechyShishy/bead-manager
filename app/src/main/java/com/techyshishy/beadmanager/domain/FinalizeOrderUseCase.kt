@@ -580,6 +580,7 @@ class FinalizeOrderUseCase @Inject constructor(
                 quantityUnits = combo.quantity,
                 status = OrderItemStatus.FINALIZED.firestoreValue,
                 invoiceNumber = null,
+                invoiceId = null,
                 pinned = false,
             )
         }
@@ -638,6 +639,7 @@ class FinalizeOrderUseCase @Inject constructor(
                         quantityUnits = pin.quantityUnits,
                         status = OrderItemStatus.FINALIZED.firestoreValue,
                         invoiceNumber = null,
+                        invoiceId = null,
                         pinned = true,
                     )
                 }

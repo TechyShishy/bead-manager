@@ -167,7 +167,7 @@ class FinalizeOrderUseCaseTest {
         // Previously planned 3 x ac; Aura now reports 1 in stock.
         val ordered = OrderItemEntry(
             beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
-            quantityUnits = 3, status = OrderItemStatus.ORDERED.firestoreValue, invoiceNumber = "INV-1",
+            quantityUnits = 3, status = OrderItemStatus.ORDERED.firestoreValue, invoiceId = "inv-1",
         )
         val orders = orderRepositoryWith(ordered)
         val replaced = slot<List<OrderItemEntry>>()
@@ -186,7 +186,7 @@ class FinalizeOrderUseCaseTest {
             listOf(OrderItemStatus.FINALIZED.firestoreValue, OrderItemStatus.FINALIZED.firestoreValue),
             replaced.captured.map { it.status },
         )
-        assertEquals(listOf(null, null), replaced.captured.map { it.invoiceNumber })
+        assertEquals(listOf(null, null), replaced.captured.map { it.invoiceId })
         assertEquals(listOf(150.0, 150.0), replaced.captured.map { it.targetGrams })
     }
 
@@ -271,9 +271,9 @@ class FinalizeOrderUseCaseTest {
     fun `savePin pins the rows and keeps invoice only on unchanged rows`() = runTest {
         val kept = OrderItemEntry(
             beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
-            quantityUnits = 1, status = OrderItemStatus.ORDERED.firestoreValue, invoiceNumber = "INV-1",
+            quantityUnits = 1, status = OrderItemStatus.ORDERED.firestoreValue, invoiceId = "inv-1",
         )
-        val changed = kept.copy(packGrams = 7.5, quantityUnits = 2, invoiceNumber = "INV-1")
+        val changed = kept.copy(packGrams = 7.5, quantityUnits = 2, invoiceId = "inv-1")
         val orders = orderRepositoryWith(kept, changed)
         val replacements = slot<List<OrderItemEntry>>()
         coEvery { orders.replaceItems("order1", any(), any(), capture(replacements)) } returns Unit
@@ -290,7 +290,7 @@ class FinalizeOrderUseCaseTest {
                 .map { it.firestoreValue },
             rows.map { it.status },
         )
-        assertEquals(listOf("INV-1", null, null), rows.map { it.invoiceNumber })
+        assertEquals(listOf("inv-1", null, null), rows.map { it.invoiceId })
     }
 
     @Test

@@ -72,6 +72,7 @@ import kotlinx.coroutines.launch
 import com.techyshishy.beadmanager.R
 import com.techyshishy.beadmanager.data.firestore.OrderItemEntry
 import com.techyshishy.beadmanager.data.firestore.OrderItemStatus
+import com.techyshishy.beadmanager.data.firestore.invoiceNumberOf
 import com.techyshishy.beadmanager.data.firestore.effectiveContributions
 import com.techyshishy.beadmanager.data.seed.CatalogSeeder
 import java.math.BigDecimal
@@ -214,6 +215,7 @@ fun OrderDetailScreen(
                             hex = bead?.hex ?: "",
                             colorName = beadColorNames[item.beadCode],
                             isFrozen = isFrozen,
+                            invoiceNumber = order?.invoiceNumberOf(item),
                             showInvoiceNumber = false,
                             onMarkReceived = { viewModel.markItemReceived(item) },
                             onRevertReceived = { viewModel.revertItemReceived(item) },
@@ -256,6 +258,7 @@ fun OrderDetailScreen(
                             hex = bead?.hex ?: "",
                             colorName = beadColorNames[item.beadCode],
                             isFrozen = isFrozen,
+                            invoiceNumber = order?.invoiceNumberOf(item),
                             onMarkReceived = { viewModel.markItemReceived(item) },
                             onRevertReceived = { viewModel.revertItemReceived(item) },
                             onUpdateStatus = { newStatus -> viewModel.updateItemStatus(item, newStatus) },
@@ -385,6 +388,7 @@ private fun OrderItemRow(
     hex: String,
     colorName: String?,
     isFrozen: Boolean,
+    invoiceNumber: String? = null,
     showInvoiceNumber: Boolean = true,
     onMarkReceived: () -> Unit,
     onRevertReceived: () -> Unit,
@@ -442,9 +446,9 @@ private fun OrderItemRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (showInvoiceNumber && status == OrderItemStatus.ORDERED && !item.invoiceNumber.isNullOrBlank()) {
+                if (showInvoiceNumber && status == OrderItemStatus.ORDERED && !invoiceNumber.isNullOrBlank()) {
                     Text(
-                        text = stringResource(R.string.order_invoice_number, item.invoiceNumber),
+                        text = stringResource(R.string.order_invoice_number, invoiceNumber),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -57,11 +57,17 @@ data class OrderItemEntry(
      */
     val buyUp: Boolean = false,
     /**
-     * Invoice or order number entered when transitioning this item from FINALIZED to ORDERED.
-     * Null when not yet ordered or when no invoice number was provided.
-     * Firestore stores the field only when non-null; absent = null for pre-existing documents.
+     * Invoice or order number stored directly on the item by documents that predate
+     * [OrderInvoice]. Superseded by [invoiceId]; read it only as a fallback through
+     * [invoiceNumberOf], and write null.
      */
+    @Deprecated("Superseded by invoiceId. Read-only fallback for documents not yet migrated.")
     val invoiceNumber: String? = null,
+    /**
+     * Id of the [OrderInvoice] this item was ordered on. Null until the item is marked
+     * ordered through a vendor, and again once it leaves ORDERED.
+     */
+    val invoiceId: String? = null,
     /**
      * True when the user chose this row's vendor, pack and quantity by hand. Automatic
      * re-planning and out-of-stock fallback never change a pinned row, and reopening the

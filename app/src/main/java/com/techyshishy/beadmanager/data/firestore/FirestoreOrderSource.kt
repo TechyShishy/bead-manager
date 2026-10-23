@@ -122,6 +122,42 @@ class FirestoreOrderSource @Inject constructor(
     }
 
     /**
+     * Replaces the items and invoices arrays together in one write, so rows never point at an
+     * invoice that has not been stored. Same merge and [lastUpdated] behavior as [updateItems].
+     */
+    suspend fun updateItemsAndInvoices(
+        orderId: String,
+        items: List<OrderItemEntry>,
+        invoices: List<OrderInvoice>,
+    ) {
+        val uid = requireUid()
+        ordersRef(uid).document(orderId)
+            .set(
+                mapOf(
+                    "items" to items,
+                    "invoices" to invoices,
+                    "lastUpdated" to FieldValue.serverTimestamp(),
+                ),
+                SetOptions.merge(),
+            )
+            .await()
+    }
+
+    /** Replaces the invoices array and refreshes [lastUpdated]; items are untouched. */
+    suspend fun updateInvoices(orderId: String, invoices: List<OrderInvoice>) {
+        val uid = requireUid()
+        ordersRef(uid).document(orderId)
+            .set(
+                mapOf(
+                    "invoices" to invoices,
+                    "lastUpdated" to FieldValue.serverTimestamp(),
+                ),
+                SetOptions.merge(),
+            )
+            .await()
+    }
+
+    /**
      * Live stream of a single order document by [orderId].
      * Emits null if the document does not exist.
      */

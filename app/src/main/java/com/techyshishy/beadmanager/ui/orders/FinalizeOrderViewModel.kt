@@ -211,12 +211,27 @@ class FinalizeOrderViewModel @Inject constructor(
      * If no FINALIZED items remain after the transition, emits [UiState.AllOrdered] to trigger
      * navigation back. Otherwise, the state reflects the remaining vendors still to be ordered.
      */
-    fun markVendorOrdered(vendorKey: String, invoiceNumber: String? = null) {
+    fun markVendorOrdered(
+        vendorKey: String,
+        invoiceNumber: String? = null,
+        actualCents: Int? = null,
+    ) {
         val orderId = currentOrderId.takeIf { it.isNotBlank() } ?: return
         viewModelScope.launch {
             val order = orderRepository.orderStream(orderId).first() ?: return@launch
-            orderRepository.markVendorItemsOrdered(orderId, vendorKey, order.items, invoiceNumber)
             val currentState = _uiState.value
+            // Snapshot of the app's price for this vendor's rows, so later catalog price
+            // changes do not alter what the invoice was estimated at.
+            val estimatedCents = (currentState as? UiState.FinalizedView)?.items
+                ?.filter { it.vendorKey == vendorKey }
+                ?.takeIf { rows -> rows.isNotEmpty() && rows.all { it.priceCents != null && !it.fetchFailed } }
+                ?.sumOf { it.quantityUnits * it.priceCents!! }
+            orderRepository.markVendorItemsOrdered(
+                orderId, vendorKey, order.items, order.invoices,
+                invoiceNumber = invoiceNumber,
+                estimatedCents = estimatedCents,
+                actualCents = actualCents,
+            )
             if (currentState is UiState.FinalizedView) {
                 val remaining = currentState.items.filter { it.vendorKey != vendorKey }
                 _uiState.value = if (remaining.isEmpty()) UiState.AllOrdered

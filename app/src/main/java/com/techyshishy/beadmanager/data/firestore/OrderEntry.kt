@@ -39,4 +39,10 @@ data class OrderEntry(
      * An empty string is treated the same as null.
      */
     val customName: String? = null,
+    /**
+     * Vendor invoices for this order. Items point at one through
+     * [OrderItemEntry.invoiceId]. Invoices that no item references any more are kept: the
+     * amount on them was really paid.
+     */
+    val invoices: List<OrderInvoice> = emptyList(),
 )
