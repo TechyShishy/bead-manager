@@ -20,7 +20,7 @@ import com.techyshishy.beadmanager.data.repository.VendorSelection
 import com.techyshishy.beadmanager.data.repository.analyzeBuyUp
 import com.techyshishy.beadmanager.data.repository.applyFmgTier
 import com.techyshishy.beadmanager.data.repository.fmgEffectivePriceCents
-import com.techyshishy.beadmanager.data.repository.selectPreferredVendor
+import com.techyshishy.beadmanager.data.repository.selectAllocation
 import com.techyshishy.beadmanager.data.scraper.NoConnectivityException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -88,8 +88,9 @@ data class OrderAnalysis(
     val buyUpSuggestion: BuyUpSuggestion?,
     val unassignedItems: List<OrderItemEntry>,
     val assignedItems: List<OrderItemEntry>,
-    val selectionMap: Map<String, VendorSelection>,
-    val fallbackSelections: Map<String, VendorSelection>,
+    /** Per bead, one selection per vendor used; several when stock forces a split. */
+    val selectionMap: Map<String, List<VendorSelection>>,
+    val fallbackSelections: Map<String, List<VendorSelection>>,
     val allFreshPacks: Map<Triple<String, String, Double>, VendorPackEntity>,
     val allOrderItems: List<OrderItemEntry>,
     val beadMap: Map<String, BeadEntity>,
@@ -97,6 +98,10 @@ data class OrderAnalysis(
     val currentFmgTotalUnits: Int,
     val fmgPacksByBead: Map<String, List<VendorPackEntity>>,
 )
+
+/** Each pack combination of every vendor part, paired with the part it belongs to. */
+private fun List<VendorSelection>.flattenCombinations(): List<Pair<VendorSelection, PackCombination>> =
+    flatMap { part -> part.combination.map { part to it } }
 
 /**
  * Orchestrates order finalization in two phases:
@@ -177,7 +182,7 @@ class FinalizeOrderUseCase @Inject constructor(
         val freshPacksByBead: Map<String, List<VendorPackEntity>> =
             unassignedBeadCodes.associateWith { catalogRepository.packsForBead(it) }
 
-        val selectionMap = mutableMapOf<String, VendorSelection>()
+        val selectionMap = mutableMapOf<String, List<VendorSelection>>()
         val noVendorBeadCodes = mutableListOf<String>()
         for (item in unassignedItems) {
             check(item.beadCode !in selectionMap) {
@@ -185,7 +190,7 @@ class FinalizeOrderUseCase @Inject constructor(
                     "each bead may appear at most once in unassigned PENDING items"
             }
             val packs = freshPacksByBead[item.beadCode] ?: emptyList()
-            val selection = selectPreferredVendor(item.beadCode, item.targetGrams, packs, vendorPriority)
+            val selection = selectAllocation(item.beadCode, item.targetGrams, packs, vendorPriority)
             if (selection == null) {
                 noVendorBeadCodes.add(item.beadCode)
             } else {
@@ -207,7 +212,7 @@ class FinalizeOrderUseCase @Inject constructor(
         }
 
         val assignedFallbackFailures = mutableListOf<String>()
-        val fallbackSelections = mutableMapOf<String, VendorSelection>()
+        val fallbackSelections = mutableMapOf<String, List<VendorSelection>>()
         val fallbackPacksByBead = mutableMapOf<String, List<VendorPackEntity>>()
         for (pack in unavailableAssigned) {
             val originalItem = assignedItems.first {
@@ -217,7 +222,7 @@ class FinalizeOrderUseCase @Inject constructor(
             fallbackPacksByBead[pack.beadCode] = allPacksForBead
             val fallbackPriority = vendorPriority.filter { it != pack.vendorKey }
             val availablePacks = allPacksForBead.filter { it.available != false && it.priceCents != null }
-            val selection = selectPreferredVendor(
+            val selection = selectAllocation(
                 pack.beadCode, originalItem.targetGrams, availablePacks, fallbackPriority,
             )
             if (selection == null) {
@@ -236,11 +241,11 @@ class FinalizeOrderUseCase @Inject constructor(
 
         // Build a FMG selection map for tier calculations (includes pre-assigned FMG items).
         val fmgSelectionsByBead: Map<String, VendorSelection> = buildMap {
-            for ((beadCode, sel) in selectionMap) {
-                if (sel.vendorKey == "fmg") put(beadCode, sel)
+            for ((beadCode, parts) in selectionMap) {
+                parts.firstOrNull { it.vendorKey == "fmg" }?.let { put(beadCode, it) }
             }
-            for ((beadCode, sel) in fallbackSelections) {
-                if (sel.vendorKey == "fmg") put(beadCode, sel)
+            for ((beadCode, parts) in fallbackSelections) {
+                parts.firstOrNull { it.vendorKey == "fmg" }?.let { put(beadCode, it) }
             }
             // Pre-assigned FMG items not replaced by fallback, grouped by bead code.
             val preAssignedByBead = assignedItems
@@ -294,9 +299,9 @@ class FinalizeOrderUseCase @Inject constructor(
         val finalizedItems = mutableListOf<FinalizedItem>()
 
         for (item in assignedItems) {
-            val fallback = fallbackSelections[item.beadCode]
-            if (fallback != null) {
-                for (combo in fallback.combination) {
+            val fallbackParts = fallbackSelections[item.beadCode]
+            if (fallbackParts != null) {
+                for ((fallback, combo) in fallbackParts.flattenCombinations()) {
                     val key = Triple(item.beadCode, fallback.vendorKey, combo.packGrams)
                     val pack = allFreshPacks[key]
                     val bead = beadMap[item.beadCode]
@@ -335,8 +340,8 @@ class FinalizeOrderUseCase @Inject constructor(
         }
 
         for (item in unassignedItems) {
-            val selection = selectionMap[item.beadCode] ?: continue
-            for (combo in selection.combination) {
+            val parts = selectionMap[item.beadCode] ?: continue
+            for ((selection, combo) in parts.flattenCombinations()) {
                 val key = Triple(item.beadCode, selection.vendorKey, combo.packGrams)
                 val pack = allFreshPacks[key]
                 val bead = beadMap[item.beadCode]
@@ -551,14 +556,14 @@ class FinalizeOrderUseCase @Inject constructor(
     private fun buildResolvedItems(
         unassignedItems: List<OrderItemEntry>,
         assignedItems: List<OrderItemEntry>,
-        selectionMap: Map<String, VendorSelection>,
-        fallbackSelections: Map<String, VendorSelection>,
+        selectionMap: Map<String, List<VendorSelection>>,
+        fallbackSelections: Map<String, List<VendorSelection>>,
     ): List<OrderItemEntry> {
         val result = mutableListOf<OrderItemEntry>()
 
         for (item in unassignedItems) {
-            val selection = selectionMap[item.beadCode] ?: continue
-            for (combo in selection.combination) {
+            val parts = selectionMap[item.beadCode] ?: continue
+            for ((selection, combo) in parts.flattenCombinations()) {
                 result.add(
                     item.copy(
                         vendorKey = selection.vendorKey,
@@ -570,9 +575,9 @@ class FinalizeOrderUseCase @Inject constructor(
         }
 
         for (item in assignedItems) {
-            val fallback = fallbackSelections[item.beadCode]
-            if (fallback != null) {
-                for (combo in fallback.combination) {
+            val fallbackParts = fallbackSelections[item.beadCode]
+            if (fallbackParts != null) {
+                for ((fallback, combo) in fallbackParts.flattenCombinations()) {
                     result.add(
                         item.copy(
                             vendorKey = fallback.vendorKey,

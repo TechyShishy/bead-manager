@@ -265,6 +265,59 @@ fun selectPreferredVendor(
 }
 
 /**
+ * Allocates [targetGrams] of [beadCode] across vendors, one [VendorSelection] per vendor used.
+ *
+ * Tries [selectPreferredVendor] first, so a single vendor covers the bead whenever it can.
+ * When no single vendor can (stock caps), walks [vendorPriorityOrder]: a vendor that can
+ * cover what remains takes the cheapest combination for it; otherwise it contributes every
+ * unit it has in stock and the remainder rolls to the next vendor.
+ *
+ * Returns null when the vendors together cannot cover the target.
+ */
+fun selectAllocation(
+    beadCode: String,
+    targetGrams: Double,
+    allPacks: List<VendorPackEntity>,
+    vendorPriorityOrder: List<String>,
+): List<VendorSelection>? {
+    selectPreferredVendor(beadCode, targetGrams, allPacks, vendorPriorityOrder)
+        ?.let { return listOf(it) }
+
+    val byVendor = allPacks
+        .filter { it.beadCode == beadCode && it.priceCents != null && it.available != false }
+        .groupBy { it.vendorKey }
+
+    val parts = mutableListOf<VendorSelection>()
+    var remaining = targetGrams
+    for (vendorKey in vendorPriorityOrder) {
+        val packs = byVendor[vendorKey] ?: continue
+        val covering = computeCheapestCombination(packs, remaining)
+        if (covering.isNotEmpty()) {
+            parts.add(VendorSelection(vendorKey, covering, combinationCostCents(covering, packs)))
+            return parts
+        }
+        // Not coverable: take everything this vendor has in stock. An uncapped pack would
+        // have made the target coverable, so every pack here carries a stock quantity.
+        val everything = packs
+            .filter { (it.stockQuantity ?: 0) > 0 }
+            .map { PackCombination(it.grams, it.stockQuantity!!) }
+            .sortedByDescending { it.packGrams }
+        if (everything.isEmpty()) continue
+        parts.add(VendorSelection(vendorKey, everything, combinationCostCents(everything, packs)))
+        remaining -= everything.sumOf { it.packGrams * it.quantity }
+    }
+    return null
+}
+
+private fun combinationCostCents(
+    combination: List<PackCombination>,
+    packs: List<VendorPackEntity>,
+): Int = combination.sumOf { combo ->
+    val pack = packs.first { (it.grams * 10).roundToInt() == (combo.packGrams * 10).roundToInt() }
+    (pack.priceCents ?: 0) * combo.quantity
+}
+
+/**
  * Information about one buy-up suggestion: which bead and pack to add to push
  * the FMG order over the next quantity-break tier, along with the net savings.
  *

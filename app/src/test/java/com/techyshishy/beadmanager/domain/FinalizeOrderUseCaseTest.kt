@@ -121,6 +121,38 @@ class FinalizeOrderUseCaseTest {
     }
 
     @Test
+    fun `analyze splits a bead across vendors when stock caps force it`() = runTest {
+        val acPack = fmgPack.copy(
+            id = 2, vendorKey = "ac", grams = 50.0, priceCents = 3000, stockQuantity = 1,
+        )
+        val fmgCapped = fmgPack.copy(
+            id = 3, grams = 50.0, priceCents = 3500, stockQuantity = 2,
+        )
+        val catalog = catalogRepositoryWith(emptyMap())
+        coEvery { catalog.packsForBead("DB0001") } returns listOf(acPack, fmgCapped)
+        val preferences: PreferencesRepository = mockk {
+            every { vendorPriorityOrder } returns flowOf(listOf("ac", "fmg"))
+            every { buyUpEnabled } returns flowOf(false)
+        }
+        val item = unassignedPendingItem("DB0001").copy(targetGrams = 150.0)
+
+        val useCase = FinalizeOrderUseCase(
+            context = mockConnectedContext(),
+            orderRepository = orderRepositoryWith(item),
+            catalogRepository = catalog,
+            inventoryRepository = inventoryRepository(),
+            preferencesRepository = preferences,
+        )
+
+        val result = useCase.analyze("order1")
+
+        assertEquals(
+            listOf("ac" to 1, "fmg" to 2),
+            result.items.map { it.vendorKey to it.quantityUnits },
+        )
+    }
+
+    @Test
     fun `checkLowStock returns empty list when inventory is empty`() = runTest {
         val useCase = FinalizeOrderUseCase(
             context = mockConnectedContext(),

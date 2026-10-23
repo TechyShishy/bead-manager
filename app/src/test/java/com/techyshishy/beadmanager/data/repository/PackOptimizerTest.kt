@@ -159,4 +159,67 @@ class PackOptimizerTest {
         assertEquals("fmg", result?.vendorKey)
         assertEquals(combo(50.0 to 3), result?.combination)
     }
+
+    // ---- cross-vendor allocation ----
+
+    @Test
+    fun `selectAllocation uses a single vendor when it can cover the target`() {
+        val packs = listOf(pack(50.0, 2325, vendorKey = "fmg"))
+        val result = selectAllocation("DB0010", 50.0, packs, listOf("ac", "fmg"))!!
+        assertEquals(listOf("fmg"), result.map { it.vendorKey })
+    }
+
+    @Test
+    fun `selectAllocation splits a global shortage across vendors in priority order`() {
+        // Need 3 x 50g and every vendor has exactly 1.
+        val packs = listOf(
+            pack(50.0, 3000, vendorKey = "ac", stockQuantity = 1),
+            pack(50.0, 3200, vendorKey = "bob", stockQuantity = 1),
+            pack(50.0, 3500, vendorKey = "fmg", stockQuantity = 1),
+        )
+        val result = selectAllocation("DB0010", 150.0, packs, listOf("ac", "bob", "fmg"))!!
+        assertEquals(listOf("ac", "bob", "fmg"), result.map { it.vendorKey })
+        assertEquals(
+            listOf(combo(50.0 to 1), combo(50.0 to 1), combo(50.0 to 1)),
+            result.map { it.combination },
+        )
+        assertEquals(listOf(3000, 3200, 3500), result.map { it.totalCents })
+    }
+
+    @Test
+    fun `selectAllocation splits 3 needed as 1 here and 2 there`() {
+        val packs = listOf(
+            pack(50.0, 3000, vendorKey = "ac", stockQuantity = 1),
+            pack(50.0, 3500, vendorKey = "fmg"),
+        )
+        // AC alone cannot cover 150g, but FMG alone can, so no split is needed.
+        val single = selectAllocation("DB0010", 150.0, packs, listOf("ac", "fmg"))!!
+        assertEquals(listOf("fmg"), single.map { it.vendorKey })
+
+        val capped = listOf(
+            pack(50.0, 3000, vendorKey = "ac", stockQuantity = 1),
+            pack(50.0, 3500, vendorKey = "fmg", stockQuantity = 2),
+        )
+        val split = selectAllocation("DB0010", 150.0, capped, listOf("ac", "fmg"))!!
+        assertEquals(listOf("ac", "fmg"), split.map { it.vendorKey })
+        assertEquals(listOf(combo(50.0 to 1), combo(50.0 to 2)), split.map { it.combination })
+    }
+
+    @Test
+    fun `selectAllocation returns null when all vendors together fall short`() {
+        val packs = listOf(
+            pack(50.0, 3000, vendorKey = "ac", stockQuantity = 1),
+            pack(50.0, 3500, vendorKey = "fmg", stockQuantity = 1),
+        )
+        assertNull(selectAllocation("DB0010", 150.0, packs, listOf("ac", "fmg")))
+    }
+
+    @Test
+    fun `selectAllocation skips vendors outside the priority order`() {
+        val packs = listOf(
+            pack(50.0, 3000, vendorKey = "ac", stockQuantity = 1),
+            pack(50.0, 3500, vendorKey = "fmg", stockQuantity = 5),
+        )
+        assertNull(selectAllocation("DB0010", 100.0, packs, listOf("ac")))
+    }
 }
