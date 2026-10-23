@@ -62,6 +62,13 @@ data class OrderItemEntry(
      * Firestore stores the field only when non-null; absent = null for pre-existing documents.
      */
     val invoiceNumber: String? = null,
+    /**
+     * True when the user chose this row's vendor, pack and quantity by hand. Automatic
+     * re-planning and out-of-stock fallback never change a pinned row, and reopening the
+     * order keeps its assignment. Firestore stores the field only when true; absent = false
+     * for pre-existing documents.
+     */
+    val pinned: Boolean = false,
 )
 
 /**

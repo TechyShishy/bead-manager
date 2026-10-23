@@ -10,6 +10,8 @@ import com.techyshishy.beadmanager.domain.FinalizeOrderUseCase
 import com.techyshishy.beadmanager.domain.FinalizedItem
 import com.techyshishy.beadmanager.domain.InvalidBuyUpBeadException
 import com.techyshishy.beadmanager.domain.OrderAnalysis
+import com.techyshishy.beadmanager.domain.PinEditorData
+import com.techyshishy.beadmanager.domain.PinRow
 import com.techyshishy.beadmanager.domain.UnavailablePacksException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +56,11 @@ class FinalizeOrderViewModel @Inject constructor(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var currentOrderId: String = ""
+
+    private val _pinEditor = MutableStateFlow<PinEditorData?>(null)
+
+    /** Non-null while the pin editor sheet is open. */
+    val pinEditor: StateFlow<PinEditorData?> = _pinEditor.asStateFlow()
 
     /**
      * Initiates the finalize flow for [orderId].
@@ -167,6 +174,50 @@ class FinalizeOrderViewModel @Inject constructor(
                 useCase.reportStockAndReplan(
                     orderId, item.beadCode, item.vendorKey, item.packGrams, quantity,
                 )
+                useCase.resolveExistingOrder(orderId)
+            }.fold(
+                onSuccess = { UiState.FinalizedView(it.items) },
+                onFailure = { e ->
+                    when (e) {
+                        is UnavailablePacksException -> UiState.UnavailableError(e.beadCodes)
+                        else -> UiState.UnknownError
+                    }
+                },
+            )
+        }
+    }
+
+    /** Opens the pin editor for [beadCode]; stays closed when the bead has nothing to edit. */
+    fun openPinEditor(beadCode: String) {
+        val orderId = currentOrderId.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch {
+            _pinEditor.value = runCatching { useCase.loadPinEditor(orderId, beadCode) }.getOrNull()
+        }
+    }
+
+    fun dismissPinEditor() {
+        _pinEditor.value = null
+    }
+
+    /** Pins the edited rows for the open editor's bead and shows the updated items. */
+    fun savePin(rows: List<PinRow>) {
+        val beadCode = _pinEditor.value?.beadCode ?: return
+        applyPinChange { orderId -> useCase.savePin(orderId, beadCode, rows) }
+    }
+
+    /** Removes the open editor's pin and hands the bead back to the optimizer. */
+    fun removePin() {
+        val beadCode = _pinEditor.value?.beadCode ?: return
+        applyPinChange { orderId -> useCase.removePin(orderId, beadCode) }
+    }
+
+    private fun applyPinChange(change: suspend (orderId: String) -> Unit) {
+        val orderId = currentOrderId.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch {
+            _pinEditor.value = null
+            _uiState.value = UiState.Checking
+            _uiState.value = runCatching {
+                change(orderId)
                 useCase.resolveExistingOrder(orderId)
             }.fold(
                 onSuccess = { UiState.FinalizedView(it.items) },

@@ -62,4 +62,19 @@ class OrderRepositoryReplaceItemsTest {
             }
         }
     }
+
+    @Test
+    fun `reopenOrder keeps the assignment of pinned rows and clears the rest`() = runTest {
+        val pinned = item("ac", 50.0, 3).copy(pinned = true, targetGrams = 150.0)
+        val plain = item("fmg", 7.5, 2, beadCode = "DB0002")
+        val slot = slot<List<OrderItemEntry>>()
+        coEvery { source.updateItems("o", capture(slot)) } returns Unit
+
+        repository.reopenOrder("o", listOf(pinned, plain))
+
+        val (first, second) = slot.captured
+        assertEquals(OrderItemStatus.PENDING.firestoreValue, first.status)
+        assertEquals(listOf("ac", 50.0, 3), listOf(first.vendorKey, first.packGrams, first.quantityUnits))
+        assertEquals(listOf("", 0.0, 0), listOf(second.vendorKey, second.packGrams, second.quantityUnits))
+    }
 }

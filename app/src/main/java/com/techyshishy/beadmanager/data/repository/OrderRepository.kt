@@ -363,8 +363,8 @@ class OrderRepository @Inject constructor(
     }
 
     /**
-     * Reverts all FINALIZED items to PENDING and clears their vendor assignments.
-     * Items in any other status are left unchanged.
+     * Reverts all FINALIZED items to PENDING and clears their vendor assignments, except
+     * pinned items, which keep theirs. Items in any other status are left unchanged.
      *
      * Pack-split finalization creates multiple FINALIZED items per bead (one per pack size),
      * each carrying identical targetGrams and sourceProjectContributions copied from the
@@ -378,7 +378,10 @@ class OrderRepository @Inject constructor(
         allItems: List<OrderItemEntry>,
     ) {
         val reverted = allItems.map { item ->
-            if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED) {
+            if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED && item.pinned) {
+                // A pinned row keeps its hand-picked assignment; only the status reverts.
+                item.copy(status = OrderItemStatus.PENDING.firestoreValue)
+            } else if (OrderItemStatus.fromFirestore(item.status) == OrderItemStatus.FINALIZED) {
                 item.copy(
                     status = OrderItemStatus.PENDING.firestoreValue,
                     vendorKey = "",

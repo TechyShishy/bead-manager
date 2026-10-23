@@ -14,6 +14,7 @@ import com.techyshishy.beadmanager.data.repository.OrderRepository
 import com.techyshishy.beadmanager.data.repository.PreferencesRepository
 import com.techyshishy.beadmanager.data.repository.PriceCheckResult
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -209,6 +210,116 @@ class FinalizeOrderUseCaseTest {
             inventoryRepository = inventoryRepository(),
             preferencesRepository = preferences,
         ).replanBead("order1", "DB0001")
+    }
+
+    private fun useCaseWith(
+        orders: OrderRepository,
+        packs: List<VendorPackEntity>,
+        priority: List<String>,
+    ): FinalizeOrderUseCase {
+        val catalog = catalogRepositoryWith(emptyMap())
+        coEvery { catalog.packsForBead("DB0001") } returns packs
+        coEvery { catalog.packByKey(any(), any(), any()) } answers {
+            packs.firstOrNull {
+                it.beadCode == firstArg<String>() && it.vendorKey == secondArg<String>() &&
+                    it.grams == thirdArg<Double>()
+            }
+        }
+        val preferences: PreferencesRepository = mockk {
+            every { vendorPriorityOrder } returns flowOf(priority)
+            every { buyUpEnabled } returns flowOf(false)
+        }
+        return FinalizeOrderUseCase(
+            context = mockConnectedContext(),
+            orderRepository = orders,
+            catalogRepository = catalog,
+            inventoryRepository = inventoryRepository(),
+            preferencesRepository = preferences,
+        )
+    }
+
+    private fun assignedPending(pinned: Boolean) = OrderItemEntry(
+        beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
+        quantityUnits = 3, status = OrderItemStatus.PENDING.firestoreValue, pinned = pinned,
+    )
+
+    @Test
+    fun `analyze falls back for an unpinned assigned row that exceeds reported stock`() = runTest {
+        val acPack = fmgPack.copy(id = 2, vendorKey = "ac", grams = 50.0, priceCents = 3000, stockQuantity = 1)
+        val fmgPack50 = fmgPack.copy(id = 3, grams = 50.0, priceCents = 3500)
+        val result = useCaseWith(
+            orderRepositoryWith(assignedPending(pinned = false)), listOf(acPack, fmgPack50), listOf("ac", "fmg"),
+        ).analyze("order1")
+
+        assertEquals(listOf("fmg" to 3), result.items.map { it.vendorKey to it.quantityUnits })
+    }
+
+    @Test
+    fun `analyze keeps a pinned assigned row and flags it when stock is short`() = runTest {
+        val acPack = fmgPack.copy(id = 2, vendorKey = "ac", grams = 50.0, priceCents = 3000, stockQuantity = 1)
+        val fmgPack50 = fmgPack.copy(id = 3, grams = 50.0, priceCents = 3500)
+        val result = useCaseWith(
+            orderRepositoryWith(assignedPending(pinned = true)), listOf(acPack, fmgPack50), listOf("ac", "fmg"),
+        ).analyze("order1")
+
+        assertEquals(listOf("ac" to 3), result.items.map { it.vendorKey to it.quantityUnits })
+        assertEquals(listOf(true), result.items.map { it.pinned })
+        assertEquals(listOf(true), result.items.map { it.pinWarning })
+    }
+
+    @Test
+    fun `savePin pins the rows and keeps invoice only on unchanged rows`() = runTest {
+        val kept = OrderItemEntry(
+            beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
+            quantityUnits = 1, status = OrderItemStatus.ORDERED.firestoreValue, invoiceNumber = "INV-1",
+        )
+        val changed = kept.copy(packGrams = 7.5, quantityUnits = 2, invoiceNumber = "INV-1")
+        val orders = orderRepositoryWith(kept, changed)
+        val replacements = slot<List<OrderItemEntry>>()
+        coEvery { orders.replaceItems("order1", any(), any(), capture(replacements)) } returns Unit
+
+        useCaseWith(orders, listOf(fmgPack), listOf("fmg")).savePin(
+            "order1", "DB0001",
+            listOf(PinRow("ac", 50.0, 1), PinRow("ac", 7.5, 3), PinRow("fmg", 50.0, 1)),
+        )
+
+        val rows = replacements.captured
+        assertEquals(listOf(true, true, true), rows.map { it.pinned })
+        assertEquals(
+            listOf(OrderItemStatus.ORDERED, OrderItemStatus.FINALIZED, OrderItemStatus.FINALIZED)
+                .map { it.firestoreValue },
+            rows.map { it.status },
+        )
+        assertEquals(listOf("INV-1", null, null), rows.map { it.invoiceNumber })
+    }
+
+    @Test
+    fun `replanBead leaves pinned rows alone`() = runTest {
+        val pinnedRow = OrderItemEntry(
+            beadCode = "DB0001", vendorKey = "ac", targetGrams = 150.0, packGrams = 50.0,
+            quantityUnits = 3, status = OrderItemStatus.FINALIZED.firestoreValue, pinned = true,
+        )
+        val orders = orderRepositoryWith(pinnedRow)
+
+        useCaseWith(orders, listOf(fmgPack), listOf("fmg")).replanBead("order1", "DB0001")
+
+        coVerify(exactly = 0) { orders.replaceItems(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `removePin hands the bead back to the optimizer with unpinned rows`() = runTest {
+        val pinnedRow = OrderItemEntry(
+            beadCode = "DB0001", vendorKey = "ac", targetGrams = 10.0, packGrams = 50.0,
+            quantityUnits = 3, status = OrderItemStatus.FINALIZED.firestoreValue, pinned = true,
+        )
+        val orders = orderRepositoryWith(pinnedRow)
+        val replacements = slot<List<OrderItemEntry>>()
+        coEvery { orders.replaceItems("order1", any(), any(), capture(replacements)) } returns Unit
+
+        useCaseWith(orders, listOf(fmgPack), listOf("fmg")).removePin("order1", "DB0001")
+
+        assertEquals(listOf("fmg" to 1), replacements.captured.map { it.vendorKey to it.quantityUnits })
+        assertEquals(listOf(false), replacements.captured.map { it.pinned })
     }
 
     @Test

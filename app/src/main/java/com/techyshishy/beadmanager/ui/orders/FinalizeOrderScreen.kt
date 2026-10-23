@@ -135,6 +135,7 @@ fun FinalizeOrderScreen(
     LaunchedEffect(orderId) { viewModel.initiate(orderId) }
 
     val uiState by viewModel.uiState.collectAsState()
+    val pinEditor by viewModel.pinEditor.collectAsState()
 
     LaunchedEffect(uiState) {
         when (uiState) {
@@ -170,6 +171,7 @@ fun FinalizeOrderScreen(
                 onReopen = { viewModel.reopen() },
                 onViewInCatalog = onViewInCatalog,
                 onReportStock = { item, quantity -> viewModel.reportStock(item, quantity) },
+                onOverride = { beadCode -> viewModel.openPinEditor(beadCode) },
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -222,6 +224,15 @@ fun FinalizeOrderScreen(
             )
         }
     }
+
+    pinEditor?.let { data ->
+        PinEditorSheet(
+            data = data,
+            onSave = { rows -> viewModel.savePin(rows) },
+            onRemovePin = { viewModel.removePin() },
+            onDismiss = { viewModel.dismissPinEditor() },
+        )
+    }
 }
 
 @Composable
@@ -249,6 +260,7 @@ private fun FinalizedViewContent(
     onReopen: () -> Unit,
     onViewInCatalog: (String) -> Unit,
     onReportStock: (item: FinalizedItem, quantity: Int) -> Unit,
+    onOverride: (beadCode: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showReopenDialog by remember { mutableStateOf(false) }
@@ -341,6 +353,7 @@ private fun FinalizedViewContent(
                         onVisited = { visitedKeys = visitedKeys + itemKey },
                         onViewInCatalog = { onViewInCatalog(item.beadCode) },
                         onReportStock = { quantity -> onReportStock(item, quantity) },
+                        onOverride = { onOverride(item.beadCode) },
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                 }
@@ -600,6 +613,7 @@ private fun FinalizedItemRow(
     onVisited: () -> Unit,
     onViewInCatalog: () -> Unit,
     onReportStock: (quantity: Int) -> Unit,
+    onOverride: () -> Unit,
 ) {
     var showReportStock by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -689,9 +703,30 @@ private fun FinalizedItemRow(
                     ),
                 )
             }
+            if (item.pinWarning) {
+                SuggestionChip(
+                    onClick = onOverride,
+                    icon = { Icon(Icons.Filled.WarningAmber, contentDescription = null) },
+                    label = { Text(stringResource(R.string.finalize_pin_warning)) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        labelColor = MaterialTheme.colorScheme.error,
+                        iconContentColor = MaterialTheme.colorScheme.error,
+                    ),
+                )
+            }
+            if (item.pinned) {
+                SuggestionChip(
+                    onClick = onOverride,
+                    label = { Text(stringResource(R.string.finalize_pinned)) },
+                )
+            }
             SuggestionChip(
                 onClick = { showReportStock = true },
                 label = { Text(stringResource(R.string.finalize_not_available_here)) },
+            )
+            SuggestionChip(
+                onClick = onOverride,
+                label = { Text(stringResource(R.string.finalize_override_vendor)) },
             )
             if (item.url.isNotBlank()) {
                 SuggestionChip(

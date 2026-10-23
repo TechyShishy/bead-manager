@@ -66,12 +66,33 @@ data class FinalizedItem(
     val colorName: String? = null,
     /** True when this item was added as a buy-up to reach a discount tier. */
     val isBuyUp: Boolean = false,
+    /** True when the user chose this row by hand; automatic planning leaves it alone. */
+    val pinned: Boolean = false,
+    /** True for a pinned row whose pack is out of stock or has less stock than the row needs. */
+    val pinWarning: Boolean = false,
 ) {
     val packGramsLabel: String
         get() = BigDecimal.valueOf(packGrams).stripTrailingZeros().toPlainString()
 }
 
 data class FinalizeResult(val items: List<FinalizedItem>)
+
+/** One hand-chosen row of a pin: [quantityUnits] packs of [packGrams] g from [vendorKey]. */
+data class PinRow(val vendorKey: String, val packGrams: Double, val quantityUnits: Int)
+
+/**
+ * State for the pin editor sheet. [packs] is every catalog pack for the bead; [lockedPacks]
+ * are (vendorKey, packGrams) pairs held by rows the editor cannot change (received, skipped,
+ * buy-up), which new rows must not reuse. [hasPin] is true when any current row is pinned.
+ */
+data class PinEditorData(
+    val beadCode: String,
+    val targetGrams: Double,
+    val rows: List<PinRow>,
+    val packs: List<VendorPackEntity>,
+    val lockedPacks: Set<Pair<String, Double>>,
+    val hasPin: Boolean,
+)
 
 /**
  * Intermediate result of [FinalizeOrderUseCase.analyze]. Carries all state needed for
@@ -98,6 +119,13 @@ data class OrderAnalysis(
     val currentFmgTotalUnits: Int,
     val fmgPacksByBead: Map<String, List<VendorPackEntity>>,
 )
+
+/** True when [pack] is out of stock or reports fewer units than [quantityUnits]. */
+private fun pinNeedsAttention(pack: VendorPackEntity?, quantityUnits: Int): Boolean =
+    pack != null && (
+        pack.available == false ||
+            (pack.stockQuantity != null && quantityUnits > pack.stockQuantity)
+    )
 
 /** Each pack combination of every vendor part, paired with the part it belongs to. */
 private fun List<VendorSelection>.flattenCombinations(): List<Pair<VendorSelection, PackCombination>> =
@@ -203,11 +231,13 @@ class FinalizeOrderUseCase @Inject constructor(
         }
         // An assigned pack needs a fallback when it is out of stock, or when the vendor reports
         // fewer units than the assigned row asks for.
+        // Pinned rows are the user's explicit choice and never fall back.
         val unavailableAssigned = freshAssignedPacks.filter { pack ->
-            pack.available == false || assignedItems.any { item ->
-                item.beadCode == pack.beadCode && item.vendorKey == pack.vendorKey &&
+            assignedItems.any { item ->
+                !item.pinned && item.beadCode == pack.beadCode && item.vendorKey == pack.vendorKey &&
                     item.packGrams == pack.grams &&
-                    pack.stockQuantity != null && item.quantityUnits > pack.stockQuantity
+                    (pack.available == false ||
+                        (pack.stockQuantity != null && item.quantityUnits > pack.stockQuantity))
             }
         }
 
@@ -299,7 +329,7 @@ class FinalizeOrderUseCase @Inject constructor(
         val finalizedItems = mutableListOf<FinalizedItem>()
 
         for (item in assignedItems) {
-            val fallbackParts = fallbackSelections[item.beadCode]
+            val fallbackParts = fallbackSelections[item.beadCode].takeIf { !item.pinned }
             if (fallbackParts != null) {
                 for ((fallback, combo) in fallbackParts.flattenCombinations()) {
                     val key = Triple(item.beadCode, fallback.vendorKey, combo.packGrams)
@@ -335,6 +365,8 @@ class FinalizeOrderUseCase @Inject constructor(
                     imageUrl = bead?.imageUrl ?: "",
                     hex = bead?.hex ?: "",
                     colorName = beadNames[item.beadCode to item.vendorKey],
+                    pinned = item.pinned,
+                    pinWarning = item.pinned && pinNeedsAttention(pack, item.quantityUnits),
                 ))
             }
         }
@@ -527,16 +559,21 @@ class FinalizeOrderUseCase @Inject constructor(
      * already in the catalog (no live check, so reported stock is not overwritten).
      *
      * Replannable rows are the bead's FINALIZED and ORDERED rows. RECEIVED, SKIPPED and
-     * buy-up rows are untouched. A new row identical to an existing row in vendor, pack and
+     * buy-up rows are untouched, as are pinned rows unless [includePinned] is set (removing
+     * an override); re-planned rows are never pinned. A new row identical to an existing row in vendor, pack and
      * quantity keeps that row's status and invoice number; any other row is FINALIZED with
      * no invoice number, to be marked ordered again at its vendor.
      *
      * Throws [UnavailablePacksException] when no allocation covers the bead.
      */
-    suspend fun replanBead(orderId: String, beadCode: String): Unit = mutex.withLock {
+    suspend fun replanBead(
+        orderId: String,
+        beadCode: String,
+        includePinned: Boolean = false,
+    ): Unit = mutex.withLock {
         val order = orderRepository.orderStream(orderId).first()
             ?: error("Order $orderId not found")
-        val rows = order.items.filter { it.isReplannable(beadCode) }
+        val rows = order.items.filter { it.isReplannable(beadCode) && (includePinned || !it.pinned) }
         if (rows.isEmpty()) return@withLock
 
         val vendorPriority = preferencesRepository.vendorPriorityOrder.first()
@@ -550,16 +587,80 @@ class FinalizeOrderUseCase @Inject constructor(
                 it.vendorKey == part.vendorKey && it.packGrams == combo.packGrams &&
                     it.quantityUnits == combo.quantity
             }
-            existing ?: template.copy(
+            existing?.copy(pinned = false) ?: template.copy(
                 vendorKey = part.vendorKey,
                 packGrams = combo.packGrams,
                 quantityUnits = combo.quantity,
                 status = OrderItemStatus.FINALIZED.firestoreValue,
                 invoiceNumber = null,
+                pinned = false,
             )
         }
         orderRepository.replaceItems(orderId, order.items, replaced = rows, replacements = replacements)
     }
+
+    /**
+     * Loads what the pin editor needs for [beadCode]: its replannable rows, every catalog pack
+     * for the bead, and the vendor/pack identities already taken by rows the editor cannot
+     * touch. Returns null when the bead has no replannable rows.
+     */
+    suspend fun loadPinEditor(orderId: String, beadCode: String): PinEditorData? {
+        val order = orderRepository.orderStream(orderId).first()
+            ?: error("Order $orderId not found")
+        val rows = order.items.filter { it.isReplannable(beadCode) }
+        if (rows.isEmpty()) return null
+        val locked = order.items
+            .filter { it.beadCode == beadCode && it.vendorKey.isNotBlank() && !it.isReplannable(beadCode) }
+            .map { it.vendorKey to it.packGrams }
+            .toSet()
+        return PinEditorData(
+            beadCode = beadCode,
+            targetGrams = rows.first().targetGrams,
+            rows = rows.map { PinRow(it.vendorKey, it.packGrams, it.quantityUnits) },
+            packs = catalogRepository.packsForBead(beadCode),
+            lockedPacks = locked,
+            hasPin = rows.any { it.pinned },
+        )
+    }
+
+    /**
+     * Replaces the bead's replannable rows with [pinRows], all pinned. A row that matches an
+     * existing row in vendor, pack and quantity keeps its status and invoice number; any
+     * other row is FINALIZED with no invoice number.
+     */
+    suspend fun savePin(orderId: String, beadCode: String, pinRows: List<PinRow>): Unit =
+        mutex.withLock {
+            require(pinRows.isNotEmpty() && pinRows.all { it.quantityUnits > 0 }) {
+                "A pin needs at least one row with a positive quantity"
+            }
+            val order = orderRepository.orderStream(orderId).first()
+                ?: error("Order $orderId not found")
+            val rows = order.items.filter { it.isReplannable(beadCode) }
+            if (rows.isEmpty()) return@withLock
+            val template = rows.first()
+            val replacements = pinRows.map { pin ->
+                val existing = rows.firstOrNull {
+                    it.vendorKey == pin.vendorKey && it.packGrams == pin.packGrams
+                }
+                when {
+                    existing != null && existing.quantityUnits == pin.quantityUnits ->
+                        existing.copy(pinned = true)
+                    else -> (existing ?: template).copy(
+                        vendorKey = pin.vendorKey,
+                        packGrams = pin.packGrams,
+                        quantityUnits = pin.quantityUnits,
+                        status = OrderItemStatus.FINALIZED.firestoreValue,
+                        invoiceNumber = null,
+                        pinned = true,
+                    )
+                }
+            }
+            orderRepository.replaceItems(orderId, order.items, replaced = rows, replacements = replacements)
+        }
+
+    /** Drops the bead's pin and hands it back to the optimizer. */
+    suspend fun removePin(orderId: String, beadCode: String) =
+        replanBead(orderId, beadCode, includePinned = true)
 
     private fun OrderItemEntry.isReplannable(beadCode: String): Boolean {
         if (this.beadCode != beadCode || buyUp || vendorKey.isBlank()) return false
@@ -607,6 +708,8 @@ class FinalizeOrderUseCase @Inject constructor(
                 hex = bead?.hex ?: "",
                 colorName = beadNames[item.beadCode to item.vendorKey],
                 isBuyUp = item.buyUp,
+                pinned = item.pinned,
+                pinWarning = item.pinned && pinNeedsAttention(pack, item.quantityUnits),
             )
         }
         return FinalizeResult(items = finalizedItems)
@@ -641,7 +744,7 @@ class FinalizeOrderUseCase @Inject constructor(
         }
 
         for (item in assignedItems) {
-            val fallbackParts = fallbackSelections[item.beadCode]
+            val fallbackParts = fallbackSelections[item.beadCode].takeIf { !item.pinned }
             if (fallbackParts != null) {
                 for ((fallback, combo) in fallbackParts.flattenCombinations()) {
                     result.add(
